@@ -2,6 +2,7 @@ package com.smarttools.netguard.ui.profiles
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -16,20 +17,26 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentQrScanBinding
+import com.smarttools.netguard.util.QRScanner
 import com.smarttools.netguard.viewmodel.ProfileListViewModel
+import com.smarttools.netguard.viewmodel.SubscriptionViewModel
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
+@androidx.camera.core.ExperimentalGetImage
 class QrScanFragment : Fragment() {
 
     private var _binding: FragmentQrScanBinding? = null
     private val binding get() = _binding!!
-    private val viewModel: ProfileListViewModel by activityViewModels()
+    private val profileViewModel: ProfileListViewModel by activityViewModels()
+    private val subscriptionViewModel: SubscriptionViewModel by activityViewModels()
 
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var processed = false
@@ -45,6 +52,33 @@ class QrScanFragment : Fragment() {
         }
     }
 
+    private val galleryPicker = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val inputStream = requireContext().contentResolver.openInputStream(uri)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                if (bitmap == null) {
+                    Toast.makeText(requireContext(), R.string.no_qr_found, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val value = QRScanner.scanBitmap(bitmap)
+                bitmap.recycle()
+                if (value != null) {
+                    handleScannedValue(value)
+                } else {
+                    Toast.makeText(requireContext(), R.string.no_qr_found, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("QrScan", "Gallery scan failed", e)
+                Toast.makeText(requireContext(), R.string.no_qr_found, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentQrScanBinding.inflate(inflater, container, false)
         return binding.root
@@ -57,6 +91,10 @@ class QrScanFragment : Fragment() {
             findNavController().popBackStack()
         }
 
+        binding.btnGallery.setOnClickListener {
+            galleryPicker.launch("image/*")
+        }
+
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
         ) {
@@ -66,7 +104,6 @@ class QrScanFragment : Fragment() {
         }
     }
 
-    @androidx.camera.core.ExperimentalGetImage
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         cameraProviderFuture.addListener({
@@ -96,13 +133,11 @@ class QrScanFragment : Fragment() {
                 scanner.process(inputImage)
                     .addOnSuccessListener { barcodes ->
                         for (barcode in barcodes) {
-                            if (barcode.format == Barcode.FORMAT_QR_CODE) {
-                                val value = barcode.rawValue ?: continue
-                                if (isVpnUri(value) && !processed) {
-                                    processed = true
-                                    handleScannedUri(value)
-                                    return@addOnSuccessListener
-                                }
+                            val value = barcode.rawValue ?: continue
+                            if (value.isNotBlank() && !processed) {
+                                processed = true
+                                handleScannedValue(value)
+                                return@addOnSuccessListener
                             }
                         }
                     }
@@ -126,13 +161,26 @@ class QrScanFragment : Fragment() {
 
     private fun isVpnUri(value: String): Boolean {
         val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://")
-        return schemes.any { value.startsWith(it) }
+        return schemes.any { value.startsWith(it, ignoreCase = true) }
     }
 
-    private fun handleScannedUri(uri: String) {
+    private fun handleScannedValue(value: String) {
         activity?.runOnUiThread {
-            viewModel.importFromText(uri)
-            Toast.makeText(requireContext(), R.string.qr_imported, Toast.LENGTH_SHORT).show()
+            when {
+                isVpnUri(value) -> {
+                    profileViewModel.importFromText(value)
+                    Toast.makeText(requireContext(), R.string.qr_imported, Toast.LENGTH_SHORT).show()
+                }
+                value.startsWith("http://") || value.startsWith("https://") -> {
+                    subscriptionViewModel.addSubscription("QR Subscription", value, 0)
+                    Toast.makeText(requireContext(), R.string.subscription_added_qr, Toast.LENGTH_SHORT).show()
+                }
+                else -> {
+                    // Try as multi-line VPN URIs (some QR codes have multiple lines)
+                    profileViewModel.importFromText(value)
+                    Toast.makeText(requireContext(), R.string.qr_imported, Toast.LENGTH_SHORT).show()
+                }
+            }
             findNavController().popBackStack()
         }
     }
