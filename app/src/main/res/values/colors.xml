@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#2196F3</color>
+    <color name="primary_dark">#1976D2</color>
+    <color name="accent">#03A9F4</color>
+
+    <color name="status_connected">#4CAF50</color>
+    <color name="status_connecting">#FF9800</color>
+    <color name="status_disconnected">#9E9E9E</color>
+    <color name="status_error">#F44336</color>
+
+    <color name="ping_good">#4CAF50</color>
+    <color name="ping_medium">#FF9800</color>
+    <color name="ping_bad">#F44336</color>
+
+    <color name="card_selected">#1A2196F3</color>
+    <color name="card_normal">@android:color/transparent</color>
+
+    <color name="test_pass">#4CAF50</color>
+    <color name="test_warn">#FF9800</color>
+    <color name="test_fail">#F44336</color>
+
+    <color name="log_info">#9E9E9E</color>
+    <color name="log_warn">#FF9800</color>
+    <color name="log_error">#F44336</color>
+
+    <color name="text_secondary">#757575</color>
+    <color name="white">#FFFFFF</color>
+
+    <color name="btn_connected">#4CAF50</color>
+    <color name="btn_connecting">#FF9800</color>
+    <color name="btn_disconnected">#616161</color>
+
+    <color name="ic_launcher_background">#0D1B2A</color>
+</resources>

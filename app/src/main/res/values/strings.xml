@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_profiles">Servers</string>
+    <string name="nav_subscriptions">Subs</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_logs">Logs</string>
+
+    <!-- Connection -->
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="status_disconnected">Not connected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected</string>
+    <string name="no_profile_selected">No server selected</string>
+    <string name="vpn_permission_denied">Permission denied</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">Name</string>
+    <string name="address">Address</string>
+    <string name="port">Port</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="no_profiles">No servers added yet</string>
+    <string name="import_profiles">Import</string>
+    <string name="import_btn">Import</string>
+    <string name="manual">Manual</string>
+    <string name="profile_deleted">Profile deleted</string>
+    <string name="allow_insecure">Allow insecure TLS</string>
+    <string name="test_all">Test All</string>
+
+    <!-- Actions -->
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="test">Test</string>
+    <string name="share">Share</string>
+    <string name="add">Add</string>
+    <string name="undo">Undo</string>
+    <string name="copied">Copied to clipboard</string>
+    <string name="saved">Saved</string>
+    <string name="clear">Clear</string>
+    <string name="copy_all">Copy All</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">Add Subscription</string>
+    <string name="no_subscriptions">No subscriptions</string>
+    <string name="update_all">Update All</string>
+    <string name="auto_update">Auto-update</string>
+    <string name="auto_update_interval">Update interval</string>
+    <string name="auto_update_disabled">Disabled</string>
+    <string name="auto_update_hours">Every %d hours</string>
+
+    <!-- Settings -->
+    <string name="routing">Routing</string>
+    <string name="routing_global">Global Proxy</string>
+    <string name="routing_rules">Rule-based</string>
+    <string name="routing_direct">Direct</string>
+    <string name="primary_dns">Primary DNS</string>
+    <string name="secondary_dns">Secondary DNS</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">Bypass LAN</string>
+    <string name="enable_ipv6">Enable IPv6</string>
+    <string name="security_self_test">Security Self-Test</string>
+    <string name="run_security_test">Run Tests</string>
+    <string name="export_import">Export / Import</string>
+    <string name="export_config">Export</string>
+    <string name="import_config">Import</string>
+    <string name="exported">Config copied to clipboard</string>
+    <string name="show_speed_notification">Show speed in notification</string>
+    <string name="language">Language</string>
+    <string name="language_system">System default</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">Per-App VPN</string>
+    <string name="per_app_disabled">Disabled</string>
+    <string name="per_app_whitelist">Whitelist (only selected)</string>
+    <string name="per_app_blacklist">Blacklist (all except selected)</string>
+    <string name="select_apps">Select Apps</string>
+    <string name="search_apps">Search apps…</string>
+    <string name="show_system_apps">Show system apps</string>
+    <string name="apps_selected">%d apps selected</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">Backup / Restore</string>
+    <string name="backup_to_file">Backup to File</string>
+    <string name="restore_from_file">Restore from File</string>
+    <string name="backup_success">Backup saved successfully</string>
+    <string name="restore_success">Restored %d profiles</string>
+    <string name="restore_error">Restore failed: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">Connection active</string>
+    <string name="notif_text">Network service is running</string>
+    <string name="notif_stop">Stop</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">Paste</string>
+    <string name="clipboard_empty">Clipboard is empty</string>
+    <string name="clipboard_no_profile">No valid profile found in clipboard</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">Share QR</string>
+    <string name="share_uri">Copy URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">Block internet if VPN disconnects</string>
+    <string name="open_vpn_settings">Open VPN Settings</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">Auto-reconnect</string>
+    <string name="auto_reconnect_desc">Reconnect on network change</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">Import profile?</string>
+    <string name="import_profile_confirm">Add server profile from external source?\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">Config contains server credentials. Clipboard is accessible to other apps.</string>
+    <string name="backup_warning">Backup contains server credentials. Store securely.</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">Invalid DNS address</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">Only HTTPS subscription URLs are supported</string>
+
+    <!-- Errors -->
+    <string name="status_error">Error</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">Best Server</string>
+    <string name="auto_selecting">Testing servers…</string>
+    <string name="best_server_found">Best: %s (%dms)</string>
+    <string name="no_servers_reachable">No servers reachable</string>
+    <string name="no_servers">No servers added</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">Sort by Ping</string>
+
+    <!-- Logs -->
+    <string name="log_all">All</string>
+    <string name="log_info">Info</string>
+    <string name="log_warn">Warn</string>
+    <string name="log_error">Error</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">Today</string>
+    <string name="stats_week">This week</string>
+    <string name="stats_total">All time</string>
+    <string name="stats_reset">Reset Statistics</string>
+    <string name="stats_reset_confirm">Reset all traffic statistics?</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Quick connect/disconnect toggle</string>
+
+    <!-- Theme -->
+    <string name="theme">Theme</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+
+    <!-- Settings descriptions -->
+    <string name="routing_desc">Choose how traffic is routed through the VPN</string>
+    <string name="dns_desc">DNS servers resolve domain names to IP addresses</string>
+    <string name="doh_desc">Encrypt DNS queries for privacy</string>
+    <string name="bypass_lan_desc">Access local devices (printer, NAS) without VPN</string>
+    <string name="ipv6_desc">Route IPv6 traffic through VPN tunnel</string>
+    <string name="speed_notif_desc">Show live speed in the status bar</string>
+    <string name="security_test_desc">Check VPN tunnel integrity and security</string>
+    <string name="kill_switch_full_desc">Blocks all internet if VPN disconnects. Enable \"Always-on VPN\" in Android settings.</string>
+    <string name="per_app_desc">Choose which apps use or bypass VPN</string>
+    <string name="export_import_desc">Copy config to clipboard for sharing</string>
+    <string name="backup_restore_desc">Save profiles to file or restore from backup</string>
+
+    <!-- Server switching -->
+    <string name="switching_server">Switching server\u2026</string>
+
+    <!-- Service compatibility test -->
+    <string name="test_services">Test Services</string>
+    <string name="sort_by_compat">Sort by Compatibility</string>
+    <string name="service_test_results">Service Availability</string>
+    <string name="service_score">Score: %1$d/%2$d</string>
+    <string name="connect_first">Connect to VPN first</string>
+
+    <!-- About -->
+    <string name="created_by">Created by KOKOS</string>
+    <string name="github_url">https://github.com/KOKosaaaa</string>
+</resources>

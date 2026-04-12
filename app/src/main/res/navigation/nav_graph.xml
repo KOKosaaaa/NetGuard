@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.smarttools.netguard.ui.home.HomeFragment"
+        android:label="@string/nav_home" />
+
+    <fragment
+        android:id="@+id/nav_profiles"
+        android:name="com.smarttools.netguard.ui.profiles.ProfileListFragment"
+        android:label="@string/nav_profiles">
+        <action
+            android:id="@+id/action_profiles_to_edit"
+            app:destination="@id/nav_profile_edit" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_profile_edit"
+        android:name="com.smarttools.netguard.ui.profiles.ProfileEditFragment"
+        android:label="@string/edit_profile">
+        <argument
+            android:name="profile_id"
+            app:argType="long"
+            android:defaultValue="0L" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_subscriptions"
+        android:name="com.smarttools.netguard.ui.subscription.SubscriptionFragment"
+        android:label="@string/nav_subscriptions" />
+
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="com.smarttools.netguard.ui.settings.SettingsFragment"
+        android:label="@string/nav_settings">
+        <action
+            android:id="@+id/action_settings_to_per_app"
+            app:destination="@id/nav_per_app" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_per_app"
+        android:name="com.smarttools.netguard.ui.settings.PerAppFragment"
+        android:label="@string/per_app_vpn" />
+
+    <fragment
+        android:id="@+id/nav_logs"
+        android:name="com.smarttools.netguard.ui.logs.LogFragment"
+        android:label="@string/nav_logs" />
+
+</navigation>

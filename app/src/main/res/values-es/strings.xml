@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Inicio</string>
+    <string name="nav_profiles">Servidores</string>
+    <string name="nav_subscriptions">Suscripciones</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="nav_logs">Registros</string>
+
+    <!-- Connection -->
+    <string name="connect">Conectar</string>
+    <string name="disconnect">Desconectar</string>
+    <string name="status_disconnected">No conectado</string>
+    <string name="status_connecting">Conectando…</string>
+    <string name="status_connected">Conectado</string>
+    <string name="no_profile_selected">Ningún servidor seleccionado</string>
+    <string name="vpn_permission_denied">Permiso denegado</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">Nombre</string>
+    <string name="address">Dirección</string>
+    <string name="port">Puerto</string>
+    <string name="edit_profile">Editar perfil</string>
+    <string name="no_profiles">Aún no se han añadido servidores</string>
+    <string name="import_profiles">Importar</string>
+    <string name="import_btn">Importar</string>
+    <string name="manual">Manual</string>
+    <string name="profile_deleted">Perfil eliminado</string>
+    <string name="allow_insecure">Permitir TLS inseguro</string>
+    <string name="test_all">Probar todos</string>
+
+    <!-- Actions -->
+    <string name="save">Guardar</string>
+    <string name="delete">Eliminar</string>
+    <string name="test">Probar</string>
+    <string name="share">Compartir</string>
+    <string name="add">Añadir</string>
+    <string name="undo">Deshacer</string>
+    <string name="copied">Copiado al portapapeles</string>
+    <string name="saved">Guardado</string>
+    <string name="clear">Borrar</string>
+    <string name="copy_all">Copiar todo</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">Añadir suscripción</string>
+    <string name="no_subscriptions">Sin suscripciones</string>
+    <string name="update_all">Actualizar todo</string>
+    <string name="auto_update">Actualización automática</string>
+    <string name="auto_update_interval">Intervalo de actualización</string>
+    <string name="auto_update_disabled">Desactivado</string>
+    <string name="auto_update_hours">Cada %d horas</string>
+
+    <!-- Settings -->
+    <string name="routing">Enrutamiento</string>
+    <string name="routing_global">Proxy global</string>
+    <string name="routing_rules">Basado en reglas</string>
+    <string name="routing_direct">Directo</string>
+    <string name="primary_dns">DNS primario</string>
+    <string name="secondary_dns">DNS secundario</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">Omitir LAN</string>
+    <string name="enable_ipv6">Habilitar IPv6</string>
+    <string name="security_self_test">Autotest de seguridad</string>
+    <string name="run_security_test">Ejecutar pruebas</string>
+    <string name="export_import">Exportar / Importar</string>
+    <string name="export_config">Exportar</string>
+    <string name="import_config">Importar</string>
+    <string name="exported">Configuración copiada al portapapeles</string>
+    <string name="show_speed_notification">Mostrar velocidad en la notificación</string>
+    <string name="language">Idioma</string>
+    <string name="language_system">Predeterminado del sistema</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">VPN por aplicación</string>
+    <string name="per_app_disabled">Desactivado</string>
+    <string name="per_app_whitelist">Lista blanca (solo seleccionadas)</string>
+    <string name="per_app_blacklist">Lista negra (todas excepto seleccionadas)</string>
+    <string name="select_apps">Seleccionar apps</string>
+    <string name="search_apps">Buscar apps…</string>
+    <string name="show_system_apps">Mostrar apps del sistema</string>
+    <string name="apps_selected">%d apps seleccionadas</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">Copia de seguridad / Restaurar</string>
+    <string name="backup_to_file">Guardar en archivo</string>
+    <string name="restore_from_file">Restaurar desde archivo</string>
+    <string name="backup_success">Copia de seguridad guardada correctamente</string>
+    <string name="restore_success">%d perfiles restaurados</string>
+    <string name="restore_error">Error al restaurar: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">Conexión activa</string>
+    <string name="notif_text">El servicio de red está en ejecución</string>
+    <string name="notif_stop">Detener</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">Pegar</string>
+    <string name="clipboard_empty">El portapapeles está vacío</string>
+    <string name="clipboard_no_profile">No se encontró un perfil válido en el portapapeles</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">Compartir QR</string>
+    <string name="share_uri">Copiar URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">Bloquear internet si se desconecta el VPN</string>
+    <string name="open_vpn_settings">Abrir ajustes de VPN</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">Reconexión automática</string>
+    <string name="auto_reconnect_desc">Reconectar al cambiar de red</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">¿Importar perfil?</string>
+    <string name="import_profile_confirm">¿Añadir perfil de servidor desde fuente externa?\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">La configuración contiene credenciales del servidor. El portapapeles es accesible para otras apps.</string>
+    <string name="backup_warning">La copia de seguridad contiene credenciales del servidor. Guárdela de forma segura.</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">Dirección DNS no válida</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">Solo se admiten URLs de suscripción HTTPS</string>
+
+    <!-- Errors -->
+    <string name="status_error">Error</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">Mejor servidor</string>
+    <string name="auto_selecting">Probando servidores…</string>
+    <string name="best_server_found">Mejor: %s (%dms)</string>
+    <string name="no_servers_reachable">Ningún servidor accesible</string>
+    <string name="no_servers">No se han añadido servidores</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">Ordenar por Ping</string>
+
+    <!-- Logs -->
+    <string name="log_all">Todo</string>
+    <string name="log_info">Info</string>
+    <string name="log_warn">Advertencia</string>
+    <string name="log_error">Error</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">Hoy</string>
+    <string name="stats_week">Esta semana</string>
+    <string name="stats_total">Todo el tiempo</string>
+    <string name="stats_reset">Restablecer estadísticas</string>
+    <string name="stats_reset_confirm">¿Restablecer todas las estadísticas de tráfico?</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Botón rápido de conectar/desconectar</string>
+    <!-- Theme -->
+    <string name="theme">Tema</string>
+    <string name="theme_dark">Oscuro</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">Elige cómo se enruta el tráfico a través del VPN</string>
+    <string name="dns_desc">Los servidores DNS resuelven nombres de dominio a direcciones IP</string>
+    <string name="doh_desc">Cifrar consultas DNS para mayor privacidad</string>
+    <string name="bypass_lan_desc">Acceder a dispositivos locales (impresora, NAS) sin VPN</string>
+    <string name="ipv6_desc">Enrutar tráfico IPv6 a través del túnel VPN</string>
+    <string name="speed_notif_desc">Mostrar velocidad en vivo en la barra de estado</string>
+    <string name="security_test_desc">Verificar la integridad y seguridad del túnel VPN</string>
+    <string name="kill_switch_full_desc">Bloquea todo el internet si el VPN se desconecta. Activa \"VPN siempre activo\" en los ajustes de Android.</string>
+    <string name="per_app_desc">Elige qué apps usan o evitan el VPN</string>
+    <string name="export_import_desc">Copiar configuración al portapapeles para compartir</string>
+    <string name="backup_restore_desc">Guardar perfiles en archivo o restaurar desde copia de seguridad</string>
+    <!-- Server switching -->
+    <string name="switching_server">Cambiando de servidor\u2026</string>
+</resources>
