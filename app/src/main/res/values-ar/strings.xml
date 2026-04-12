@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">حفظ الملفات الشخصية في ملف أو استعادتها من نسخة احتياطية</string>
     <!-- Server switching -->
     <string name="switching_server">جارٍ تبديل الخادم\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">مسح QR</string>
+    <string name="qr_scan_hint">وجّه الكاميرا نحو رمز QR لملف VPN</string>
+    <string name="qr_imported">تم استيراد الملف من QR</string>
+    <string name="camera_permission_denied">يلزم إذن الكاميرا للمسح</string>
+    <string name="close">إغلاق</string>
 </resources>

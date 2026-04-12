@@ -25,6 +25,7 @@ import com.smarttools.netguard.util.QRGenerator
 import com.smarttools.netguard.util.ServiceTester
 import com.smarttools.netguard.viewmodel.MainViewModel
 import com.smarttools.netguard.viewmodel.ProfileListViewModel
+import androidx.navigation.fragment.findNavController
 import kotlinx.coroutines.launch
 
 class ProfileListFragment : Fragment() {
@@ -97,6 +98,10 @@ class ProfileListFragment : Fragment() {
 
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_scan_qr -> {
+                    findNavController().navigate(R.id.action_profiles_to_qr_scan)
+                    true
+                }
                 R.id.action_ping_all -> { viewModel.pingAll(); true }
                 R.id.action_test_services -> { viewModel.testServices(); true }
                 R.id.action_sort_ping -> { viewModel.sortByPing(); true }

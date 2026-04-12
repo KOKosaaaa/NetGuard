@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">Lưu hồ sơ vào tệp hoặc khôi phục từ bản sao lưu</string>
     <!-- Server switching -->
     <string name="switching_server">Đang chuyển máy chủ\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">Quét QR</string>
+    <string name="qr_scan_hint">Hướng camera vào mã QR cấu hình VPN</string>
+    <string name="qr_imported">Đã nhập cấu hình từ QR</string>
+    <string name="camera_permission_denied">Cần quyền camera để quét QR</string>
+    <string name="close">Đóng</string>
 </resources>

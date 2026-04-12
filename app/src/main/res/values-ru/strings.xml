@@ -129,4 +129,10 @@
     <string name="backup_restore_desc">Сохранить профили в файл или восстановить из резервной копии</string>
     <!-- Server switching -->
     <string name="switching_server">Переключение сервера\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">Сканировать QR</string>
+    <string name="qr_scan_hint">Наведите камеру на QR-код профиля VPN</string>
+    <string name="qr_imported">Профиль импортирован из QR</string>
+    <string name="camera_permission_denied">Для сканирования QR нужен доступ к камере</string>
+    <string name="close">Закрыть</string>
 </resources>

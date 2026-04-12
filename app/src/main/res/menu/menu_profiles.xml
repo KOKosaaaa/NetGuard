@@ -2,6 +2,10 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/action_scan_qr"
+        android:title="@string/scan_qr"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/action_ping_all"
         android:title="@string/test_all"
         app:showAsAction="ifRoom" />

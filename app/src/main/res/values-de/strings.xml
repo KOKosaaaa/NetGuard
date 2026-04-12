@@ -129,4 +129,10 @@
     <string name="backup_restore_desc">Profile in Datei speichern oder aus Sicherung wiederherstellen</string>
     <!-- Server switching -->
     <string name="switching_server">Server wird gewechselt\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">QR scannen</string>
+    <string name="qr_scan_hint">Kamera auf einen VPN-Profil-QR-Code richten</string>
+    <string name="qr_imported">Profil aus QR importiert</string>
+    <string name="camera_permission_denied">Kameraberechtigung für QR-Scan erforderlich</string>
+    <string name="close">Schließen</string>
 </resources>
