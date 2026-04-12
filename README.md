@@ -2,17 +2,6 @@
 
 Android VPN client built for privacy, security, and stealth. Powered by xray-core.
 
-<p align="center">
-  <img src="screen4.png" width="220" />
-  <img src="screen_top_final.png" width="220" />
-  <img src="screen_current.png" width="220" />
-</p>
-<p align="center">
-  <img src="screen_boundary.png" width="220" />
-  <img src="screen.png" width="220" />
-  <img src="screen_groups.png" width="220" />
-</p>
-
 ## What makes StealthVPN different
 
 Most VPN clients (v2rayNG, Hiddify, v2rayTUN) are great tools, but they share common weaknesses: credentials sitting on disk, open local SOCKS ports, IP leaks during network switches, and package names that scream "VPN" to any DPI system. StealthVPN was designed to fix all of that.

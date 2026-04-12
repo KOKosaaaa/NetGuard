@@ -27,6 +27,9 @@ obj/
 app/src/main/assets/geoip.dat
 app/src/main/assets/geosite.dat
 
+# Screenshots
+screen*.png
+
 # Misc
 *.log
 .DS_Store
