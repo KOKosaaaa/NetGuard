@@ -1,14 +1,14 @@
-# StealthVPN
+# NetGuard
 
 Android VPN client built for privacy, security, and stealth. Powered by xray-core.
 
-## What makes StealthVPN different
+## What makes NetGuard different
 
-Most VPN clients (v2rayNG, Hiddify, v2rayTUN) are great tools, but they share common weaknesses: credentials sitting on disk, open local SOCKS ports, IP leaks during network switches, and package names that scream "VPN" to any DPI system. StealthVPN was designed to fix all of that.
+Most VPN clients (v2rayNG, Hiddify, v2rayTUN) are great tools, but they share common weaknesses: credentials sitting on disk, open local SOCKS ports, IP leaks during network switches, and package names that scream "VPN" to any DPI system. NetGuard was designed to fix all of that.
 
 ### Zero-leak network switching
 
-When you switch between WiFi and mobile data, typical clients tear down the entire VPN tunnel and reconnect from scratch. During that window your real IP leaks. StealthVPN keeps the TUN interface alive and only restarts the internal xray + tun2socks processes. Packets are black-holed until the tunnel is back up — zero leak window.
+When you switch between WiFi and mobile data, typical clients tear down the entire VPN tunnel and reconnect from scratch. During that window your real IP leaks. NetGuard keeps the TUN interface alive and only restarts the internal xray + tun2socks processes. Packets are black-holed until the tunnel is back up — zero leak window.
 
 ### Ephemeral authenticated SOCKS5
 
