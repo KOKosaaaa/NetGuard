@@ -189,8 +189,12 @@
 
     <!-- QR Scanner -->
     <string name="scan_qr">Scan QR</string>
-    <string name="qr_scan_hint">Point camera at a VPN profile QR code</string>
+    <string name="qr_scan_hint">Point camera at a QR code</string>
     <string name="qr_imported">Profile imported from QR</string>
+    <string name="subscription_added_qr">Subscription added from QR</string>
+    <string name="qr_no_valid_data">QR code doesn\'t contain VPN data</string>
+    <string name="gallery">Gallery</string>
+    <string name="no_qr_found">No QR code found in image</string>
     <string name="camera_permission_denied">Camera permission required for QR scanning</string>
     <string name="close">Close</string>
 
