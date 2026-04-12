@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">ホーム</string>
+    <string name="nav_profiles">サーバー</string>
+    <string name="nav_subscriptions">購読</string>
+    <string name="nav_settings">設定</string>
+    <string name="nav_logs">ログ</string>
+
+    <!-- Connection -->
+    <string name="connect">接続</string>
+    <string name="disconnect">切断</string>
+    <string name="status_disconnected">未接続</string>
+    <string name="status_connecting">接続中…</string>
+    <string name="status_connected">接続済み</string>
+    <string name="no_profile_selected">サーバーが選択されていません</string>
+    <string name="vpn_permission_denied">権限が拒否されました</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">名前</string>
+    <string name="address">アドレス</string>
+    <string name="port">ポート</string>
+    <string name="edit_profile">プロファイルを編集</string>
+    <string name="no_profiles">サーバーがまだ追加されていません</string>
+    <string name="import_profiles">インポート</string>
+    <string name="import_btn">インポート</string>
+    <string name="manual">手動</string>
+    <string name="profile_deleted">プロファイルを削除しました</string>
+    <string name="allow_insecure">安全でない TLS を許可</string>
+    <string name="test_all">すべてテスト</string>
+
+    <!-- Actions -->
+    <string name="save">保存</string>
+    <string name="delete">削除</string>
+    <string name="test">テスト</string>
+    <string name="share">共有</string>
+    <string name="add">追加</string>
+    <string name="undo">元に戻す</string>
+    <string name="copied">クリップボードにコピーしました</string>
+    <string name="saved">保存しました</string>
+    <string name="clear">クリア</string>
+    <string name="copy_all">すべてコピー</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">購読を追加</string>
+    <string name="no_subscriptions">購読がありません</string>
+    <string name="update_all">すべて更新</string>
+    <string name="auto_update">自動更新</string>
+    <string name="auto_update_interval">更新間隔</string>
+    <string name="auto_update_disabled">無効</string>
+    <string name="auto_update_hours">%d 時間ごと</string>
+
+    <!-- Settings -->
+    <string name="routing">ルーティング</string>
+    <string name="routing_global">グローバルプロキシ</string>
+    <string name="routing_rules">ルールベース</string>
+    <string name="routing_direct">ダイレクト</string>
+    <string name="primary_dns">プライマリ DNS</string>
+    <string name="secondary_dns">セカンダリ DNS</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">LAN をバイパス</string>
+    <string name="enable_ipv6">IPv6 を有効化</string>
+    <string name="security_self_test">セキュリティ自己テスト</string>
+    <string name="run_security_test">テストを実行</string>
+    <string name="export_import">エクスポート / インポート</string>
+    <string name="export_config">エクスポート</string>
+    <string name="import_config">インポート</string>
+    <string name="exported">設定をクリップボードにコピーしました</string>
+    <string name="show_speed_notification">通知に速度を表示</string>
+    <string name="language">言語</string>
+    <string name="language_system">システムのデフォルト</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">アプリ別 VPN</string>
+    <string name="per_app_disabled">無効</string>
+    <string name="per_app_whitelist">ホワイトリスト（選択したアプリのみ）</string>
+    <string name="per_app_blacklist">ブラックリスト（選択以外のすべて）</string>
+    <string name="select_apps">アプリを選択</string>
+    <string name="search_apps">アプリを検索…</string>
+    <string name="show_system_apps">システムアプリを表示</string>
+    <string name="apps_selected">%d 個のアプリを選択</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">バックアップ / 復元</string>
+    <string name="backup_to_file">ファイルにバックアップ</string>
+    <string name="restore_from_file">ファイルから復元</string>
+    <string name="backup_success">バックアップを保存しました</string>
+    <string name="restore_success">%d 件のプロファイルを復元しました</string>
+    <string name="restore_error">復元に失敗しました：%s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">接続中</string>
+    <string name="notif_text">ネットワークサービスが実行中です</string>
+    <string name="notif_stop">停止</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">貼り付け</string>
+    <string name="clipboard_empty">クリップボードが空です</string>
+    <string name="clipboard_no_profile">クリップボードに有効なプロファイルがありません</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">QR を共有</string>
+    <string name="share_uri">URI をコピー</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">VPN 切断時にインターネットをブロック</string>
+    <string name="open_vpn_settings">VPN 設定を開く</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">自動再接続</string>
+    <string name="auto_reconnect_desc">ネットワーク変更時に再接続</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">プロファイルをインポートしますか？</string>
+    <string name="import_profile_confirm">外部ソースからサーバープロファイルを追加しますか？\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">設定にはサーバーの認証情報が含まれています。クリップボードは他のアプリからアクセスできます。</string>
+    <string name="backup_warning">バックアップにはサーバーの認証情報が含まれています。安全に保管してください。</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">無効な DNS アドレス</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">HTTPS の購読 URL のみサポートされています</string>
+
+    <!-- Errors -->
+    <string name="status_error">エラー</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">最適なサーバー</string>
+    <string name="auto_selecting">サーバーをテスト中…</string>
+    <string name="best_server_found">最適：%s（%dms）</string>
+    <string name="no_servers_reachable">到達可能なサーバーがありません</string>
+    <string name="no_servers">サーバーが追加されていません</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">Ping で並び替え</string>
+
+    <!-- Logs -->
+    <string name="log_all">すべて</string>
+    <string name="log_info">情報</string>
+    <string name="log_warn">警告</string>
+    <string name="log_error">エラー</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">今日</string>
+    <string name="stats_week">今週</string>
+    <string name="stats_total">全期間</string>
+    <string name="stats_reset">統計をリセット</string>
+    <string name="stats_reset_confirm">すべてのトラフィック統計をリセットしますか？</string>
+
+    <!-- Widget -->
+    <string name="widget_description">接続/切断のクイック切り替え</string>
+    <!-- Theme -->
+    <string name="theme">テーマ</string>
+    <string name="theme_dark">ダーク</string>
+    <string name="theme_light">ライト</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">VPN を通じたトラフィックのルーティング方法を選択</string>
+    <string name="dns_desc">DNS サーバーはドメイン名を IP アドレスに変換します</string>
+    <string name="doh_desc">プライバシー保護のため DNS クエリを暗号化</string>
+    <string name="bypass_lan_desc">VPN なしでローカルデバイス（プリンター、NAS）にアクセス</string>
+    <string name="ipv6_desc">IPv6 トラフィックを VPN トンネル経由でルーティング</string>
+    <string name="speed_notif_desc">ステータスバーにリアルタイム速度を表示</string>
+    <string name="security_test_desc">VPN トンネルの整合性とセキュリティを確認</string>
+    <string name="kill_switch_full_desc">VPN が切断されるとすべてのインターネットをブロックします。Android 設定で「常時接続 VPN」を有効にしてください。</string>
+    <string name="per_app_desc">VPN を使用またはバイパスするアプリを選択</string>
+    <string name="export_import_desc">共有用に設定をクリップボードにコピー</string>
+    <string name="backup_restore_desc">プロファイルをファイルに保存またはバックアップから復元</string>
+    <!-- Server switching -->
+    <string name="switching_server">サーバーを切り替え中\u2026</string>
+</resources>

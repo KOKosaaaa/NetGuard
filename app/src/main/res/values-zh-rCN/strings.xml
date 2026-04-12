@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">首页</string>
+    <string name="nav_profiles">服务器</string>
+    <string name="nav_subscriptions">订阅</string>
+    <string name="nav_settings">设置</string>
+    <string name="nav_logs">日志</string>
+
+    <!-- Connection -->
+    <string name="connect">连接</string>
+    <string name="disconnect">断开</string>
+    <string name="status_disconnected">未连接</string>
+    <string name="status_connecting">连接中…</string>
+    <string name="status_connected">已连接</string>
+    <string name="no_profile_selected">未选择服务器</string>
+    <string name="vpn_permission_denied">权限被拒绝</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">名称</string>
+    <string name="address">地址</string>
+    <string name="port">端口</string>
+    <string name="edit_profile">编辑配置</string>
+    <string name="no_profiles">尚未添加服务器</string>
+    <string name="import_profiles">导入</string>
+    <string name="import_btn">导入</string>
+    <string name="manual">手动</string>
+    <string name="profile_deleted">配置已删除</string>
+    <string name="allow_insecure">允许不安全的 TLS</string>
+    <string name="test_all">全部测试</string>
+
+    <!-- Actions -->
+    <string name="save">保存</string>
+    <string name="delete">删除</string>
+    <string name="test">测试</string>
+    <string name="share">分享</string>
+    <string name="add">添加</string>
+    <string name="undo">撤销</string>
+    <string name="copied">已复制到剪贴板</string>
+    <string name="saved">已保存</string>
+    <string name="clear">清除</string>
+    <string name="copy_all">复制全部</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">添加订阅</string>
+    <string name="no_subscriptions">暂无订阅</string>
+    <string name="update_all">全部更新</string>
+    <string name="auto_update">自动更新</string>
+    <string name="auto_update_interval">更新间隔</string>
+    <string name="auto_update_disabled">已禁用</string>
+    <string name="auto_update_hours">每 %d 小时</string>
+
+    <!-- Settings -->
+    <string name="routing">路由</string>
+    <string name="routing_global">全局代理</string>
+    <string name="routing_rules">规则模式</string>
+    <string name="routing_direct">直连</string>
+    <string name="primary_dns">主 DNS</string>
+    <string name="secondary_dns">备用 DNS</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">绕过局域网</string>
+    <string name="enable_ipv6">启用 IPv6</string>
+    <string name="security_self_test">安全自检</string>
+    <string name="run_security_test">运行测试</string>
+    <string name="export_import">导出 / 导入</string>
+    <string name="export_config">导出</string>
+    <string name="import_config">导入</string>
+    <string name="exported">配置已复制到剪贴板</string>
+    <string name="show_speed_notification">在通知中显示速度</string>
+    <string name="language">语言</string>
+    <string name="language_system">跟随系统</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">分应用 VPN</string>
+    <string name="per_app_disabled">已禁用</string>
+    <string name="per_app_whitelist">白名单（仅选中的应用）</string>
+    <string name="per_app_blacklist">黑名单（除选中外的所有应用）</string>
+    <string name="select_apps">选择应用</string>
+    <string name="search_apps">搜索应用…</string>
+    <string name="show_system_apps">显示系统应用</string>
+    <string name="apps_selected">已选择 %d 个应用</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">备份 / 恢复</string>
+    <string name="backup_to_file">备份到文件</string>
+    <string name="restore_from_file">从文件恢复</string>
+    <string name="backup_success">备份保存成功</string>
+    <string name="restore_success">已恢复 %d 个配置</string>
+    <string name="restore_error">恢复失败：%s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">连接已激活</string>
+    <string name="notif_text">网络服务运行中</string>
+    <string name="notif_stop">停止</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">粘贴</string>
+    <string name="clipboard_empty">剪贴板为空</string>
+    <string name="clipboard_no_profile">剪贴板中未找到有效配置</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">分享 QR</string>
+    <string name="share_uri">复制 URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">VPN 断开时阻止互联网</string>
+    <string name="open_vpn_settings">打开 VPN 设置</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">自动重连</string>
+    <string name="auto_reconnect_desc">网络变化时自动重新连接</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">导入配置？</string>
+    <string name="import_profile_confirm">从外部来源添加服务器配置？\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">配置包含服务器凭据。剪贴板可被其他应用访问。</string>
+    <string name="backup_warning">备份包含服务器凭据。请安全存储。</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">无效的 DNS 地址</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">仅支持 HTTPS 订阅链接</string>
+
+    <!-- Errors -->
+    <string name="status_error">错误</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">最佳服务器</string>
+    <string name="auto_selecting">正在测试服务器…</string>
+    <string name="best_server_found">最佳：%s（%dms）</string>
+    <string name="no_servers_reachable">没有可达的服务器</string>
+    <string name="no_servers">尚未添加服务器</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">按延迟排序</string>
+
+    <!-- Logs -->
+    <string name="log_all">全部</string>
+    <string name="log_info">信息</string>
+    <string name="log_warn">警告</string>
+    <string name="log_error">错误</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">今天</string>
+    <string name="stats_week">本周</string>
+    <string name="stats_total">全部时间</string>
+    <string name="stats_reset">重置统计</string>
+    <string name="stats_reset_confirm">重置所有流量统计数据？</string>
+
+    <!-- Widget -->
+    <string name="widget_description">快速连接/断开切换</string>
+    <!-- Theme -->
+    <string name="theme">主题</string>
+    <string name="theme_dark">深色</string>
+    <string name="theme_light">浅色</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">选择流量通过 VPN 的路由方式</string>
+    <string name="dns_desc">DNS 服务器将域名解析为 IP 地址</string>
+    <string name="doh_desc">加密 DNS 查询以保护隐私</string>
+    <string name="bypass_lan_desc">无需 VPN 即可访问本地设备（打印机、NAS）</string>
+    <string name="ipv6_desc">通过 VPN 隧道路由 IPv6 流量</string>
+    <string name="speed_notif_desc">在状态栏中显示实时速度</string>
+    <string name="security_test_desc">检查 VPN 隧道的完整性和安全性</string>
+    <string name="kill_switch_full_desc">VPN 断开时阻止所有互联网连接。请在 Android 设置中启用"始终开启的 VPN"。</string>
+    <string name="per_app_desc">选择哪些应用使用或绕过 VPN</string>
+    <string name="export_import_desc">将配置复制到剪贴板以便分享</string>
+    <string name="backup_restore_desc">将配置保存到文件或从备份恢复</string>
+    <!-- Server switching -->
+    <string name="switching_server">正在切换服务器\u2026</string>
+</resources>

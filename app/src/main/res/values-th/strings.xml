@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">หน้าหลัก</string>
+    <string name="nav_profiles">เซิร์ฟเวอร์</string>
+    <string name="nav_subscriptions">การสมัครสมาชิก</string>
+    <string name="nav_settings">การตั้งค่า</string>
+    <string name="nav_logs">บันทึก</string>
+
+    <!-- Connection -->
+    <string name="connect">เชื่อมต่อ</string>
+    <string name="disconnect">ยกเลิกการเชื่อมต่อ</string>
+    <string name="status_disconnected">ไม่ได้เชื่อมต่อ</string>
+    <string name="status_connecting">กำลังเชื่อมต่อ…</string>
+    <string name="status_connected">เชื่อมต่อแล้ว</string>
+    <string name="no_profile_selected">ไม่ได้เลือกเซิร์ฟเวอร์</string>
+    <string name="vpn_permission_denied">สิทธิ์ถูกปฏิเสธ</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">ชื่อ</string>
+    <string name="address">ที่อยู่</string>
+    <string name="port">พอร์ต</string>
+    <string name="edit_profile">แก้ไขโปรไฟล์</string>
+    <string name="no_profiles">ยังไม่มีเซิร์ฟเวอร์</string>
+    <string name="import_profiles">นำเข้า</string>
+    <string name="import_btn">นำเข้า</string>
+    <string name="manual">ด้วยตนเอง</string>
+    <string name="profile_deleted">ลบโปรไฟล์แล้ว</string>
+    <string name="allow_insecure">อนุญาต TLS ที่ไม่ปลอดภัย</string>
+    <string name="test_all">ทดสอบทั้งหมด</string>
+
+    <!-- Actions -->
+    <string name="save">บันทึก</string>
+    <string name="delete">ลบ</string>
+    <string name="test">ทดสอบ</string>
+    <string name="share">แชร์</string>
+    <string name="add">เพิ่ม</string>
+    <string name="undo">เลิกทำ</string>
+    <string name="copied">คัดลอกไปยังคลิปบอร์ดแล้ว</string>
+    <string name="saved">บันทึกแล้ว</string>
+    <string name="clear">ล้าง</string>
+    <string name="copy_all">คัดลอกทั้งหมด</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">เพิ่มการสมัครสมาชิก</string>
+    <string name="no_subscriptions">ไม่มีการสมัครสมาชิก</string>
+    <string name="update_all">อัปเดตทั้งหมด</string>
+    <string name="auto_update">อัปเดตอัตโนมัติ</string>
+    <string name="auto_update_interval">ช่วงเวลาอัปเดต</string>
+    <string name="auto_update_disabled">ปิดใช้งาน</string>
+    <string name="auto_update_hours">ทุก %d ชั่วโมง</string>
+
+    <!-- Settings -->
+    <string name="routing">การกำหนดเส้นทาง</string>
+    <string name="routing_global">พร็อกซีทั้งหมด</string>
+    <string name="routing_rules">ตามกฎ</string>
+    <string name="routing_direct">ตรง</string>
+    <string name="primary_dns">DNS หลัก</string>
+    <string name="secondary_dns">DNS สำรอง</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">ข้าม LAN</string>
+    <string name="enable_ipv6">เปิดใช้ IPv6</string>
+    <string name="security_self_test">ทดสอบความปลอดภัยตนเอง</string>
+    <string name="run_security_test">เรียกใช้การทดสอบ</string>
+    <string name="export_import">ส่งออก / นำเข้า</string>
+    <string name="export_config">ส่งออก</string>
+    <string name="import_config">นำเข้า</string>
+    <string name="exported">คัดลอกการตั้งค่าไปยังคลิปบอร์ดแล้ว</string>
+    <string name="show_speed_notification">แสดงความเร็วในการแจ้งเตือน</string>
+    <string name="language">ภาษา</string>
+    <string name="language_system">ค่าเริ่มต้นของระบบ</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">VPN ต่อแอป</string>
+    <string name="per_app_disabled">ปิดใช้งาน</string>
+    <string name="per_app_whitelist">รายการที่อนุญาต (เฉพาะที่เลือก)</string>
+    <string name="per_app_blacklist">รายการที่บล็อก (ทั้งหมดยกเว้นที่เลือก)</string>
+    <string name="select_apps">เลือกแอป</string>
+    <string name="search_apps">ค้นหาแอป…</string>
+    <string name="show_system_apps">แสดงแอประบบ</string>
+    <string name="apps_selected">เลือก %d แอป</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">สำรอง / กู้คืน</string>
+    <string name="backup_to_file">สำรองไปยังไฟล์</string>
+    <string name="restore_from_file">กู้คืนจากไฟล์</string>
+    <string name="backup_success">สำรองข้อมูลสำเร็จ</string>
+    <string name="restore_success">กู้คืน %d โปรไฟล์แล้ว</string>
+    <string name="restore_error">กู้คืนล้มเหลว: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">การเชื่อมต่อใช้งานอยู่</string>
+    <string name="notif_text">บริการเครือข่ายกำลังทำงาน</string>
+    <string name="notif_stop">หยุด</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">วาง</string>
+    <string name="clipboard_empty">คลิปบอร์ดว่างเปล่า</string>
+    <string name="clipboard_no_profile">ไม่พบโปรไฟล์ที่ถูกต้องในคลิปบอร์ด</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">แชร์ QR</string>
+    <string name="share_uri">คัดลอก URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">บล็อกอินเทอร์เน็ตหาก VPN ถูกตัด</string>
+    <string name="open_vpn_settings">เปิดการตั้งค่า VPN</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">เชื่อมต่อใหม่อัตโนมัติ</string>
+    <string name="auto_reconnect_desc">เชื่อมต่อใหม่เมื่อเครือข่ายเปลี่ยน</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">นำเข้าโปรไฟล์?</string>
+    <string name="import_profile_confirm">เพิ่มโปรไฟล์เซิร์ฟเวอร์จากแหล่งภายนอก?\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">การตั้งค่ามีข้อมูลรับรองเซิร์ฟเวอร์ แอปอื่นสามารถเข้าถึงคลิปบอร์ดได้</string>
+    <string name="backup_warning">ข้อมูลสำรองมีข้อมูลรับรองเซิร์ฟเวอร์ กรุณาเก็บรักษาอย่างปลอดภัย</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">ที่อยู่ DNS ไม่ถูกต้อง</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">รองรับเฉพาะ URL สมัครสมาชิก HTTPS เท่านั้น</string>
+
+    <!-- Errors -->
+    <string name="status_error">ข้อผิดพลาด</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">เซิร์ฟเวอร์ที่ดีที่สุด</string>
+    <string name="auto_selecting">กำลังทดสอบเซิร์ฟเวอร์…</string>
+    <string name="best_server_found">ดีที่สุด: %s (%dms)</string>
+    <string name="no_servers_reachable">ไม่มีเซิร์ฟเวอร์ที่เข้าถึงได้</string>
+    <string name="no_servers">ยังไม่มีเซิร์ฟเวอร์</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">เรียงตาม Ping</string>
+
+    <!-- Logs -->
+    <string name="log_all">ทั้งหมด</string>
+    <string name="log_info">ข้อมูล</string>
+    <string name="log_warn">คำเตือน</string>
+    <string name="log_error">ข้อผิดพลาด</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">วันนี้</string>
+    <string name="stats_week">สัปดาห์นี้</string>
+    <string name="stats_total">ทั้งหมด</string>
+    <string name="stats_reset">รีเซ็ตสถิติ</string>
+    <string name="stats_reset_confirm">รีเซ็ตสถิติการรับส่งข้อมูลทั้งหมด?</string>
+
+    <!-- Widget -->
+    <string name="widget_description">ปุ่มเชื่อมต่อ/ตัดการเชื่อมต่อด่วน</string>
+    <!-- Theme -->
+    <string name="theme">ธีม</string>
+    <string name="theme_dark">มืด</string>
+    <string name="theme_light">สว่าง</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">เลือกวิธีการกำหนดเส้นทางทราฟฟิกผ่าน VPN</string>
+    <string name="dns_desc">เซิร์ฟเวอร์ DNS แปลงชื่อโดเมนเป็นที่อยู่ IP</string>
+    <string name="doh_desc">เข้ารหัสการสอบถาม DNS เพื่อความเป็นส่วนตัว</string>
+    <string name="bypass_lan_desc">เข้าถึงอุปกรณ์ในเครือข่ายท้องถิ่น (เครื่องพิมพ์, NAS) โดยไม่ผ่าน VPN</string>
+    <string name="ipv6_desc">กำหนดเส้นทางทราฟฟิก IPv6 ผ่านอุโมงค์ VPN</string>
+    <string name="speed_notif_desc">แสดงความเร็วแบบเรียลไทม์ในแถบสถานะ</string>
+    <string name="security_test_desc">ตรวจสอบความสมบูรณ์และความปลอดภัยของอุโมงค์ VPN</string>
+    <string name="kill_switch_full_desc">บล็อกอินเทอร์เน็ตทั้งหมดหาก VPN ถูกตัด เปิดใช้ \"VPN เปิดตลอดเวลา\" ในการตั้งค่า Android</string>
+    <string name="per_app_desc">เลือกแอปที่จะใช้หรือข้าม VPN</string>
+    <string name="export_import_desc">คัดลอกการตั้งค่าไปยังคลิปบอร์ดเพื่อแชร์</string>
+    <string name="backup_restore_desc">บันทึกโปรไฟล์ลงไฟล์หรือกู้คืนจากข้อมูลสำรอง</string>
+    <!-- Server switching -->
+    <string name="switching_server">กำลังเปลี่ยนเซิร์ฟเวอร์\u2026</string>
+</resources>

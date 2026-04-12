@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Beranda</string>
+    <string name="nav_profiles">Server</string>
+    <string name="nav_subscriptions">Langganan</string>
+    <string name="nav_settings">Pengaturan</string>
+    <string name="nav_logs">Log</string>
+
+    <!-- Connection -->
+    <string name="connect">Hubungkan</string>
+    <string name="disconnect">Putuskan</string>
+    <string name="status_disconnected">Tidak terhubung</string>
+    <string name="status_connecting">Menghubungkan…</string>
+    <string name="status_connected">Terhubung</string>
+    <string name="no_profile_selected">Tidak ada server yang dipilih</string>
+    <string name="vpn_permission_denied">Izin ditolak</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">Nama</string>
+    <string name="address">Alamat</string>
+    <string name="port">Port</string>
+    <string name="edit_profile">Edit Profil</string>
+    <string name="no_profiles">Belum ada server yang ditambahkan</string>
+    <string name="import_profiles">Impor</string>
+    <string name="import_btn">Impor</string>
+    <string name="manual">Manual</string>
+    <string name="profile_deleted">Profil dihapus</string>
+    <string name="allow_insecure">Izinkan TLS tidak aman</string>
+    <string name="test_all">Tes Semua</string>
+
+    <!-- Actions -->
+    <string name="save">Simpan</string>
+    <string name="delete">Hapus</string>
+    <string name="test">Tes</string>
+    <string name="share">Bagikan</string>
+    <string name="add">Tambah</string>
+    <string name="undo">Urungkan</string>
+    <string name="copied">Disalin ke papan klip</string>
+    <string name="saved">Tersimpan</string>
+    <string name="clear">Bersihkan</string>
+    <string name="copy_all">Salin Semua</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">Tambah Langganan</string>
+    <string name="no_subscriptions">Tidak ada langganan</string>
+    <string name="update_all">Perbarui Semua</string>
+    <string name="auto_update">Pembaruan otomatis</string>
+    <string name="auto_update_interval">Interval pembaruan</string>
+    <string name="auto_update_disabled">Nonaktif</string>
+    <string name="auto_update_hours">Setiap %d jam</string>
+
+    <!-- Settings -->
+    <string name="routing">Routing</string>
+    <string name="routing_global">Proxy Global</string>
+    <string name="routing_rules">Berbasis aturan</string>
+    <string name="routing_direct">Langsung</string>
+    <string name="primary_dns">DNS Utama</string>
+    <string name="secondary_dns">DNS Sekunder</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">Lewati LAN</string>
+    <string name="enable_ipv6">Aktifkan IPv6</string>
+    <string name="security_self_test">Tes Keamanan Mandiri</string>
+    <string name="run_security_test">Jalankan Tes</string>
+    <string name="export_import">Ekspor / Impor</string>
+    <string name="export_config">Ekspor</string>
+    <string name="import_config">Impor</string>
+    <string name="exported">Konfigurasi disalin ke papan klip</string>
+    <string name="show_speed_notification">Tampilkan kecepatan di notifikasi</string>
+    <string name="language">Bahasa</string>
+    <string name="language_system">Bawaan sistem</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">VPN Per-Aplikasi</string>
+    <string name="per_app_disabled">Nonaktif</string>
+    <string name="per_app_whitelist">Daftar putih (hanya yang dipilih)</string>
+    <string name="per_app_blacklist">Daftar hitam (semua kecuali yang dipilih)</string>
+    <string name="select_apps">Pilih Aplikasi</string>
+    <string name="search_apps">Cari aplikasi…</string>
+    <string name="show_system_apps">Tampilkan aplikasi sistem</string>
+    <string name="apps_selected">%d aplikasi dipilih</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">Cadangkan / Pulihkan</string>
+    <string name="backup_to_file">Cadangkan ke File</string>
+    <string name="restore_from_file">Pulihkan dari File</string>
+    <string name="backup_success">Cadangan berhasil disimpan</string>
+    <string name="restore_success">%d profil dipulihkan</string>
+    <string name="restore_error">Pemulihan gagal: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">Koneksi aktif</string>
+    <string name="notif_text">Layanan jaringan sedang berjalan</string>
+    <string name="notif_stop">Hentikan</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">Tempel</string>
+    <string name="clipboard_empty">Papan klip kosong</string>
+    <string name="clipboard_no_profile">Tidak ditemukan profil valid di papan klip</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">Bagikan QR</string>
+    <string name="share_uri">Salin URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">Blokir internet jika VPN terputus</string>
+    <string name="open_vpn_settings">Buka Pengaturan VPN</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">Sambung ulang otomatis</string>
+    <string name="auto_reconnect_desc">Sambungkan ulang saat jaringan berubah</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">Impor profil?</string>
+    <string name="import_profile_confirm">Tambahkan profil server dari sumber eksternal?\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">Konfigurasi berisi kredensial server. Papan klip dapat diakses oleh aplikasi lain.</string>
+    <string name="backup_warning">Cadangan berisi kredensial server. Simpan dengan aman.</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">Alamat DNS tidak valid</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">Hanya URL langganan HTTPS yang didukung</string>
+
+    <!-- Errors -->
+    <string name="status_error">Kesalahan</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">Server Terbaik</string>
+    <string name="auto_selecting">Menguji server…</string>
+    <string name="best_server_found">Terbaik: %s (%dms)</string>
+    <string name="no_servers_reachable">Tidak ada server yang dapat dijangkau</string>
+    <string name="no_servers">Tidak ada server yang ditambahkan</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">Urutkan berdasarkan Ping</string>
+
+    <!-- Logs -->
+    <string name="log_all">Semua</string>
+    <string name="log_info">Info</string>
+    <string name="log_warn">Peringatan</string>
+    <string name="log_error">Kesalahan</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">Hari ini</string>
+    <string name="stats_week">Minggu ini</string>
+    <string name="stats_total">Sepanjang waktu</string>
+    <string name="stats_reset">Reset Statistik</string>
+    <string name="stats_reset_confirm">Reset semua statistik lalu lintas?</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Tombol cepat hubungkan/putuskan</string>
+    <!-- Theme -->
+    <string name="theme">Tema</string>
+    <string name="theme_dark">Gelap</string>
+    <string name="theme_light">Terang</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">Pilih cara lalu lintas diarahkan melalui VPN</string>
+    <string name="dns_desc">Server DNS mengubah nama domain menjadi alamat IP</string>
+    <string name="doh_desc">Enkripsi kueri DNS untuk privasi</string>
+    <string name="bypass_lan_desc">Akses perangkat lokal (printer, NAS) tanpa VPN</string>
+    <string name="ipv6_desc">Arahkan lalu lintas IPv6 melalui terowongan VPN</string>
+    <string name="speed_notif_desc">Tampilkan kecepatan langsung di bilah status</string>
+    <string name="security_test_desc">Periksa integritas dan keamanan terowongan VPN</string>
+    <string name="kill_switch_full_desc">Memblokir semua internet jika VPN terputus. Aktifkan \"VPN selalu aktif\" di pengaturan Android.</string>
+    <string name="per_app_desc">Pilih aplikasi yang menggunakan atau melewati VPN</string>
+    <string name="export_import_desc">Salin konfigurasi ke papan klip untuk dibagikan</string>
+    <string name="backup_restore_desc">Simpan profil ke file atau pulihkan dari cadangan</string>
+    <!-- Server switching -->
+    <string name="switching_server">Beralih server\u2026</string>
+</resources>

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">होम</string>
+    <string name="nav_profiles">सर्वर</string>
+    <string name="nav_subscriptions">सदस्यताएँ</string>
+    <string name="nav_settings">सेटिंग्स</string>
+    <string name="nav_logs">लॉग</string>
+
+    <!-- Connection -->
+    <string name="connect">कनेक्ट करें</string>
+    <string name="disconnect">डिस्कनेक्ट करें</string>
+    <string name="status_disconnected">कनेक्ट नहीं है</string>
+    <string name="status_connecting">कनेक्ट हो रहा है…</string>
+    <string name="status_connected">कनेक्ट है</string>
+    <string name="no_profile_selected">कोई सर्वर चयनित नहीं</string>
+    <string name="vpn_permission_denied">अनुमति अस्वीकृत</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">नाम</string>
+    <string name="address">पता</string>
+    <string name="port">पोर्ट</string>
+    <string name="edit_profile">प्रोफ़ाइल संपादित करें</string>
+    <string name="no_profiles">अभी तक कोई सर्वर नहीं जोड़ा गया</string>
+    <string name="import_profiles">आयात</string>
+    <string name="import_btn">आयात</string>
+    <string name="manual">मैनुअल</string>
+    <string name="profile_deleted">प्रोफ़ाइल हटा दी गई</string>
+    <string name="allow_insecure">असुरक्षित TLS की अनुमति दें</string>
+    <string name="test_all">सभी का परीक्षण</string>
+
+    <!-- Actions -->
+    <string name="save">सहेजें</string>
+    <string name="delete">हटाएँ</string>
+    <string name="test">परीक्षण</string>
+    <string name="share">साझा करें</string>
+    <string name="add">जोड़ें</string>
+    <string name="undo">पूर्ववत करें</string>
+    <string name="copied">क्लिपबोर्ड पर कॉपी किया गया</string>
+    <string name="saved">सहेजा गया</string>
+    <string name="clear">साफ़ करें</string>
+    <string name="copy_all">सभी कॉपी करें</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">सदस्यता जोड़ें</string>
+    <string name="no_subscriptions">कोई सदस्यता नहीं</string>
+    <string name="update_all">सभी अपडेट करें</string>
+    <string name="auto_update">स्वतः अपडेट</string>
+    <string name="auto_update_interval">अपडेट अंतराल</string>
+    <string name="auto_update_disabled">अक्षम</string>
+    <string name="auto_update_hours">हर %d घंटे</string>
+
+    <!-- Settings -->
+    <string name="routing">रूटिंग</string>
+    <string name="routing_global">ग्लोबल प्रॉक्सी</string>
+    <string name="routing_rules">नियम-आधारित</string>
+    <string name="routing_direct">डायरेक्ट</string>
+    <string name="primary_dns">प्राथमिक DNS</string>
+    <string name="secondary_dns">द्वितीयक DNS</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">LAN बायपास करें</string>
+    <string name="enable_ipv6">IPv6 सक्षम करें</string>
+    <string name="security_self_test">सुरक्षा स्व-परीक्षण</string>
+    <string name="run_security_test">परीक्षण चलाएँ</string>
+    <string name="export_import">निर्यात / आयात</string>
+    <string name="export_config">निर्यात</string>
+    <string name="import_config">आयात</string>
+    <string name="exported">कॉन्फ़िग क्लिपबोर्ड पर कॉपी किया गया</string>
+    <string name="show_speed_notification">सूचना में गति दिखाएँ</string>
+    <string name="language">भाषा</string>
+    <string name="language_system">सिस्टम डिफ़ॉल्ट</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">प्रति-ऐप VPN</string>
+    <string name="per_app_disabled">अक्षम</string>
+    <string name="per_app_whitelist">व्हाइटलिस्ट (केवल चयनित)</string>
+    <string name="per_app_blacklist">ब्लैकलिस्ट (चयनित को छोड़कर सभी)</string>
+    <string name="select_apps">ऐप्स चुनें</string>
+    <string name="search_apps">ऐप्स खोजें…</string>
+    <string name="show_system_apps">सिस्टम ऐप्स दिखाएँ</string>
+    <string name="apps_selected">%d ऐप्स चयनित</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">बैकअप / रीस्टोर</string>
+    <string name="backup_to_file">फ़ाइल में बैकअप</string>
+    <string name="restore_from_file">फ़ाइल से रीस्टोर</string>
+    <string name="backup_success">बैकअप सफलतापूर्वक सहेजा गया</string>
+    <string name="restore_success">%d प्रोफ़ाइल रीस्टोर की गईं</string>
+    <string name="restore_error">रीस्टोर विफल: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">कनेक्शन सक्रिय</string>
+    <string name="notif_text">नेटवर्क सेवा चल रही है</string>
+    <string name="notif_stop">रोकें</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">चिपकाएँ</string>
+    <string name="clipboard_empty">क्लिपबोर्ड खाली है</string>
+    <string name="clipboard_no_profile">क्लिपबोर्ड में कोई मान्य प्रोफ़ाइल नहीं मिली</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">QR साझा करें</string>
+    <string name="share_uri">URI कॉपी करें</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">VPN डिस्कनेक्ट होने पर इंटरनेट ब्लॉक करें</string>
+    <string name="open_vpn_settings">VPN सेटिंग्स खोलें</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">स्वतः पुनः कनेक्ट</string>
+    <string name="auto_reconnect_desc">नेटवर्क बदलने पर पुनः कनेक्ट करें</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">प्रोफ़ाइल आयात करें?</string>
+    <string name="import_profile_confirm">बाहरी स्रोत से सर्वर प्रोफ़ाइल जोड़ें?\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">कॉन्फ़िग में सर्वर क्रेडेंशियल हैं। क्लिपबोर्ड अन्य ऐप्स द्वारा एक्सेस किया जा सकता है।</string>
+    <string name="backup_warning">बैकअप में सर्वर क्रेडेंशियल हैं। सुरक्षित रूप से संग्रहीत करें।</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">अमान्य DNS पता</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">केवल HTTPS सदस्यता URL समर्थित हैं</string>
+
+    <!-- Errors -->
+    <string name="status_error">त्रुटि</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">सर्वश्रेष्ठ सर्वर</string>
+    <string name="auto_selecting">सर्वर का परीक्षण हो रहा है…</string>
+    <string name="best_server_found">सर्वश्रेष्ठ: %s (%dms)</string>
+    <string name="no_servers_reachable">कोई सर्वर उपलब्ध नहीं</string>
+    <string name="no_servers">कोई सर्वर नहीं जोड़ा गया</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">Ping के अनुसार क्रमबद्ध</string>
+
+    <!-- Logs -->
+    <string name="log_all">सभी</string>
+    <string name="log_info">जानकारी</string>
+    <string name="log_warn">चेतावनी</string>
+    <string name="log_error">त्रुटि</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">आज</string>
+    <string name="stats_week">इस सप्ताह</string>
+    <string name="stats_total">कुल समय</string>
+    <string name="stats_reset">आँकड़े रीसेट करें</string>
+    <string name="stats_reset_confirm">सभी ट्रैफ़िक आँकड़े रीसेट करें?</string>
+
+    <!-- Widget -->
+    <string name="widget_description">त्वरित कनेक्ट/डिस्कनेक्ट टॉगल</string>
+    <!-- Theme -->
+    <string name="theme">थीम</string>
+    <string name="theme_dark">डार्क</string>
+    <string name="theme_light">लाइट</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">चुनें कि ट्रैफ़िक VPN के माध्यम से कैसे रूट हो</string>
+    <string name="dns_desc">DNS सर्वर डोमेन नामों को IP पतों में बदलते हैं</string>
+    <string name="doh_desc">गोपनीयता के लिए DNS क्वेरी को एन्क्रिप्ट करें</string>
+    <string name="bypass_lan_desc">VPN के बिना स्थानीय उपकरणों (प्रिंटर, NAS) तक पहुँचें</string>
+    <string name="ipv6_desc">IPv6 ट्रैफ़िक को VPN टनल के माध्यम से रूट करें</string>
+    <string name="speed_notif_desc">स्टेटस बार में लाइव गति दिखाएँ</string>
+    <string name="security_test_desc">VPN टनल की अखंडता और सुरक्षा जाँचें</string>
+    <string name="kill_switch_full_desc">VPN डिस्कनेक्ट होने पर सारा इंटरनेट ब्लॉक करता है। Android सेटिंग्स में \"हमेशा चालू VPN\" सक्षम करें।</string>
+    <string name="per_app_desc">चुनें कौन से ऐप्स VPN का उपयोग करें या बायपास करें</string>
+    <string name="export_import_desc">साझा करने के लिए कॉन्फ़िग को क्लिपबोर्ड पर कॉपी करें</string>
+    <string name="backup_restore_desc">प्रोफ़ाइल को फ़ाइल में सहेजें या बैकअप से रीस्टोर करें</string>
+    <!-- Server switching -->
+    <string name="switching_server">सर्वर बदल रहा है\u2026</string>
+</resources>

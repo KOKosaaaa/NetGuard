@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Trang chủ</string>
+    <string name="nav_profiles">Máy chủ</string>
+    <string name="nav_subscriptions">Đăng ký</string>
+    <string name="nav_settings">Cài đặt</string>
+    <string name="nav_logs">Nhật ký</string>
+
+    <!-- Connection -->
+    <string name="connect">Kết nối</string>
+    <string name="disconnect">Ngắt kết nối</string>
+    <string name="status_disconnected">Chưa kết nối</string>
+    <string name="status_connecting">Đang kết nối…</string>
+    <string name="status_connected">Đã kết nối</string>
+    <string name="no_profile_selected">Chưa chọn máy chủ</string>
+    <string name="vpn_permission_denied">Quyền bị từ chối</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">Tên</string>
+    <string name="address">Địa chỉ</string>
+    <string name="port">Cổng</string>
+    <string name="edit_profile">Chỉnh sửa hồ sơ</string>
+    <string name="no_profiles">Chưa thêm máy chủ nào</string>
+    <string name="import_profiles">Nhập</string>
+    <string name="import_btn">Nhập</string>
+    <string name="manual">Thủ công</string>
+    <string name="profile_deleted">Đã xóa hồ sơ</string>
+    <string name="allow_insecure">Cho phép TLS không an toàn</string>
+    <string name="test_all">Kiểm tra tất cả</string>
+
+    <!-- Actions -->
+    <string name="save">Lưu</string>
+    <string name="delete">Xóa</string>
+    <string name="test">Kiểm tra</string>
+    <string name="share">Chia sẻ</string>
+    <string name="add">Thêm</string>
+    <string name="undo">Hoàn tác</string>
+    <string name="copied">Đã sao chép vào bộ nhớ tạm</string>
+    <string name="saved">Đã lưu</string>
+    <string name="clear">Xóa</string>
+    <string name="copy_all">Sao chép tất cả</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">Thêm đăng ký</string>
+    <string name="no_subscriptions">Không có đăng ký</string>
+    <string name="update_all">Cập nhật tất cả</string>
+    <string name="auto_update">Tự động cập nhật</string>
+    <string name="auto_update_interval">Chu kỳ cập nhật</string>
+    <string name="auto_update_disabled">Đã tắt</string>
+    <string name="auto_update_hours">Mỗi %d giờ</string>
+
+    <!-- Settings -->
+    <string name="routing">Định tuyến</string>
+    <string name="routing_global">Proxy toàn cục</string>
+    <string name="routing_rules">Theo quy tắc</string>
+    <string name="routing_direct">Trực tiếp</string>
+    <string name="primary_dns">DNS chính</string>
+    <string name="secondary_dns">DNS phụ</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">Bỏ qua LAN</string>
+    <string name="enable_ipv6">Bật IPv6</string>
+    <string name="security_self_test">Tự kiểm tra bảo mật</string>
+    <string name="run_security_test">Chạy kiểm tra</string>
+    <string name="export_import">Xuất / Nhập</string>
+    <string name="export_config">Xuất</string>
+    <string name="import_config">Nhập</string>
+    <string name="exported">Cấu hình đã sao chép vào bộ nhớ tạm</string>
+    <string name="show_speed_notification">Hiển thị tốc độ trong thông báo</string>
+    <string name="language">Ngôn ngữ</string>
+    <string name="language_system">Mặc định hệ thống</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">VPN theo ứng dụng</string>
+    <string name="per_app_disabled">Đã tắt</string>
+    <string name="per_app_whitelist">Danh sách trắng (chỉ ứng dụng đã chọn)</string>
+    <string name="per_app_blacklist">Danh sách đen (tất cả trừ ứng dụng đã chọn)</string>
+    <string name="select_apps">Chọn ứng dụng</string>
+    <string name="search_apps">Tìm ứng dụng…</string>
+    <string name="show_system_apps">Hiển thị ứng dụng hệ thống</string>
+    <string name="apps_selected">Đã chọn %d ứng dụng</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">Sao lưu / Khôi phục</string>
+    <string name="backup_to_file">Sao lưu ra tệp</string>
+    <string name="restore_from_file">Khôi phục từ tệp</string>
+    <string name="backup_success">Sao lưu thành công</string>
+    <string name="restore_success">Đã khôi phục %d hồ sơ</string>
+    <string name="restore_error">Khôi phục thất bại: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">Kết nối đang hoạt động</string>
+    <string name="notif_text">Dịch vụ mạng đang chạy</string>
+    <string name="notif_stop">Dừng</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">Dán</string>
+    <string name="clipboard_empty">Bộ nhớ tạm trống</string>
+    <string name="clipboard_no_profile">Không tìm thấy hồ sơ hợp lệ trong bộ nhớ tạm</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">Chia sẻ QR</string>
+    <string name="share_uri">Sao chép URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">Chặn internet nếu VPN bị ngắt</string>
+    <string name="open_vpn_settings">Mở cài đặt VPN</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">Tự động kết nối lại</string>
+    <string name="auto_reconnect_desc">Kết nối lại khi mạng thay đổi</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">Nhập hồ sơ?</string>
+    <string name="import_profile_confirm">Thêm hồ sơ máy chủ từ nguồn bên ngoài?\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">Cấu hình chứa thông tin đăng nhập máy chủ. Bộ nhớ tạm có thể bị ứng dụng khác truy cập.</string>
+    <string name="backup_warning">Bản sao lưu chứa thông tin đăng nhập máy chủ. Hãy lưu trữ an toàn.</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">Địa chỉ DNS không hợp lệ</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">Chỉ hỗ trợ URL đăng ký HTTPS</string>
+
+    <!-- Errors -->
+    <string name="status_error">Lỗi</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">Máy chủ tốt nhất</string>
+    <string name="auto_selecting">Đang kiểm tra máy chủ…</string>
+    <string name="best_server_found">Tốt nhất: %s (%dms)</string>
+    <string name="no_servers_reachable">Không có máy chủ nào khả dụng</string>
+    <string name="no_servers">Chưa thêm máy chủ nào</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">Sắp xếp theo Ping</string>
+
+    <!-- Logs -->
+    <string name="log_all">Tất cả</string>
+    <string name="log_info">Thông tin</string>
+    <string name="log_warn">Cảnh báo</string>
+    <string name="log_error">Lỗi</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">Hôm nay</string>
+    <string name="stats_week">Tuần này</string>
+    <string name="stats_total">Toàn bộ</string>
+    <string name="stats_reset">Đặt lại thống kê</string>
+    <string name="stats_reset_confirm">Đặt lại tất cả thống kê lưu lượng?</string>
+
+    <!-- Widget -->
+    <string name="widget_description">Nút kết nối/ngắt kết nối nhanh</string>
+    <!-- Theme -->
+    <string name="theme">Giao diện</string>
+    <string name="theme_dark">Tối</string>
+    <string name="theme_light">Sáng</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">Chọn cách lưu lượng được định tuyến qua VPN</string>
+    <string name="dns_desc">Máy chủ DNS phân giải tên miền thành địa chỉ IP</string>
+    <string name="doh_desc">Mã hóa truy vấn DNS để bảo vệ quyền riêng tư</string>
+    <string name="bypass_lan_desc">Truy cập thiết bị cục bộ (máy in, NAS) không qua VPN</string>
+    <string name="ipv6_desc">Định tuyến lưu lượng IPv6 qua đường hầm VPN</string>
+    <string name="speed_notif_desc">Hiển thị tốc độ trực tiếp trên thanh trạng thái</string>
+    <string name="security_test_desc">Kiểm tra tính toàn vẹn và bảo mật của đường hầm VPN</string>
+    <string name="kill_switch_full_desc">Chặn toàn bộ internet nếu VPN bị ngắt. Bật \"VPN luôn bật\" trong cài đặt Android.</string>
+    <string name="per_app_desc">Chọn ứng dụng nào sử dụng hoặc bỏ qua VPN</string>
+    <string name="export_import_desc">Sao chép cấu hình vào bộ nhớ tạm để chia sẻ</string>
+    <string name="backup_restore_desc">Lưu hồ sơ vào tệp hoặc khôi phục từ bản sao lưu</string>
+    <!-- Server switching -->
+    <string name="switching_server">Đang chuyển máy chủ\u2026</string>
+</resources>

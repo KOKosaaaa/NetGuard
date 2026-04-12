@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name — NEUTRAL, no VPN/proxy keywords -->
+    <string name="app_name">NetGuard</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_profiles">الخوادم</string>
+    <string name="nav_subscriptions">الاشتراكات</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_logs">السجلات</string>
+
+    <!-- Connection -->
+    <string name="connect">اتصال</string>
+    <string name="disconnect">قطع الاتصال</string>
+    <string name="status_disconnected">غير متصل</string>
+    <string name="status_connecting">جارٍ الاتصال…</string>
+    <string name="status_connected">متصل</string>
+    <string name="no_profile_selected">لم يتم اختيار خادم</string>
+    <string name="vpn_permission_denied">تم رفض الإذن</string>
+
+    <!-- Profiles -->
+    <string name="profile_name">الاسم</string>
+    <string name="address">العنوان</string>
+    <string name="port">المنفذ</string>
+    <string name="edit_profile">تعديل الملف الشخصي</string>
+    <string name="no_profiles">لم تتم إضافة خوادم بعد</string>
+    <string name="import_profiles">استيراد</string>
+    <string name="import_btn">استيراد</string>
+    <string name="manual">يدوي</string>
+    <string name="profile_deleted">تم حذف الملف الشخصي</string>
+    <string name="allow_insecure">السماح بـ TLS غير آمن</string>
+    <string name="test_all">اختبار الكل</string>
+
+    <!-- Actions -->
+    <string name="save">حفظ</string>
+    <string name="delete">حذف</string>
+    <string name="test">اختبار</string>
+    <string name="share">مشاركة</string>
+    <string name="add">إضافة</string>
+    <string name="undo">تراجع</string>
+    <string name="copied">تم النسخ إلى الحافظة</string>
+    <string name="saved">تم الحفظ</string>
+    <string name="clear">مسح</string>
+    <string name="copy_all">نسخ الكل</string>
+
+    <!-- Subscriptions -->
+    <string name="add_subscription">إضافة اشتراك</string>
+    <string name="no_subscriptions">لا توجد اشتراكات</string>
+    <string name="update_all">تحديث الكل</string>
+    <string name="auto_update">تحديث تلقائي</string>
+    <string name="auto_update_interval">فترة التحديث</string>
+    <string name="auto_update_disabled">معطّل</string>
+    <string name="auto_update_hours">كل %d ساعات</string>
+
+    <!-- Settings -->
+    <string name="routing">التوجيه</string>
+    <string name="routing_global">بروكسي شامل</string>
+    <string name="routing_rules">قائم على القواعد</string>
+    <string name="routing_direct">مباشر</string>
+    <string name="primary_dns">DNS الأساسي</string>
+    <string name="secondary_dns">DNS الثانوي</string>
+    <string name="doh">DNS over HTTPS</string>
+    <string name="bypass_lan">تجاوز LAN</string>
+    <string name="enable_ipv6">تفعيل IPv6</string>
+    <string name="security_self_test">اختبار الأمان الذاتي</string>
+    <string name="run_security_test">تشغيل الاختبارات</string>
+    <string name="export_import">تصدير / استيراد</string>
+    <string name="export_config">تصدير</string>
+    <string name="import_config">استيراد</string>
+    <string name="exported">تم نسخ الإعدادات إلى الحافظة</string>
+    <string name="show_speed_notification">عرض السرعة في الإشعار</string>
+    <string name="language">اللغة</string>
+    <string name="language_system">الافتراضي للنظام</string>
+
+    <!-- Per-App -->
+    <string name="per_app_vpn">VPN لكل تطبيق</string>
+    <string name="per_app_disabled">معطّل</string>
+    <string name="per_app_whitelist">القائمة البيضاء (المحددة فقط)</string>
+    <string name="per_app_blacklist">القائمة السوداء (الكل عدا المحددة)</string>
+    <string name="select_apps">اختيار التطبيقات</string>
+    <string name="search_apps">البحث في التطبيقات…</string>
+    <string name="show_system_apps">عرض تطبيقات النظام</string>
+    <string name="apps_selected">تم اختيار %d تطبيقات</string>
+
+    <!-- Backup / Restore -->
+    <string name="backup_restore">نسخ احتياطي / استعادة</string>
+    <string name="backup_to_file">نسخ احتياطي إلى ملف</string>
+    <string name="restore_from_file">استعادة من ملف</string>
+    <string name="backup_success">تم حفظ النسخة الاحتياطية بنجاح</string>
+    <string name="restore_success">تمت استعادة %d ملفات شخصية</string>
+    <string name="restore_error">فشلت الاستعادة: %s</string>
+
+    <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
+    <string name="notif_title">الاتصال نشط</string>
+    <string name="notif_text">خدمة الشبكة قيد التشغيل</string>
+    <string name="notif_stop">إيقاف</string>
+
+    <!-- Clipboard -->
+    <string name="paste_from_clipboard">لصق</string>
+    <string name="clipboard_empty">الحافظة فارغة</string>
+    <string name="clipboard_no_profile">لم يتم العثور على ملف شخصي صالح في الحافظة</string>
+
+    <!-- Share QR -->
+    <string name="share_qr">مشاركة QR</string>
+    <string name="share_uri">نسخ URI</string>
+
+    <!-- Kill Switch -->
+    <string name="kill_switch">Kill Switch</string>
+    <string name="kill_switch_desc">حظر الإنترنت عند انقطاع VPN</string>
+    <string name="open_vpn_settings">فتح إعدادات VPN</string>
+
+    <!-- Auto-reconnect -->
+    <string name="auto_reconnect">إعادة الاتصال التلقائي</string>
+    <string name="auto_reconnect_desc">إعادة الاتصال عند تغيير الشبكة</string>
+
+    <!-- Deep link confirmation -->
+    <string name="import_profile_question">استيراد الملف الشخصي؟</string>
+    <string name="import_profile_confirm">إضافة ملف خادم من مصدر خارجي؟\n\n%1$s</string>
+
+    <!-- Export warning -->
+    <string name="export_warning">تحتوي الإعدادات على بيانات اعتماد الخادم. الحافظة متاحة للتطبيقات الأخرى.</string>
+    <string name="backup_warning">تحتوي النسخة الاحتياطية على بيانات اعتماد الخادم. احفظها بأمان.</string>
+
+    <!-- DNS validation -->
+    <string name="invalid_dns">عنوان DNS غير صالح</string>
+
+    <!-- Subscription validation -->
+    <string name="subscription_https_only">يتم دعم روابط اشتراك HTTPS فقط</string>
+
+    <!-- Errors -->
+    <string name="status_error">خطأ</string>
+
+    <!-- Auto-select best server -->
+    <string name="auto_select">أفضل خادم</string>
+    <string name="auto_selecting">جارٍ اختبار الخوادم…</string>
+    <string name="best_server_found">الأفضل: %s (%dms)</string>
+    <string name="no_servers_reachable">لا يمكن الوصول إلى أي خادم</string>
+    <string name="no_servers">لم تتم إضافة خوادم</string>
+
+    <!-- Sort -->
+    <string name="sort_by_ping">ترتيب حسب Ping</string>
+
+    <!-- Logs -->
+    <string name="log_all">الكل</string>
+    <string name="log_info">معلومات</string>
+    <string name="log_warn">تحذير</string>
+    <string name="log_error">خطأ</string>
+
+    <!-- Session stats -->
+    <string name="stats_today">اليوم</string>
+    <string name="stats_week">هذا الأسبوع</string>
+    <string name="stats_total">كل الأوقات</string>
+    <string name="stats_reset">إعادة تعيين الإحصائيات</string>
+    <string name="stats_reset_confirm">إعادة تعيين جميع إحصائيات حركة المرور؟</string>
+
+    <!-- Widget -->
+    <string name="widget_description">زر اتصال/قطع اتصال سريع</string>
+    <!-- Theme -->
+    <string name="theme">المظهر</string>
+    <string name="theme_dark">داكن</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_oled">OLED Black</string>
+    <string name="theme_ocean">Ocean</string>
+    <!-- Settings descriptions -->
+    <string name="routing_desc">اختر كيفية توجيه حركة المرور عبر VPN</string>
+    <string name="dns_desc">تقوم خوادم DNS بتحويل أسماء النطاقات إلى عناوين IP</string>
+    <string name="doh_desc">تشفير استعلامات DNS لحماية الخصوصية</string>
+    <string name="bypass_lan_desc">الوصول إلى الأجهزة المحلية (طابعة، NAS) بدون VPN</string>
+    <string name="ipv6_desc">توجيه حركة مرور IPv6 عبر نفق VPN</string>
+    <string name="speed_notif_desc">عرض السرعة الحية في شريط الحالة</string>
+    <string name="security_test_desc">فحص سلامة وأمان نفق VPN</string>
+    <string name="kill_switch_full_desc">يحظر كل الإنترنت عند انقطاع VPN. قم بتفعيل \"VPN دائم التشغيل\" في إعدادات Android.</string>
+    <string name="per_app_desc">اختر التطبيقات التي تستخدم أو تتجاوز VPN</string>
+    <string name="export_import_desc">نسخ الإعدادات إلى الحافظة للمشاركة</string>
+    <string name="backup_restore_desc">حفظ الملفات الشخصية في ملف أو استعادتها من نسخة احتياطية</string>
+    <!-- Server switching -->
+    <string name="switching_server">جارٍ تبديل الخادم\u2026</string>
+</resources>
