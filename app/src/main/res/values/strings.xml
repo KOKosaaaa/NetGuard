@@ -187,6 +187,13 @@
     <string name="service_score">Score: %1$d/%2$d</string>
     <string name="connect_first">Connect to VPN first</string>
 
+    <!-- QR Scanner -->
+    <string name="scan_qr">Scan QR</string>
+    <string name="qr_scan_hint">Point camera at a VPN profile QR code</string>
+    <string name="qr_imported">Profile imported from QR</string>
+    <string name="camera_permission_denied">Camera permission required for QR scanning</string>
+    <string name="close">Close</string>
+
     <!-- About -->
     <string name="created_by">Created by KOKOS</string>
     <string name="github_url">https://github.com/KOKosaaaa</string>

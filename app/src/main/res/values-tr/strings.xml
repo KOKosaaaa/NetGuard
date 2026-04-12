@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">Profilleri dosyaya kaydedin veya yedekten geri yükleyin</string>
     <!-- Server switching -->
     <string name="switching_server">Sunucu değiştiriliyor\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">QR Tara</string>
+    <string name="qr_scan_hint">Kamerayı VPN profil QR koduna doğrultun</string>
+    <string name="qr_imported">QR\'den profil içe aktarıldı</string>
+    <string name="camera_permission_denied">QR tarama için kamera izni gerekli</string>
+    <string name="close">Kapat</string>
 </resources>

@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">प्रोफ़ाइल को फ़ाइल में सहेजें या बैकअप से रीस्टोर करें</string>
     <!-- Server switching -->
     <string name="switching_server">सर्वर बदल रहा है\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">QR स्कैन करें</string>
+    <string name="qr_scan_hint">कैमरा VPN प्रोफ़ाइल QR कोड पर रखें</string>
+    <string name="qr_imported">QR से प्रोफ़ाइल आयातित</string>
+    <string name="camera_permission_denied">QR स्कैनिंग के लिए कैमरा अनुमति आवश्यक</string>
+    <string name="close">बंद करें</string>
 </resources>

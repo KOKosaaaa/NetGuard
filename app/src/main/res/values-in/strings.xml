@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">Simpan profil ke file atau pulihkan dari cadangan</string>
     <!-- Server switching -->
     <string name="switching_server">Beralih server\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">Pindai QR</string>
+    <string name="qr_scan_hint">Arahkan kamera ke kode QR profil VPN</string>
+    <string name="qr_imported">Profil diimpor dari QR</string>
+    <string name="camera_permission_denied">Izin kamera diperlukan untuk memindai QR</string>
+    <string name="close">Tutup</string>
 </resources>

@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">プロファイルをファイルに保存またはバックアップから復元</string>
     <!-- Server switching -->
     <string name="switching_server">サーバーを切り替え中\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">QRスキャン</string>
+    <string name="qr_scan_hint">VPNプロファイルのQRコードにカメラを向けてください</string>
+    <string name="qr_imported">QRからプロファイルをインポートしました</string>
+    <string name="camera_permission_denied">QRスキャンにはカメラの許可が必要です</string>
+    <string name="close">閉じる</string>
 </resources>

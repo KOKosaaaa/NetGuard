@@ -176,4 +176,10 @@
     <string name="backup_restore_desc">将配置保存到文件或从备份恢复</string>
     <!-- Server switching -->
     <string name="switching_server">正在切换服务器\u2026</string>
+    <!-- QR Scanner -->
+    <string name="scan_qr">扫描二维码</string>
+    <string name="qr_scan_hint">将摄像头对准VPN配置二维码</string>
+    <string name="qr_imported">已从二维码导入配置</string>
+    <string name="camera_permission_denied">扫描二维码需要相机权限</string>
+    <string name="close">关闭</string>
 </resources>
