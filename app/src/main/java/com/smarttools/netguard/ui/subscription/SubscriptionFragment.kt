@@ -23,7 +23,9 @@ import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentSubscriptionBinding
 import com.smarttools.netguard.model.Subscription
 import com.smarttools.netguard.util.QRGenerator
+import com.smarttools.netguard.viewmodel.ProfileListViewModel
 import com.smarttools.netguard.viewmodel.SubscriptionViewModel
+import androidx.navigation.fragment.findNavController
 import kotlinx.coroutines.launch
 
 class SubscriptionFragment : Fragment() {
@@ -52,10 +54,17 @@ class SubscriptionFragment : Fragment() {
         binding.fabAddSub.setOnClickListener { showAddDialog() }
 
         binding.toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_update_all) {
-                viewModel.updateAll()
-                true
-            } else false
+            when (item.itemId) {
+                R.id.action_scan_qr -> {
+                    findNavController().navigate(R.id.action_subscriptions_to_qr_scan)
+                    true
+                }
+                R.id.action_update_all -> {
+                    viewModel.updateAll()
+                    true
+                }
+                else -> false
+            }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {

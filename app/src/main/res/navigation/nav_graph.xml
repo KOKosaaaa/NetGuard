@@ -16,9 +16,6 @@
         <action
             android:id="@+id/action_profiles_to_edit"
             app:destination="@id/nav_profile_edit" />
-        <action
-            android:id="@+id/action_profiles_to_qr_scan"
-            app:destination="@id/nav_qr_scan" />
     </fragment>
 
     <fragment
@@ -39,7 +36,11 @@
     <fragment
         android:id="@+id/nav_subscriptions"
         android:name="com.smarttools.netguard.ui.subscription.SubscriptionFragment"
-        android:label="@string/nav_subscriptions" />
+        android:label="@string/nav_subscriptions">
+        <action
+            android:id="@+id/action_subscriptions_to_qr_scan"
+            app:destination="@id/nav_qr_scan" />
+    </fragment>
 
     <fragment
         android:id="@+id/nav_settings"
