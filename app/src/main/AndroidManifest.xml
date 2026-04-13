@@ -42,6 +42,10 @@
                 <data android:scheme="hysteria2" />
                 <data android:scheme="hy2" />
             </intent-filter>
+            <!-- Long-press on Quick Settings tile opens the app -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
 
         <service
