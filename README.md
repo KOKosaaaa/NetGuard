@@ -30,6 +30,10 @@ The xray JSON config (containing server credentials, UUIDs, passwords) is writte
 - MTU anomaly detection
 - Package name stealth analysis
 
+### Evil Twin WiFi protection
+
+Stores SSID+BSSID pairs for trusted WiFi networks. When connecting to a WiFi with a known SSID but unknown BSSID (possible Evil Twin attack), automatically enables VPN and sends a warning notification.
+
 ### Service availability testing
 
 Test which services actually work through each server — YouTube, Telegram, Instagram, ChatGPT, Discord, Google, X/Twitter, Spotify. See a score like "3/8" before you connect.
@@ -46,6 +50,10 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 | Feature | Details |
 |---------|---------|
+| Connection Map | Animated world map showing user-to-server connection line |
+| Speed Test | Download/upload/ping through VPN tunnel (OkHttp + raw SOCKS5) |
+| WiFi Auto-Connect | Auto-enable VPN on untrusted WiFi + Evil Twin detection |
+| Material You | Dynamic color theme on Android 12+ |
 | Per-app routing | Whitelist / Blacklist / Disabled |
 | Auto-select best server | TCP ping all servers, connect to fastest |
 | Subscription management | Auto-update via WorkManager (6/12/24/48h) |
@@ -58,7 +66,7 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 | DNS | Custom primary/secondary, optional DoH through proxy |
 | Routing modes | Global proxy / Rule-based (RU direct) / Direct |
 | LAN bypass | Access local network devices while connected |
-| Themes | Dark, Light, OLED Black, Ocean |
+| Themes | Dark, Light, OLED Black, Ocean, Dynamic (Material You) |
 | Languages | 17 languages |
 | Backup/Restore | Export/import full config as JSON |
 | Log viewer | Real-time xray logs with auto-redaction of credentials |
@@ -71,10 +79,11 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 - Tapjacking protection on critical buttons (filterTouchesWhenObscured)
 - Deep link validation with confirmation dialog
 - Atomic file writes (temp + rename pattern)
-- No cleartext traffic (`android:usesCleartextTraffic="false"`)
+- No cleartext traffic (except speed test domains through VPN tunnel)
 - No backup (`android:allowBackup="false"`)
 - DNS leak prevention — all port 53 traffic forced through proxy
 - Input size limits on URIs, subscriptions, imports
+- Evil Twin WiFi detection (SSID+BSSID pair validation)
 
 ## Build
 
