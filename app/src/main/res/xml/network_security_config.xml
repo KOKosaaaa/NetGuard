@@ -5,4 +5,10 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <!-- Allow HTTP for speed test endpoints (traffic goes through VPN tunnel) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">speed.cloudflare.com</domain>
+        <domain includeSubdomains="true">speedtest.tele2.net</domain>
+        <domain includeSubdomains="true">proof.ovh.net</domain>
+    </domain-config>
 </network-security-config>

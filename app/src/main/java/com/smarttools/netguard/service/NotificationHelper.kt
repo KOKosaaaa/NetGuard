@@ -18,7 +18,15 @@ object NotificationHelper {
     private const val CHANNEL_ID = "net_service"
     private const val CHANNEL_NAME = "Network Service"
 
+    private var channelCreated = false
+    private var cachedContentIntent: PendingIntent? = null
+    private var cachedStopIntent: PendingIntent? = null
+    private var cachedTitle: String? = null
+    private var cachedStopLabel: String? = null
+    private var lastSpeedText: String? = null
+
     fun createChannel(context: Context) {
+        if (channelCreated) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -31,66 +39,86 @@ object NotificationHelper {
             val nm = context.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(channel)
         }
+        channelCreated = true
     }
 
-    fun createConnectedNotification(context: Context): Notification {
-        createChannel(context)
-
+    private fun getContentIntent(context: Context): PendingIntent {
+        cachedContentIntent?.let { return it }
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        val pendingIntent = PendingIntent.getActivity(
+        return PendingIntent.getActivity(
             context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        ).also { cachedContentIntent = it }
+    }
 
+    private fun getStopIntent(context: Context): PendingIntent {
+        cachedStopIntent?.let { return it }
         val stopIntent = Intent(context, TunnelVpnService::class.java).apply {
             action = TunnelVpnService.ACTION_STOP
         }
-        val stopPendingIntent = PendingIntent.getService(
+        return PendingIntent.getService(
             context, 1, stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        ).also { cachedStopIntent = it }
+    }
 
+    private fun getTitle(context: Context): String {
+        cachedTitle?.let { return it }
+        return context.getString(R.string.notif_title).also { cachedTitle = it }
+    }
+
+    private fun getStopLabel(context: Context): String {
+        cachedStopLabel?.let { return it }
+        return context.getString(R.string.notif_stop).also { cachedStopLabel = it }
+    }
+
+    fun createConnectingNotification(context: Context): Notification {
+        createChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(context.getString(R.string.notif_title))
-            .setContentText(context.getString(R.string.notif_text))
+            .setContentTitle(context.getString(R.string.notif_title_connecting))
+            .setContentText(context.getString(R.string.notif_text_connecting))
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_stop, context.getString(R.string.notif_stop), stopPendingIntent)
+            .setContentIntent(getContentIntent(context))
+            .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
-    fun updateSpeedNotification(context: Context, rxSpeed: Long, txSpeed: Long) {
+    fun createConnectedNotification(context: Context): Notification {
         createChannel(context)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(getTitle(context))
+            .setContentText(context.getString(R.string.notif_text))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(getContentIntent(context))
+            .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
 
+    fun showConnectedNotification(context: Context) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIFICATION_ID, createConnectedNotification(context))
+    }
+
+    fun updateSpeedNotification(context: Context, rxSpeed: Long, txSpeed: Long) {
         val speedText = "\u2193 ${TrafficFormatter.formatSpeed(rxSpeed)}  \u2191 ${TrafficFormatter.formatSpeed(txSpeed)}"
-
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val stopIntent = Intent(context, TunnelVpnService::class.java).apply {
-            action = TunnelVpnService.ACTION_STOP
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            context, 1, stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        // Skip if text hasn't changed
+        if (speedText == lastSpeedText) return
+        lastSpeedText = speedText
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(context.getString(R.string.notif_title))
+            .setContentTitle(getTitle(context))
             .setContentText(speedText)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_stop, context.getString(R.string.notif_stop), stopPendingIntent)
+            .setContentIntent(getContentIntent(context))
+            .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -99,5 +127,15 @@ object NotificationHelper {
 
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, notification)
+    }
+
+    /** Clear cached state when service stops */
+    fun invalidateCache() {
+        cachedContentIntent = null
+        cachedStopIntent = null
+        cachedTitle = null
+        cachedStopLabel = null
+        lastSpeedText = null
+        channelCreated = false
     }
 }

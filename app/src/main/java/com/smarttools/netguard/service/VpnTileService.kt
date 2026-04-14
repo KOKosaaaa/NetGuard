@@ -14,17 +14,24 @@ import kotlinx.coroutines.flow.collectLatest
 class VpnTileService : TileService() {
 
     private var scope: CoroutineScope? = null
+    private var lastTileState: Int = -1
+    private var lastTileLabel: String? = null
 
     override fun onStartListening() {
         super.onStartListening()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        // Immediate sync update from cached state — no coroutine needed
+        val current = TunnelVpnService.connectionState.value
+        updateTileIfChanged(current)
+
+        // Only create scope if not already active
+        if (scope?.isActive != true) {
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        }
         scope?.launch {
             TunnelVpnService.connectionState.collectLatest { state ->
                 try {
-                    updateTile(state)
-                } catch (_: Exception) {
-                    // qsTile may not be ready yet
-                }
+                    updateTileIfChanged(state)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -33,6 +40,40 @@ class VpnTileService : TileService() {
         scope?.cancel()
         scope = null
         super.onStopListening()
+    }
+
+    private fun updateTileIfChanged(state: ConnectionState) {
+        val tile = qsTile ?: return
+        val newState: Int
+        val newLabel: String
+        when (state) {
+            is ConnectionState.Connected -> {
+                newState = Tile.STATE_ACTIVE
+                newLabel = "Connected"
+            }
+            is ConnectionState.Connecting -> {
+                newState = Tile.STATE_ACTIVE
+                newLabel = "Connecting..."
+            }
+            is ConnectionState.Disconnected -> {
+                newState = Tile.STATE_INACTIVE
+                newLabel = "NetGuard"
+            }
+            is ConnectionState.Error -> {
+                newState = Tile.STATE_INACTIVE
+                newLabel = "Error"
+            }
+        }
+        // Skip expensive updateTile() if nothing changed
+        if (newState == lastTileState && newLabel == lastTileLabel) return
+        lastTileState = newState
+        lastTileLabel = newLabel
+        tile.state = newState
+        tile.label = newLabel
+        if (state is ConnectionState.Connected && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            tile.subtitle = ""
+        }
+        tile.updateTile()
     }
 
     override fun onClick() {
@@ -81,31 +122,5 @@ class VpnTileService : TileService() {
             @Suppress("DEPRECATION")
             startActivityAndCollapse(intent)
         }
-    }
-
-    private fun updateTile(state: ConnectionState) {
-        val tile = qsTile ?: return
-        when (state) {
-            is ConnectionState.Connected -> {
-                tile.state = Tile.STATE_ACTIVE
-                tile.label = "Connected"
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    tile.subtitle = ""
-                }
-            }
-            is ConnectionState.Connecting -> {
-                tile.state = Tile.STATE_ACTIVE
-                tile.label = "Connecting..."
-            }
-            is ConnectionState.Disconnected -> {
-                tile.state = Tile.STATE_INACTIVE
-                tile.label = "NetGuard"
-            }
-            is ConnectionState.Error -> {
-                tile.state = Tile.STATE_INACTIVE
-                tile.label = "Error"
-            }
-        }
-        tile.updateTile()
     }
 }

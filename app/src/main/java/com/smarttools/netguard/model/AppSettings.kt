@@ -11,7 +11,11 @@ data class AppSettings(
     val enableIpv6: Boolean = true,
     val perAppMode: PerAppMode = PerAppMode.DISABLED,
     val perAppList: Set<String> = emptySet(),
-    val showSpeedInNotification: Boolean = true
+    val showSpeedInNotification: Boolean = false,
+    val showConnectionMap: Boolean = true,
+    val showSpeedTest: Boolean = true,
+    val autoConnectWifi: Boolean = false,
+    val trustedWifiList: Set<String> = emptySet()
 )
 
 enum class RoutingMode {
@@ -24,7 +28,8 @@ enum class ThemeMode {
     DARK,
     LIGHT,
     OLED,
-    OCEAN
+    OCEAN,
+    DYNAMIC
 }
 
 enum class PerAppMode {

@@ -30,12 +30,14 @@ object XrayConfigGenerator {
         var socksPass: String? = null
 
         if (useSocksInbound) {
-            // Fallback: authenticated SOCKS on random ephemeral port
+            // Authenticated SOCKS5 on random ephemeral port (for tun2socks)
             val (user, pass, port) = CredentialManager.generate()
             socksPort = port
             socksUser = user
             socksPass = pass
-            root.add("inbounds", buildAuthenticatedSocksInbound(port, user, pass))
+            val httpPort = CredentialManager.getHttpPort()!!
+            val noAuthSocksPort = CredentialManager.getNoAuthSocksPort()!!
+            root.add("inbounds", buildInbounds(port, httpPort, noAuthSocksPort, user, pass))
         } else {
             root.add("inbounds", JsonArray())
         }
@@ -89,10 +91,10 @@ object XrayConfigGenerator {
         }
     }
 
-    private fun buildAuthenticatedSocksInbound(port: Int, user: String, pass: String): JsonArray {
-        val inbound = JsonObject().apply {
+    private fun buildInbounds(socksPort: Int, httpPort: Int, noAuthSocksPort: Int, user: String, pass: String): JsonArray {
+        val socksInbound = JsonObject().apply {
             addProperty("tag", "tun-in")
-            addProperty("port", port)
+            addProperty("port", socksPort)
             addProperty("listen", "127.0.0.1")
             addProperty("protocol", "socks")
             add("settings", JsonObject().apply {
@@ -116,7 +118,46 @@ object XrayConfigGenerator {
                 addProperty("routeOnly", true)
             })
         }
-        return JsonArray().apply { add(inbound) }
+        val httpInbound = JsonObject().apply {
+            addProperty("tag", "http-in")
+            addProperty("port", httpPort)
+            addProperty("listen", "127.0.0.1")
+            addProperty("protocol", "http")
+            add("settings", JsonObject().apply {
+                add("accounts", JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("user", user)
+                        addProperty("pass", pass)
+                    })
+                })
+                addProperty("allowTransparent", false)
+            })
+        }
+        // No-auth SOCKS5 for speed test — localhost only, no security risk
+        // routeOnly=false so xray overrides destination from SNI (fixes poisoned DNS)
+        val noAuthSocksInbound = JsonObject().apply {
+            addProperty("tag", "speedtest-in")
+            addProperty("port", noAuthSocksPort)
+            addProperty("listen", "127.0.0.1")
+            addProperty("protocol", "socks")
+            add("settings", JsonObject().apply {
+                addProperty("auth", "noauth")
+                addProperty("udp", false)
+            })
+            add("sniffing", JsonObject().apply {
+                addProperty("enabled", true)
+                add("destOverride", JsonArray().apply {
+                    add("http")
+                    add("tls")
+                    add("quic")
+                })
+            })
+        }
+        return JsonArray().apply {
+            add(socksInbound)
+            add(httpInbound)
+            add(noAuthSocksInbound)
+        }
     }
 
     private fun buildOutbounds(profile: ServerProfile): JsonArray {

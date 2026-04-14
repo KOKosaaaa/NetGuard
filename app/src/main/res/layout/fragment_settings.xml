@@ -48,6 +48,47 @@
         <View android:layout_width="match_parent" android:layout_height="1dp"
             android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
 
+        <!-- ===== FEATURES ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/features"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox android:id="@+id/cb_connection_map" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/show_connection_map" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/connection_map_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
+        <CheckBox android:id="@+id/cb_speed_test" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/show_speed_test" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/speed_test_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
+        <CheckBox android:id="@+id/cb_auto_connect_wifi" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/auto_connect_wifi" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/auto_connect_wifi_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_trusted_wifi"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/trusted_wifi"
+            android:layout_marginStart="32dp"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
+
         <!-- ===== ROUTING ===== -->
         <TextView
             android:layout_width="wrap_content"

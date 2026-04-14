@@ -8,8 +8,10 @@ import com.smarttools.netguard.repository.ProfileRepository
 import com.smarttools.netguard.repository.StatsRepository
 import com.smarttools.netguard.repository.SubscriptionRepository
 import com.smarttools.netguard.service.NotificationHelper
+import com.smarttools.netguard.service.WifiAutoConnectManager
 import com.smarttools.netguard.worker.SubscriptionUpdateWorker
 import androidx.work.*
+import com.google.android.material.color.DynamicColors
 import java.util.concurrent.TimeUnit
 
 class App : Application() {
@@ -26,8 +28,18 @@ class App : Application() {
     lateinit var statsRepository: StatsRepository
         private set
 
+    var wifiAutoConnectManager: WifiAutoConnectManager? = null
+        private set
+
     override fun onCreate() {
         super.onCreate()
+
+        // Apply Dynamic Colors before any UI is created (Android 12+)
+        val settings = loadSettings()
+        if (settings.themeMode == ThemeMode.DYNAMIC) {
+            DynamicColors.applyToActivitiesIfAvailable(this)
+        }
+
         database = AppDatabase.getInstance(this)
         profileRepository = ProfileRepository(database.profileDao())
         subscriptionRepository = SubscriptionRepository(
@@ -35,8 +47,13 @@ class App : Application() {
             database.profileDao()
         )
         statsRepository = StatsRepository(this)
+        com.smarttools.netguard.util.GeoLookup.init(this)
         NotificationHelper.createChannel(this)
         scheduleSubscriptionUpdates()
+
+        if (settings.autoConnectWifi) {
+            wifiAutoConnectManager = WifiAutoConnectManager(this).also { it.register() }
+        }
     }
 
     fun getPreferences(): SharedPreferences {
@@ -62,7 +79,11 @@ class App : Application() {
                 prefs.getString("per_app_mode", null), PerAppMode.DISABLED
             ),
             perAppList = prefs.getStringSet("per_app_list", emptySet()) ?: emptySet(),
-            showSpeedInNotification = prefs.getBoolean("show_speed_notification", true)
+            showSpeedInNotification = prefs.getBoolean("show_speed_notification", false),
+            showConnectionMap = prefs.getBoolean("show_connection_map", true),
+            showSpeedTest = prefs.getBoolean("show_speed_test", true),
+            autoConnectWifi = prefs.getBoolean("auto_connect_wifi", false),
+            trustedWifiList = prefs.getStringSet("trusted_wifi_list", emptySet()) ?: emptySet()
         )
     }
 
@@ -94,6 +115,17 @@ class App : Application() {
         )
     }
 
+    fun updateWifiAutoConnect(enabled: Boolean) {
+        if (enabled) {
+            if (wifiAutoConnectManager == null) {
+                wifiAutoConnectManager = WifiAutoConnectManager(this).also { it.register() }
+            }
+        } else {
+            wifiAutoConnectManager?.unregister()
+            wifiAutoConnectManager = null
+        }
+    }
+
     fun saveSettings(settings: AppSettings) {
         getPreferences().edit().apply {
             putString("routing_mode", settings.routingMode.name)
@@ -107,6 +139,10 @@ class App : Application() {
             putStringSet("per_app_list", settings.perAppList)
             putString("language", settings.language)
             putBoolean("show_speed_notification", settings.showSpeedInNotification)
+            putBoolean("show_connection_map", settings.showConnectionMap)
+            putBoolean("show_speed_test", settings.showSpeedTest)
+            putBoolean("auto_connect_wifi", settings.autoConnectWifi)
+            putStringSet("trusted_wifi_list", settings.trustedWifiList)
             apply()
         }
     }
