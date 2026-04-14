@@ -19,6 +19,16 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="32dp" />
 
+    <com.smarttools.netguard.widget.ConnectionMapView
+        android:id="@+id/connection_map"
+        android:layout_width="0dp"
+        android:layout_height="130dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/tv_status"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp" />
+
     <ImageButton
         android:id="@+id/btn_connect"
         android:layout_width="120dp"
@@ -28,11 +38,11 @@
         android:background="@drawable/bg_button_disconnected"
         android:contentDescription="@string/connect"
         android:filterTouchesWhenObscured="true"
-        app:layout_constraintTop_toBottomOf="@id/tv_status"
+        app:layout_constraintTop_toBottomOf="@id/connection_map"
         app:layout_constraintBottom_toTopOf="@id/tv_profile_name"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="32dp" />
+        android:layout_marginTop="8dp" />
 
     <TextView
         android:id="@+id/tv_profile_name"
@@ -44,7 +54,7 @@
         app:layout_constraintBottom_toTopOf="@id/layout_auto_select"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginBottom="2dp" />
 
     <LinearLayout
         android:id="@+id/layout_auto_select"
@@ -52,10 +62,10 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        app:layout_constraintBottom_toTopOf="@id/layout_stats"
+        app:layout_constraintBottom_toTopOf="@id/layout_speed_test"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="4dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_auto_select"
@@ -85,6 +95,51 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="16dp" />
+
+    <LinearLayout
+        android:id="@+id/layout_speed_test"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/layout_stats"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="4dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_speed_test"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/speed_test"
+                android:textSize="12sp"
+                style="@style/Widget.Material3.Button.TonalButton" />
+
+            <ProgressBar
+                android:id="@+id/progress_speed_test"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="8dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_speed_result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:visibility="gone"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/layout_stats"

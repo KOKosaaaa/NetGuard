@@ -6,12 +6,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
-import java.net.Authenticator
-import java.net.HttpURLConnection
+import okhttp3.Credentials
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.Route
 import java.net.InetSocketAddress
-import java.net.PasswordAuthentication
 import java.net.Proxy
-import java.net.URL
+import java.util.concurrent.TimeUnit
 
 object ServiceTester {
 
@@ -41,73 +43,71 @@ object ServiceTester {
     )
 
     suspend fun testAll(): List<TestResult> = withContext(Dispatchers.IO) {
-        // Set up SOCKS5 auth before tests
-        val port = CredentialManager.getPort()
-        val user = CredentialManager.getUser()
-        val pass = CredentialManager.getPass()
-
-        if (port != null && user != null && pass != null) {
-            Log.d(TAG, "Testing through SOCKS5 proxy 127.0.0.1:$port")
-            Authenticator.setDefault(object : Authenticator() {
-                override fun getPasswordAuthentication(): PasswordAuthentication {
-                    return PasswordAuthentication(user, pass.toCharArray())
-                }
-            })
-        } else {
-            Log.d(TAG, "No proxy available, testing direct connection")
-        }
-
-        try {
-            SERVICES.map { service ->
-                async { testService(service, port, user, pass) }
-            }.awaitAll()
-        } finally {
-            if (port != null) {
-                Authenticator.setDefault(null)
-            }
-        }
+        val client = buildClient()
+        SERVICES.map { service ->
+            async { testService(service, client) }
+        }.awaitAll()
     }
 
     suspend fun testSingle(index: Int): TestResult = withContext(Dispatchers.IO) {
-        val port = CredentialManager.getPort()
-        val user = CredentialManager.getUser()
-        val pass = CredentialManager.getPass()
-        testService(SERVICES[index], port, user, pass)
+        val client = buildClient()
+        testService(SERVICES[index], client)
     }
 
-    private fun testService(service: Service, proxyPort: Int?, user: String?, pass: String?): TestResult {
-        var connection: HttpURLConnection? = null
+    private fun buildClient(): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .followRedirects(true)
+
+        // Prefer SOCKS5 no-auth (works on all server configs)
+        val noAuthPort = CredentialManager.getNoAuthSocksPort()
+        if (noAuthPort != null) {
+            Log.d(TAG, "Testing through SOCKS5 no-auth 127.0.0.1:$noAuthPort")
+            builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", noAuthPort)))
+        } else {
+            // Fallback to HTTP proxy
+            val httpPort = CredentialManager.getHttpPort()
+            val user = CredentialManager.getUser()
+            val pass = CredentialManager.getPass()
+            if (httpPort != null && user != null && pass != null) {
+                Log.d(TAG, "Testing through HTTP proxy 127.0.0.1:$httpPort")
+                val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+                builder.proxy(proxy)
+                builder.proxyAuthenticator { _: Route?, response: Response ->
+                    val credential = Credentials.basic(user, pass)
+                    response.request.newBuilder()
+                        .header("Proxy-Authorization", credential)
+                        .build()
+                }
+            } else {
+                Log.d(TAG, "No proxy available, testing direct connection")
+            }
+        }
+
+        return builder.build()
+    }
+
+    private fun testService(service: Service, client: OkHttpClient): TestResult {
         return try {
             val start = System.currentTimeMillis()
-            val url = URL(service.testUrl)
 
-            connection = if (proxyPort != null && user != null && pass != null) {
-                // Route through xray SOCKS5 proxy
-                System.setProperty("socksProxyHost", "127.0.0.1")
-                System.setProperty("socksProxyPort", proxyPort.toString())
-                val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", proxyPort))
-                url.openConnection(proxy) as HttpURLConnection
-            } else {
-                url.openConnection() as HttpURLConnection
+            val request = Request.Builder()
+                .url(service.testUrl)
+                .header("User-Agent",
+                    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "text/html,*/*")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val elapsed = (System.currentTimeMillis() - start).toInt()
+                val ok = response.code in 200..499
+                Log.d(TAG, "${service.name}: HTTP ${response.code}, ${elapsed}ms, accessible=$ok")
+                TestResult(service, ok, elapsed)
             }
-
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent",
-                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36")
-            connection.setRequestProperty("Accept", "text/html,*/*")
-            val code = connection.responseCode
-            val elapsed = (System.currentTimeMillis() - start).toInt()
-            val ok = code in 200..499
-            Log.d(TAG, "${service.name}: HTTP $code, ${elapsed}ms, accessible=$ok (proxy=${proxyPort != null})")
-            TestResult(service, ok, elapsed)
         } catch (e: Exception) {
             Log.w(TAG, "${service.name}: FAILED - ${e.javaClass.simpleName}: ${e.message}")
             TestResult(service, false)
-        } finally {
-            try { connection?.disconnect() } catch (_: Exception) {}
         }
     }
 }

@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
             ThemeMode.LIGHT -> R.style.Theme_NetGuard_Light
             ThemeMode.OLED -> R.style.Theme_NetGuard_OLED
             ThemeMode.OCEAN -> R.style.Theme_NetGuard_Ocean
+            ThemeMode.DYNAMIC -> R.style.Theme_NetGuard_Dynamic
         })
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)

@@ -19,6 +19,7 @@ import com.smarttools.netguard.MainActivity
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentHomeBinding
 import com.smarttools.netguard.model.ConnectionState
+import com.smarttools.netguard.util.GeoLookup
 import com.smarttools.netguard.util.TrafficFormatter
 import com.smarttools.netguard.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ class HomeFragment : Fragment() {
     private val viewModel: MainViewModel by activityViewModels()
 
     private var pulseAnimator: ObjectAnimator? = null
+    private var timerRunnable: Runnable? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
@@ -38,6 +40,9 @@ class HomeFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        val app = requireActivity().application as App
+        val settings = app.loadSettings()
 
         binding.btnConnect.setOnClickListener {
             val state = viewModel.connectionState.value
@@ -52,6 +57,30 @@ class HomeFragment : Fragment() {
             viewModel.autoSelectAndConnect()
         }
 
+        // Connection map setup
+        if (settings.showConnectionMap) {
+            binding.connectionMap.visibility = View.VISIBLE
+            binding.connectionMap.setMapImage(R.drawable.world_map)
+            binding.connectionMap.setLocations(GeoLookup.getUserLocation(), null)
+            // Fetch precise user location via IP in background
+            viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                GeoLookup.fetchUserLocation()?.let { loc ->
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        if (_binding != null) {
+                            binding.connectionMap.setLocations(loc, viewModel.selectedProfile.value?.let { GeoLookup.fromProfileName(it.name) })
+                        }
+                    }
+                }
+            }
+        }
+
+        // Speed test setup
+        if (settings.showSpeedTest) {
+            binding.btnSpeedTest.setOnClickListener {
+                viewModel.runSpeedTest()
+            }
+        }
+
         updateSessionStats()
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -62,7 +91,50 @@ class HomeFragment : Fragment() {
                         if (state is ConnectionState.Connected) {
                             updateTimer(state.startTimeMs)
                         } else {
+                            cancelTimer()
                             binding.tvTimer.text = "00:00"
+                        }
+                        // Connection map
+                        if (settings.showConnectionMap) {
+                            when (state) {
+                                is ConnectionState.Connected -> {
+                                    val profile = viewModel.selectedProfile.value
+                                    val serverLoc = profile?.let { GeoLookup.fromProfileName(it.name) }
+                                    if (serverLoc != null) {
+                                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), serverLoc)
+                                        binding.connectionMap.setServerLabel(profile?.name)
+                                        binding.connectionMap.setConnected(true)
+                                    } else if (profile != null) {
+                                        // IP fallback in background
+                                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), null)
+                                        binding.connectionMap.setConnected(false)
+                                        viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                            val loc = GeoLookup.fromIp(profile.address)
+                                            if (_binding != null) {
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                    if (loc != null) {
+                                                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), loc)
+                                                        binding.connectionMap.setServerLabel(profile.name)
+                                                        binding.connectionMap.setConnected(true)
+                                                    } else {
+                                                        binding.connectionMap.setServerLabel(getString(R.string.location_unknown))
+                                                        binding.connectionMap.setConnected(false)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                else -> binding.connectionMap.setConnected(false)
+                            }
+                        }
+                        // Speed test visibility
+                        if (settings.showSpeedTest) {
+                            binding.layoutSpeedTest.visibility =
+                                if (state is ConnectionState.Connected) View.VISIBLE else View.GONE
+                            if (state !is ConnectionState.Connected) {
+                                binding.tvSpeedResult.visibility = View.GONE
+                            }
                         }
                         if (state is ConnectionState.Disconnected) {
                             updateSessionStats()
@@ -91,6 +163,25 @@ class HomeFragment : Fragment() {
                 launch {
                     viewModel.autoSelectMessage.collect { msg ->
                         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                // Speed test collectors
+                if (settings.showSpeedTest) {
+                    launch {
+                        viewModel.speedTesting.collect { testing ->
+                            binding.btnSpeedTest.isEnabled = !testing
+                            binding.progressSpeedTest.visibility = if (testing) View.VISIBLE else View.GONE
+                        }
+                    }
+                    launch {
+                        viewModel.speedResult.collect { result ->
+                            if (result != null) {
+                                binding.tvSpeedResult.visibility = View.VISIBLE
+                                val dlText = if (result.downloadMbps < 0) "—" else String.format("%.1f", result.downloadMbps)
+                                val ulText = if (result.uploadMbps < 0) "—" else String.format("%.1f", result.uploadMbps)
+                                binding.tvSpeedResult.text = "\u2193 $dlText Mbps  \u2191 $ulText Mbps  Ping ${result.pingMs}ms"
+                            }
+                        }
                     }
                 }
             }
@@ -158,20 +249,26 @@ class HomeFragment : Fragment() {
         binding.btnConnect.alpha = 1f
     }
 
+    private fun cancelTimer() {
+        timerRunnable?.let { _binding?.tvTimer?.removeCallbacks(it) }
+        timerRunnable = null
+    }
+
     private fun updateTimer(startMs: Long) {
+        cancelTimer()
         val elapsed = System.currentTimeMillis() - startMs
         binding.tvTimer.text = TrafficFormatter.formatDuration(elapsed)
-        binding.tvTimer.postDelayed({
+        val runnable = Runnable {
             if (_binding != null && viewModel.connectionState.value is ConnectionState.Connected) {
                 updateTimer(startMs)
             }
-        }, 1000)
+        }
+        timerRunnable = runnable
+        binding.tvTimer.postDelayed(runnable, 1000)
     }
 
     override fun onDestroyView() {
-        // Remove all pending timer callbacks to prevent View leak
-        _binding?.tvTimer?.handler?.removeCallbacksAndMessages(null)
-        _binding?.root?.handler?.removeCallbacksAndMessages(null)
+        cancelTimer()
         stopPulse()
         _binding = null
         super.onDestroyView()

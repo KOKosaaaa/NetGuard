@@ -30,6 +30,8 @@ class TunnelVpnService : VpnService() {
 
     companion object {
         private const val TAG = "TunnelVpn"
+        private const val NOTIFICATION_THROTTLE_MS = 3000L
+        private const val CONNECTION_TIMEOUT_MS = 30_000L
         const val ACTION_START = "com.smarttools.netguard.START"
         const val ACTION_STOP = "com.smarttools.netguard.STOP"
         const val EXTRA_PROFILE_ID = "profile_id"
@@ -82,6 +84,7 @@ class TunnelVpnService : VpnService() {
     private var showSpeedNotification = false
     private var xrayWatchdogJob: Job? = null
     private var tun2socksWatchdogJob: Job? = null
+    private var lastNotificationUpdate = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -101,8 +104,8 @@ class TunnelVpnService : VpnService() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                // Show notification immediately to avoid ANR
-                val notification = NotificationHelper.createConnectedNotification(this@TunnelVpnService)
+                // Show "Connecting..." notification immediately to avoid ANR
+                val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
                 startForeground(NotificationHelper.NOTIFICATION_ID, notification)
                 startTunnel(profileId)
             }
@@ -111,7 +114,7 @@ class TunnelVpnService : VpnService() {
                 val lastProfileId = app.getPreferences()
                     .getLong("last_profile_id", -1)
                 if (lastProfileId != -1L) {
-                    val notification = NotificationHelper.createConnectedNotification(this@TunnelVpnService)
+                    val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
                     startForeground(NotificationHelper.NOTIFICATION_ID, notification)
                     startTunnel(lastProfileId)
                 } else {
@@ -128,6 +131,14 @@ class TunnelVpnService : VpnService() {
             Log.w(TAG, "startTunnel called while already starting, ignoring")
             return
         }
+        // Cancel old watchdogs BEFORE killing processes — otherwise they
+        // detect the intentional kill, see Connecting state, and call stopTunnel()
+        xrayWatchdogJob?.cancel()
+        tun2socksWatchdogJob?.cancel()
+        // Clean up any existing connection before starting new one
+        unregisterNetworkCallback()
+        stopTunnelProcesses()
+
         _connectionState.value = ConnectionState.Connecting
         LogBuffer.add(LogBuffer.LogLevel.INFO, "Starting tunnel...")
         currentProfileId = profileId
@@ -135,89 +146,101 @@ class TunnelVpnService : VpnService() {
 
         serviceScope?.launch {
             try {
-                val app = application as App
-                val profile = app.database.profileDao().getById(profileId) ?: run {
-                    _connectionState.value = ConnectionState.Error("Profile not found")
-                    stopSelf()
-                    return@launch
-                }
+                withTimeout(CONNECTION_TIMEOUT_MS) {
+                    val app = application as App
+                    val profile = app.database.profileDao().getById(profileId) ?: run {
+                        _connectionState.value = ConnectionState.Error("Profile not found")
+                        stopSelf()
+                        return@withTimeout
+                    }
 
-                app.getPreferences().edit()
-                    .putLong("last_profile_id", profileId)
-                    .apply()
+                    app.getPreferences().edit()
+                        .putLong("last_profile_id", profileId)
+                        .apply()
 
-                val settings = app.loadSettings()
+                    val settings = app.loadSettings()
 
-                // 1. Copy geodata files to xray's working directory
-                copyGeoFiles()
+                    // 1. Copy geodata files to xray's working directory
+                    copyGeoFiles()
 
-                // 2. Generate xray config with authenticated SOCKS5 on random port
-                val config = XrayConfigGenerator.generate(
-                    profile = profile,
-                    settings = settings,
-                    useSocksInbound = true
-                )
+                    // 2. Generate xray config with authenticated SOCKS5 on random port
+                    val config = XrayConfigGenerator.generate(
+                        profile = profile,
+                        settings = settings,
+                        useSocksInbound = true
+                    )
 
-                // 3. Write xray config atomically (temp + rename) to prevent corruption
-                val configFile = File(filesDir, "config.json")
-                val tempFile = File(filesDir, "config.json.tmp")
-                tempFile.writeText(config.json)
-                tempFile.renameTo(configFile)
-                Log.i(TAG, "Config written, SOCKS port=${config.socksPort}")
+                    // 3. Write xray config atomically (temp + rename) to prevent corruption
+                    val configFile = File(filesDir, "config.json")
+                    val tempFile = File(filesDir, "config.json.tmp")
+                    tempFile.writeText(config.json)
+                    tempFile.renameTo(configFile)
+                    Log.i(TAG, "Config written, SOCKS port=${config.socksPort}")
 
-                // 4. Start xray-core process, ensure config deleted even on failure
-                try {
-                    startXrayProcess(configFile)
+                    // 4. Start xray-core process, ensure config deleted even on failure
+                    try {
+                        startXrayProcess(configFile)
 
-                    // 5. Wait for xray to bind the SOCKS port
-                    waitForPort(config.socksPort ?: throw IllegalStateException("SOCKS port not generated"), timeoutMs = 5000)
-                    Log.i(TAG, "Xray is listening on port ${config.socksPort}")
-                } finally {
-                    // 5a. Delete config from disk — xray already read it into memory
-                    configFile.delete()
-                    Log.i(TAG, "Config file deleted from disk")
-                }
+                        // 5. Wait for xray to bind the SOCKS port
+                        waitForPort(config.socksPort ?: throw IllegalStateException("SOCKS port not generated"), timeoutMs = 5000)
+                        Log.i(TAG, "Xray is listening on port ${config.socksPort}")
+                    } finally {
+                        // 5a. Delete config from disk — xray already read it into memory
+                        configFile.delete()
+                        Log.i(TAG, "Config file deleted from disk")
+                    }
 
-                // 6. Establish VPN TUN interface
-                val fd = establishVpn(profile, settings) ?: run {
-                    _connectionState.value = ConnectionState.Error("VPN permission denied")
-                    stopTunnel()
-                    return@launch
-                }
-                synchronized(fdLock) { vpnFd = fd }
+                    // 6. Establish VPN TUN interface
+                    val fd = establishVpn(profile, settings) ?: run {
+                        _connectionState.value = ConnectionState.Error("VPN permission denied")
+                        stopTunnel()
+                        return@withTimeout
+                    }
+                    synchronized(fdLock) { vpnFd = fd }
 
-                // 7. Start tun2socks: TUN fd → authenticated SOCKS5
-                val socksPort = config.socksPort ?: throw IllegalStateException("SOCKS port not generated")
-                val socksUser = config.socksUser ?: throw IllegalStateException("SOCKS user not generated")
-                val socksPass = config.socksPass ?: throw IllegalStateException("SOCKS pass not generated")
-                startTun2socksProcess(fd, socksPort, socksUser, socksPass)
+                    // 7. Start tun2socks: TUN fd → authenticated SOCKS5
+                    val socksPort = config.socksPort ?: throw IllegalStateException("SOCKS port not generated")
+                    val socksUser = config.socksUser ?: throw IllegalStateException("SOCKS user not generated")
+                    val socksPass = config.socksPass ?: throw IllegalStateException("SOCKS pass not generated")
+                    startTun2socksProcess(fd, socksPort, socksUser, socksPass)
 
-                // 7a. Clear SOCKS credentials from CredentialManager memory
-                CredentialManager.clear()
+                    // 7a. Credentials kept alive for speed test/service tester
+                    // They are cleared in stopTunnel() / stopTunnelProcesses()
 
-                // 8. Read speed notification preference
-                showSpeedNotification = settings.showSpeedInNotification
+                    // 8. Read speed notification preference
+                    showSpeedNotification = settings.showSpeedInNotification
 
-                // 9. Start traffic monitor
-                trafficMonitor = TrafficMonitor().also { monitor ->
-                    monitor.start(serviceScope!!) { snapshot ->
-                        _trafficStats.value = snapshot
-                        if (showSpeedNotification) {
-                            NotificationHelper.updateSpeedNotification(this@TunnelVpnService, snapshot.rxSpeed, snapshot.txSpeed)
+                    // 9. Start traffic monitor
+                    trafficMonitor = TrafficMonitor().also { monitor ->
+                        monitor.start(serviceScope!!) { snapshot ->
+                            _trafficStats.value = snapshot
+                            if (showSpeedNotification) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastNotificationUpdate >= NOTIFICATION_THROTTLE_MS) {
+                                    lastNotificationUpdate = now
+                                    NotificationHelper.updateSpeedNotification(this@TunnelVpnService, snapshot.rxSpeed, snapshot.txSpeed)
+                                }
+                            }
                         }
                     }
+
+                    // 10. Monitor processes for unexpected death
+                    launchProcessWatchdog()
+
+                    // 11. Register network change listener for auto-reconnect
+                    registerNetworkCallback()
+
+                    _connectionState.value = ConnectionState.Connected()
+                    // Update notification from "Connecting..." to "Connected"
+                    NotificationHelper.showConnectedNotification(this@TunnelVpnService)
+                    VpnWidget.updateAllWidgets(applicationContext)
+                    Log.i(TAG, "Tunnel started for ${profile.name}")
                 }
-
-                // 10. Monitor processes for unexpected death
-                launchProcessWatchdog()
-
-                // 11. Register network change listener for auto-reconnect
-                registerNetworkCallback()
-
-                _connectionState.value = ConnectionState.Connected()
+            } catch (e: TimeoutCancellationException) {
+                Log.e(TAG, "Connection timed out after ${CONNECTION_TIMEOUT_MS / 1000}s")
+                _connectionState.value = ConnectionState.Error("Connection timed out")
                 VpnWidget.updateAllWidgets(applicationContext)
-                Log.i(TAG, "Tunnel started for ${profile.name}")
-
+                stopTunnel()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start tunnel", e)
                 _connectionState.value = ConnectionState.Error(e.message ?: "Unknown error")
@@ -372,7 +395,8 @@ class TunnelVpnService : VpnService() {
         xrayWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
             try {
                 val exitCode = xrayProcess?.waitFor() ?: return@launch
-                if (isActive && _connectionState.value is ConnectionState.Connected) {
+                val state = _connectionState.value
+                if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
                     Log.e(TAG, "Xray process died with exit code $exitCode")
                     withContext(Dispatchers.Main) {
                         _connectionState.value = ConnectionState.Error("Xray exited ($exitCode)")
@@ -384,7 +408,8 @@ class TunnelVpnService : VpnService() {
         tun2socksWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
             try {
                 val exitCode = tun2socksProcess?.waitFor() ?: return@launch
-                if (isActive && _connectionState.value is ConnectionState.Connected) {
+                val state = _connectionState.value
+                if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
                     Log.e(TAG, "tun2socks process died with exit code $exitCode")
                     withContext(Dispatchers.Main) {
                         _connectionState.value = ConnectionState.Error("tun2socks exited ($exitCode)")
@@ -502,67 +527,77 @@ class TunnelVpnService : VpnService() {
      */
     private suspend fun restartTunnelProcessesKeepTun() {
         try {
-            // Kill old processes (but DON'T close vpnFd!)
-            trafficMonitor?.stop()
-            trafficMonitor = null
-            tun2socksProcess?.let { p ->
-                try { p.destroy() } catch (_: Exception) {}
-                try { p.destroyForcibly() } catch (_: Exception) {}
-            }
-            tun2socksProcess = null
-            xrayProcess?.let { p ->
-                try { p.destroy() } catch (_: Exception) {}
-                try { p.destroyForcibly() } catch (_: Exception) {}
-            }
-            xrayProcess = null
-            CredentialManager.clear()
+            _connectionState.value = ConnectionState.Connecting
+            LogBuffer.add(LogBuffer.LogLevel.INFO, "Reconnecting (network change)...")
 
-            val app = application as App
-            val profile = app.database.profileDao().getById(currentProfileId) ?: return
-            val settings = app.loadSettings()
+            withTimeout(CONNECTION_TIMEOUT_MS) {
+                // Kill old processes (but DON'T close vpnFd!)
+                trafficMonitor?.stop()
+                trafficMonitor = null
+                tun2socksProcess?.let { p ->
+                    try { p.destroy() } catch (_: Exception) {}
+                    try { p.destroyForcibly() } catch (_: Exception) {}
+                }
+                tun2socksProcess = null
+                xrayProcess?.let { p ->
+                    try { p.destroy() } catch (_: Exception) {}
+                    try { p.destroyForcibly() } catch (_: Exception) {}
+                }
+                xrayProcess = null
+                CredentialManager.clear()
 
-            // Generate new config
-            val config = XrayConfigGenerator.generate(
-                profile = profile,
-                settings = settings,
-                useSocksInbound = true
-            )
+                val app = application as App
+                val profile = app.database.profileDao().getById(currentProfileId) ?: return@withTimeout
+                val settings = app.loadSettings()
 
-            val configFile = File(filesDir, "config.json")
-            val tempFile = File(filesDir, "config.json.tmp")
-            tempFile.writeText(config.json)
-            tempFile.renameTo(configFile)
+                // Generate new config
+                val config = XrayConfigGenerator.generate(
+                    profile = profile,
+                    settings = settings,
+                    useSocksInbound = true
+                )
 
-            // Restart xray, ensure config deleted even on failure
-            try {
-                startXrayProcess(configFile)
-                waitForPort(config.socksPort ?: return, timeoutMs = 5000)
-            } finally {
-                configFile.delete()
-            }
+                val configFile = File(filesDir, "config.json")
+                val tempFile = File(filesDir, "config.json.tmp")
+                tempFile.writeText(config.json)
+                tempFile.renameTo(configFile)
 
-            // Reuse existing TUN fd for tun2socks (validate it's still open)
-            val fd = synchronized(fdLock) {
-                vpnFd?.takeIf { it.fileDescriptor.valid() }
-            } ?: return
-            val socksPort = config.socksPort ?: return
-            val socksUser = config.socksUser ?: return
-            val socksPass = config.socksPass ?: return
-            startTun2socksProcess(fd, socksPort, socksUser, socksPass)
+                // Restart xray, ensure config deleted even on failure
+                try {
+                    startXrayProcess(configFile)
+                    waitForPort(config.socksPort ?: return@withTimeout, timeoutMs = 5000)
+                } finally {
+                    configFile.delete()
+                }
 
-            // Restart monitors
-            trafficMonitor = TrafficMonitor().also { monitor ->
-                monitor.start(serviceScope!!) { snapshot ->
-                    _trafficStats.value = snapshot
-                    if (showSpeedNotification) {
-                        NotificationHelper.updateSpeedNotification(this@TunnelVpnService, snapshot.rxSpeed, snapshot.txSpeed)
+                // Reuse existing TUN fd for tun2socks (validate it's still open)
+                val fd = synchronized(fdLock) {
+                    vpnFd?.takeIf { it.fileDescriptor.valid() }
+                } ?: return@withTimeout
+                val socksPort = config.socksPort ?: return@withTimeout
+                val socksUser = config.socksUser ?: return@withTimeout
+                val socksPass = config.socksPass ?: return@withTimeout
+                startTun2socksProcess(fd, socksPort, socksUser, socksPass)
+
+                // Restart monitors
+                trafficMonitor = TrafficMonitor().also { monitor ->
+                    monitor.start(serviceScope!!) { snapshot ->
+                        _trafficStats.value = snapshot
+                        if (showSpeedNotification) {
+                            NotificationHelper.updateSpeedNotification(this@TunnelVpnService, snapshot.rxSpeed, snapshot.txSpeed)
+                        }
                     }
                 }
-            }
-            launchProcessWatchdog()
+                launchProcessWatchdog()
 
-            _connectionState.value = ConnectionState.Connected()
-            Log.i(TAG, "Tunnel reconnected without TUN restart (no IP leak)")
+                _connectionState.value = ConnectionState.Connected()
+                NotificationHelper.showConnectedNotification(this@TunnelVpnService)
+                Log.i(TAG, "Tunnel reconnected without TUN restart (no IP leak)")
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Reconnect timed out, doing full restart")
+            stopTunnelProcesses()
+            startTunnel(currentProfileId)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to reconnect, doing full restart", e)
             stopTunnelProcesses()
@@ -629,6 +664,7 @@ class TunnelVpnService : VpnService() {
         _trafficStats.value = TrafficSnapshot(0L, 0L, 0L, 0L)
         VpnWidget.updateAllWidgets(applicationContext)
 
+        NotificationHelper.invalidateCache()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         LogBuffer.add(LogBuffer.LogLevel.INFO, "Tunnel stopped")

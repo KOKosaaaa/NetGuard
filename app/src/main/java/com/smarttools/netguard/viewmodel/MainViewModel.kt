@@ -9,6 +9,7 @@ import com.smarttools.netguard.model.ConnectionState
 import com.smarttools.netguard.model.ServerProfile
 import com.smarttools.netguard.service.TunnelVpnService
 import com.smarttools.netguard.util.PingHelper
+import com.smarttools.netguard.util.SpeedTester
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.*
@@ -30,6 +31,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _autoSelectMessage = MutableSharedFlow<String>(replay = 1)
     val autoSelectMessage: SharedFlow<String> = _autoSelectMessage.asSharedFlow()
+
+    private val _speedTesting = MutableStateFlow(false)
+    val speedTesting: StateFlow<Boolean> = _speedTesting.asStateFlow()
+
+    private val _speedResult = MutableStateFlow<SpeedTester.SpeedResult?>(null)
+    val speedResult: StateFlow<SpeedTester.SpeedResult?> = _speedResult.asStateFlow()
 
     fun toggleConnection() {
         val currentState = connectionState.value
@@ -74,6 +81,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun needsVpnPermission(): Boolean {
         return VpnService.prepare(getApplication()) != null
+    }
+
+    fun runSpeedTest() {
+        if (_speedTesting.value) return
+        if (connectionState.value !is ConnectionState.Connected) return
+        viewModelScope.launch {
+            _speedTesting.value = true
+            _speedResult.value = null
+            try {
+                val profile = profileRepo.getSelected() ?: return@launch
+                val result = SpeedTester.run(profile.address, profile.port)
+                _speedResult.value = result
+            } finally {
+                _speedTesting.value = false
+            }
+        }
     }
 
     fun autoSelectAndConnect() {

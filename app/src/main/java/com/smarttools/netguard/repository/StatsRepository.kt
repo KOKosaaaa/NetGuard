@@ -32,7 +32,7 @@ class StatsRepository(context: Context) {
                 putLong("week_tx", safeAdd(prefs.getLong("week_tx", 0), tx))
                 putLong("total_rx", safeAdd(prefs.getLong("total_rx", 0), rx))
                 putLong("total_tx", safeAdd(prefs.getLong("total_tx", 0), tx))
-                commit()
+                apply()
             }
         }
     }
@@ -53,7 +53,7 @@ class StatsRepository(context: Context) {
 
     fun resetAll() {
         synchronized(lock) {
-            prefs.edit().clear().commit()
+            prefs.edit().clear().apply()
         }
     }
 
@@ -80,6 +80,6 @@ class StatsRepository(context: Context) {
         if (savedYear != currentYear) {
             editor.putInt("last_year", currentYear)
         }
-        editor.commit()
+        editor.apply()
     }
 }

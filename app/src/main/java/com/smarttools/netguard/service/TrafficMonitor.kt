@@ -36,7 +36,7 @@ class TrafficMonitor {
 
             while (isActive) {
                 try {
-                    delay(1000)
+                    delay(2000)
                     val nowRx = TrafficStats.getTotalRxBytes()
                     val nowTx = TrafficStats.getTotalTxBytes()
 

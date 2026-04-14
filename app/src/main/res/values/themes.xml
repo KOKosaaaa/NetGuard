@@ -48,6 +48,12 @@
         <item name="android:navigationBarColor">#000000</item>
     </style>
 
+    <!-- Dynamic — Material You (Android 12+), DynamicColors overlays this -->
+    <style name="Theme.NetGuard.Dynamic" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
     <!-- Ocean — deep blue & cyan -->
     <style name="Theme.NetGuard.Ocean" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">#00BCD4</item>

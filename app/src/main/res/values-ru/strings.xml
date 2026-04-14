@@ -74,7 +74,9 @@
     <string name="restore_success">Восстановлено профилей: %d</string>
     <string name="restore_error">Ошибка восстановления: %s</string>
     <string name="notif_title">Соединение активно</string>
+    <string name="notif_title_connecting">Подключение…</string>
     <string name="notif_text">Сетевой сервис работает</string>
+    <string name="notif_text_connecting">Установка соединения</string>
     <string name="notif_stop">Стоп</string>
     <string name="paste_from_clipboard">Вставить</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>
@@ -115,6 +117,7 @@
     <string name="theme_light">Светлая</string>
     <string name="theme_oled">OLED Black</string>
     <string name="theme_ocean">Ocean</string>
+    <string name="theme_dynamic">Динамическая</string>
     <!-- Settings descriptions -->
     <string name="routing_desc">Выберите способ маршрутизации трафика через VPN</string>
     <string name="dns_desc">DNS-серверы преобразуют доменные имена в IP-адреса</string>
@@ -135,4 +138,24 @@
     <string name="qr_imported">Профиль импортирован из QR</string>
     <string name="camera_permission_denied">Для сканирования QR нужен доступ к камере</string>
     <string name="close">Закрыть</string>
+    <!-- Features -->
+    <string name="features">Функции</string>
+    <string name="show_connection_map">Карта подключения</string>
+    <string name="connection_map_desc">Анимированная карта на главном экране</string>
+    <string name="show_speed_test">Тест скорости</string>
+    <string name="speed_test_desc">Кнопка теста скорости на главном экране</string>
+    <string name="speed_test">Тест скорости</string>
+    <string name="auto_connect_wifi">Автоподключение по WiFi</string>
+    <string name="auto_connect_wifi_desc">VPN в незнакомых WiFi + защита от Evil Twin</string>
+    <string name="trusted_wifi">Доверенные WiFi-сети</string>
+    <string name="add_current_wifi">Добавить текущую сеть</string>
+    <string name="location_needed_for_wifi">Для определения имени WiFi необходимо разрешение на геолокацию</string>
+    <string name="location_unknown">Не удалось определить местоположение сервера</string>
+    <string name="added">добавлено</string>
+    <string name="removed">удалено</string>
+    <string name="evil_twin_warning_title">Подозрительная WiFi-сеть!</string>
+    <string name="evil_twin_warning_text">Сеть \"%1$s\" имеет неизвестный BSSID %2$s</string>
+    <string name="evil_twin_warning_detail">WiFi \"%1$s\" имеет другую точку доступа (BSSID: %2$s), чем доверенная. Возможна атака Evil Twin. VPN включён для вашей защиты.</string>
+    <string name="wifi_security_channel">Безопасность WiFi</string>
+    <string name="wifi_security_channel_desc">Оповещения о подозрительных WiFi-сетях</string>
 </resources>

@@ -19,9 +19,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.smarttools.netguard.App
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentSettingsBinding
 import com.smarttools.netguard.model.PerAppMode
+import com.smarttools.netguard.service.WifiAutoConnectManager
 import com.smarttools.netguard.model.RoutingMode
 import com.smarttools.netguard.model.ThemeMode
 import com.smarttools.netguard.util.SecuritySelfTest
@@ -32,7 +34,7 @@ import kotlinx.coroutines.launch
 class SettingsFragment : Fragment() {
 
     companion object {
-        private val THEME_MODES = arrayOf(ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.OLED, ThemeMode.OCEAN)
+        private val THEME_MODES = arrayOf(ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.OLED, ThemeMode.OCEAN, ThemeMode.DYNAMIC)
 
         private val LANGUAGE_CODES = arrayOf(
             "system", "en", "ru", "de", "zh-CN", "ja", "hi", "tr",
@@ -73,6 +75,8 @@ class SettingsFragment : Fragment() {
         setupTheme()
         setupSettings()
         setupLanguage()
+        setupFeatureToggles()
+        setupAutoConnectWifi()
         setupSecurityTest()
         setupExportImport()
         setupKillSwitch()
@@ -89,6 +93,7 @@ class SettingsFragment : Fragment() {
                             ThemeMode.LIGHT -> getString(R.string.theme_light)
                             ThemeMode.OLED -> getString(R.string.theme_oled)
                             ThemeMode.OCEAN -> getString(R.string.theme_ocean)
+                            ThemeMode.DYNAMIC -> getString(R.string.theme_dynamic)
                         }
                         binding.rgRouting.check(
                             when (s.routingMode) {
@@ -162,17 +167,24 @@ class SettingsFragment : Fragment() {
 
     private fun setupTheme() {
         binding.btnTheme.setOnClickListener {
-            val names = arrayOf(
+            val names = mutableListOf(
                 getString(R.string.theme_dark),
                 getString(R.string.theme_light),
                 getString(R.string.theme_oled),
                 getString(R.string.theme_ocean)
             )
-            val current = THEME_MODES.indexOf(viewModel.settings.value.themeMode).coerceAtLeast(0)
+            val modes = THEME_MODES.toMutableList()
+            // Dynamic colors only on Android 12+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                names.add(getString(R.string.theme_dynamic))
+            } else {
+                modes.remove(ThemeMode.DYNAMIC)
+            }
+            val current = modes.indexOf(viewModel.settings.value.themeMode).coerceAtLeast(0)
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.theme)
-                .setSingleChoiceItems(names, current) { dialog, which ->
-                    val mode = THEME_MODES[which]
+                .setSingleChoiceItems(names.toTypedArray(), current) { dialog, which ->
+                    val mode = modes[which]
                     viewModel.updateSettings { s -> s.copy(themeMode = mode) }
                     dialog.dismiss()
                     requireActivity().recreate()
@@ -262,6 +274,97 @@ class SettingsFragment : Fragment() {
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
+    }
+
+    private fun setupFeatureToggles() {
+        val s = viewModel.settings.value
+        binding.cbConnectionMap.isChecked = s.showConnectionMap
+        binding.cbSpeedTest.isChecked = s.showSpeedTest
+
+        binding.cbConnectionMap.setOnCheckedChangeListener { _, checked ->
+            viewModel.updateSettings { it.copy(showConnectionMap = checked) }
+        }
+        binding.cbSpeedTest.setOnCheckedChangeListener { _, checked ->
+            viewModel.updateSettings { it.copy(showSpeedTest = checked) }
+        }
+    }
+
+    private fun setupAutoConnectWifi() {
+        val s = viewModel.settings.value
+        binding.cbAutoConnectWifi.isChecked = s.autoConnectWifi
+
+        binding.cbAutoConnectWifi.setOnCheckedChangeListener { _, checked ->
+            if (checked) {
+                // Request location permission if needed (for SSID access)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        requireContext(), android.Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    return@setOnCheckedChangeListener
+                }
+            }
+            viewModel.updateSettings { it.copy(autoConnectWifi = checked) }
+            (requireActivity().application as App).updateWifiAutoConnect(checked)
+        }
+
+        binding.btnTrustedWifi.setOnClickListener {
+            showTrustedWifiDialog()
+        }
+    }
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.updateSettings { it.copy(autoConnectWifi = true) }
+            (requireActivity().application as App).updateWifiAutoConnect(true)
+        } else {
+            binding.cbAutoConnectWifi.isChecked = false
+            Toast.makeText(requireContext(), R.string.location_needed_for_wifi, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showTrustedWifiDialog() {
+        val app = requireActivity().application as App
+        val trusted = viewModel.settings.value.trustedWifiList.toMutableList()
+        val currentSsid = app.wifiAutoConnectManager?.getCurrentSsid()
+        val currentBssid = app.wifiAutoConnectManager?.getCurrentBssid()
+
+        // Display names for existing entries
+        val displayItems = trusted.map { WifiAutoConnectManager.displayName(it) }.toMutableList()
+
+        // Check if current WiFi is already trusted (match by SSID+BSSID)
+        val currentEntry = if (currentSsid != null && currentBssid != null) {
+            WifiAutoConnectManager.encode(currentSsid, currentBssid)
+        } else null
+        val hasCurrentWifi = currentEntry != null && currentEntry !in trusted
+
+        if (hasCurrentWifi && currentSsid != null) {
+            displayItems.add(0, "+ ${getString(R.string.add_current_wifi)} ($currentSsid)")
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.trusted_wifi)
+            .setItems(displayItems.toTypedArray()) { _, which ->
+                if (hasCurrentWifi && which == 0) {
+                    // Add current WiFi with SSID+BSSID
+                    val updated = trusted + currentEntry!!
+                    viewModel.updateSettings { it.copy(trustedWifiList = updated.toSet()) }
+                    Toast.makeText(requireContext(), "$currentSsid ${getString(R.string.added)}", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Remove tapped item
+                    val idx = if (hasCurrentWifi) which - 1 else which
+                    val removed = trusted[idx]
+                    trusted.removeAt(idx)
+                    viewModel.updateSettings { it.copy(trustedWifiList = trusted.toSet()) }
+                    val removedName = WifiAutoConnectManager.ssidOf(removed)
+                    Toast.makeText(requireContext(), "$removedName ${getString(R.string.removed)}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun setupSecurityTest() {

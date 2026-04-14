@@ -93,7 +93,9 @@
 
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">Connection active</string>
+    <string name="notif_title_connecting">Connecting…</string>
     <string name="notif_text">Network service is running</string>
+    <string name="notif_text_connecting">Establishing connection</string>
     <string name="notif_stop">Stop</string>
 
     <!-- Clipboard -->
@@ -163,6 +165,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_oled">OLED Black</string>
     <string name="theme_ocean">Ocean</string>
+    <string name="theme_dynamic">Dynamic</string>
 
     <!-- Settings descriptions -->
     <string name="routing_desc">Choose how traffic is routed through the VPN</string>
@@ -197,6 +200,27 @@
     <string name="no_qr_found">No QR code found in image</string>
     <string name="camera_permission_denied">Camera permission required for QR scanning</string>
     <string name="close">Close</string>
+
+    <!-- Features -->
+    <string name="features">Features</string>
+    <string name="show_connection_map">Connection Map</string>
+    <string name="connection_map_desc">Show animated map on home screen</string>
+    <string name="show_speed_test">Speed Test</string>
+    <string name="speed_test_desc">Speed test button on home screen</string>
+    <string name="speed_test">Speed Test</string>
+    <string name="auto_connect_wifi">Auto-connect on WiFi</string>
+    <string name="auto_connect_wifi_desc">Connect VPN on untrusted WiFi + Evil Twin protection</string>
+    <string name="trusted_wifi">Trusted WiFi Networks</string>
+    <string name="add_current_wifi">Add current WiFi</string>
+    <string name="location_needed_for_wifi">Location permission is needed to read WiFi name</string>
+    <string name="location_unknown">Server location unknown</string>
+    <string name="added">added</string>
+    <string name="removed">removed</string>
+    <string name="evil_twin_warning_title">Suspicious WiFi detected!</string>
+    <string name="evil_twin_warning_text">Network \"%1$s\" has unknown BSSID %2$s</string>
+    <string name="evil_twin_warning_detail">WiFi \"%1$s\" has a different access point (BSSID: %2$s) than the trusted one. This could be an Evil Twin attack. VPN has been enabled for your protection.</string>
+    <string name="wifi_security_channel">WiFi Security</string>
+    <string name="wifi_security_channel_desc">Alerts about suspicious WiFi networks</string>
 
     <!-- About -->
     <string name="created_by">Created by KOKOS</string>

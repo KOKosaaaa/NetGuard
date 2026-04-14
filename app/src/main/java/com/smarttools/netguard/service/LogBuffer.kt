@@ -14,12 +14,15 @@ object LogBuffer {
         val message: String
     )
 
-    private const val MAX_ENTRIES = 1000
+    private const val MAX_ENTRIES = 500
     private val entries = mutableListOf<LogEntry>()
     private val _flow = MutableStateFlow<List<LogEntry>>(emptyList())
     val flow: StateFlow<List<LogEntry>> = _flow.asStateFlow()
+    private var pendingFlowUpdate = false
 
     // Redact sensitive data from log messages
+    // Quick-check keywords to skip regex when no sensitive data is present
+    private val QUICK_CHECK_KEYWORDS = arrayOf("password", "pass=", "bearer", "authorization", "-")
     private val REDACT_PATTERNS = listOf(
         Regex("password\\s*[=:]\\s*\\S+", RegexOption.IGNORE_CASE),
         Regex("pass\\s*=\\s*\\S+", RegexOption.IGNORE_CASE),
@@ -29,6 +32,10 @@ object LogBuffer {
     )
 
     private fun redact(msg: String): String {
+        // Fast path: skip regex if no potential sensitive keywords
+        val lower = msg.lowercase()
+        val needsRedaction = QUICK_CHECK_KEYWORDS.any { lower.contains(it) }
+        if (!needsRedaction) return msg
         var result = msg
         for (pattern in REDACT_PATTERNS) {
             result = result.replace(pattern, "***")
@@ -42,7 +49,12 @@ object LogBuffer {
         while (entries.size > MAX_ENTRIES) {
             entries.removeAt(0)
         }
-        _flow.value = entries.toList()
+        // Throttle flow updates: batch rapid adds
+        if (!pendingFlowUpdate) {
+            pendingFlowUpdate = true
+            _flow.value = entries.toList()
+            pendingFlowUpdate = false
+        }
     }
 
     @Synchronized

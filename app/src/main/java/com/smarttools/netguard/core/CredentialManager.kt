@@ -9,7 +9,10 @@ object CredentialManager {
     private val CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     private const val PASS_LENGTH = 32
 
-    private data class Credentials(val user: String, val pass: String, val port: Int)
+    private data class Credentials(
+        val user: String, val pass: String,
+        val port: Int, val httpPort: Int, val noAuthSocksPort: Int
+    )
 
     @Volatile
     private var current: Credentials? = null
@@ -23,8 +26,10 @@ object CredentialManager {
             }
         }
         val port = RandomPort.getAvailable()
+        val httpPort = RandomPort.getAvailable()
+        val noAuthSocksPort = RandomPort.getAvailable()
 
-        current = Credentials(user, pass, port)
+        current = Credentials(user, pass, port, httpPort, noAuthSocksPort)
 
         return Triple(user, pass, port)
     }
@@ -32,6 +37,8 @@ object CredentialManager {
     fun getUser(): String? = current?.user
     fun getPass(): String? = current?.pass
     fun getPort(): Int? = current?.port
+    fun getHttpPort(): Int? = current?.httpPort
+    fun getNoAuthSocksPort(): Int? = current?.noAuthSocksPort
 
     fun clear() {
         current = null
