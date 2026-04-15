@@ -191,21 +191,30 @@ object GeoLookup {
     )
 
     fun fromProfileName(name: String): LatLon? {
+        val code = countryCodeFromName(name) ?: return null
+        return COUNTRY_COORDS[code]
+    }
+
+    /**
+     * Extract 2-letter country code from profile name.
+     * Returns null if country cannot be determined.
+     */
+    fun countryCodeFromName(name: String): String? {
         val upper = name.uppercase()
         // Try 2-letter code at start: "US-NewYork", "DE Frankfurt", "[NL]"
-        for ((code, coords) in COUNTRY_COORDS) {
+        for (code in COUNTRY_COORDS.keys) {
             if (upper.startsWith("$code-") || upper.startsWith("$code ") ||
                 upper.startsWith("[$code]") || upper == code) {
-                return coords
+                return code
             }
         }
         // Try city names
         for ((city, code) in CITY_TO_CODE) {
-            if (upper.contains(city)) return COUNTRY_COORDS[code]
+            if (upper.contains(city)) return code
         }
         // Try country names
         for ((countryName, code) in NAME_TO_CODE) {
-            if (upper.contains(countryName)) return COUNTRY_COORDS[code]
+            if (upper.contains(countryName)) return code
         }
         return null
     }

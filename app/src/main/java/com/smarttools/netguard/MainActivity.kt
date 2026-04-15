@@ -11,6 +11,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.color.DynamicColors
 import com.smarttools.netguard.core.ProfileParser
 import com.smarttools.netguard.model.ThemeMode
 import com.smarttools.netguard.viewmodel.MainViewModel
@@ -40,6 +41,10 @@ class MainActivity : AppCompatActivity() {
             ThemeMode.OCEAN -> R.style.Theme_NetGuard_Ocean
             ThemeMode.DYNAMIC -> R.style.Theme_NetGuard_Dynamic
         })
+        // Apply DynamicColors AFTER setTheme() — otherwise setTheme() overwrites the overlay
+        if (theme == ThemeMode.DYNAMIC) {
+            DynamicColors.applyToActivityIfAvailable(this)
+        }
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 

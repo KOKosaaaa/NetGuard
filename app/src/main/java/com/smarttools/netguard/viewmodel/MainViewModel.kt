@@ -8,6 +8,7 @@ import com.smarttools.netguard.App
 import com.smarttools.netguard.model.ConnectionState
 import com.smarttools.netguard.model.ServerProfile
 import com.smarttools.netguard.service.TunnelVpnService
+import com.smarttools.netguard.util.GeoLookup
 import com.smarttools.netguard.util.PingHelper
 import com.smarttools.netguard.util.SpeedTester
 import kotlinx.coroutines.async
@@ -99,6 +100,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    companion object {
+        /** Countries excluded from auto-select (user can still pick them manually) */
+        private val EXCLUDED_COUNTRIES = setOf("RU")
+    }
+
     fun autoSelectAndConnect() {
         if (_autoSelecting.value) return
         viewModelScope.launch {
@@ -109,7 +115,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _autoSelectMessage.emit("No servers added")
                     return@launch
                 }
-                val results = allProfiles.map { profile ->
+
+                // Exclude servers in restricted countries from auto-select
+                val eligible = allProfiles.filter { profile ->
+                    val country = GeoLookup.countryCodeFromName(profile.name)
+                    country == null || country !in EXCLUDED_COUNTRIES
+                }
+                if (eligible.isEmpty()) {
+                    _autoSelectMessage.emit("No eligible servers (all in excluded regions)")
+                    return@launch
+                }
+
+                val results = eligible.map { profile ->
                     async {
                         val ms = PingHelper.tcpPing(profile.address, profile.port)
                         profileRepo.updatePing(profile.id, ms)
