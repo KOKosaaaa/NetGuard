@@ -66,6 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val wasConnected = connectionState.value is ConnectionState.Connected ||
                     connectionState.value is ConnectionState.Connecting
+            val hadSpeedResult = _speedResult.value != null
             if (wasConnected) {
                 TunnelVpnService.stop(getApplication())
                 // Wait for actual disconnection instead of hardcoded delay
@@ -73,9 +74,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     connectionState.first { it is ConnectionState.Disconnected }
                 }
             }
+            _speedResult.value = null
             profileRepo.selectProfile(id)
             if (wasConnected) {
                 TunnelVpnService.start(getApplication(), id)
+                // Auto-run speed test if previous result was displayed
+                if (hadSpeedResult) {
+                    connectionState.first { it is ConnectionState.Connected || it is ConnectionState.Error || it is ConnectionState.Disconnected }
+                    if (connectionState.value is ConnectionState.Connected) {
+                        runSpeedTest()
+                    }
+                }
             }
         }
     }

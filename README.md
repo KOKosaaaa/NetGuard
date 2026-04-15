@@ -50,7 +50,7 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 | Feature | Details |
 |---------|---------|
-| Connection Map | Animated world map showing user-to-server connection line |
+| Connection Map | Animated world map showing user-to-server connection arc |
 | Speed Test | Download/upload/ping through VPN tunnel (OkHttp + raw SOCKS5) |
 | WiFi Auto-Connect | Auto-enable VPN on untrusted WiFi + Evil Twin detection |
 | Material You | Dynamic color theme on Android 12+ |

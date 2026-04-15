@@ -527,6 +527,11 @@ class TunnelVpnService : VpnService() {
      */
     private suspend fun restartTunnelProcessesKeepTun() {
         try {
+            // Cancel old watchdogs BEFORE killing processes — otherwise they
+            // detect the intentional kill, see Connecting state, and call stopTunnel()
+            xrayWatchdogJob?.cancel()
+            tun2socksWatchdogJob?.cancel()
+
             _connectionState.value = ConnectionState.Connecting
             LogBuffer.add(LogBuffer.LogLevel.INFO, "Reconnecting (network change)...")
 

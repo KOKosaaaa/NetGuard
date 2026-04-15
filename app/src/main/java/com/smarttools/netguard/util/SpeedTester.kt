@@ -61,6 +61,7 @@ object SpeedTester {
      */
     private fun runDownloadOkHttp(): Double {
         val client = buildOkHttpClient() ?: return -1.0
+        var consecutiveTimeouts = 0
 
         for (url in DOWNLOAD_URLS) {
             try {
@@ -101,10 +102,19 @@ object SpeedTester {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Download OkHttp failed ($url): ${e.javaClass.simpleName}: ${e.message}")
+                if (e is java.net.SocketTimeoutException) {
+                    consecutiveTimeouts++
+                    if (consecutiveTimeouts >= 2) {
+                        Log.w(TAG, "2 consecutive download timeouts — server likely blocks download through SOCKS, giving up")
+                        return -1.0
+                    }
+                } else {
+                    consecutiveTimeouts = 0
+                }
             }
         }
 
-        // Fallback: try raw socket approach
+        // Fallback: try raw socket approach (skip if we already had consecutive timeouts)
         for (url in DOWNLOAD_URLS.filter { it.startsWith("http://") }) {
             val result = runDownloadRawSocket(url)
             if (result > 0.0) return result
