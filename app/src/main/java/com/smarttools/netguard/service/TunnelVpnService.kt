@@ -156,6 +156,7 @@ class TunnelVpnService : VpnService() {
 
                     app.getPreferences().edit()
                         .putLong("last_profile_id", profileId)
+                        .putString("last_profile_name", profile.name)
                         .apply()
 
                     val settings = app.loadSettings()

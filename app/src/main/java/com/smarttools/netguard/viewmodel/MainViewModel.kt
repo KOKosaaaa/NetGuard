@@ -76,6 +76,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             _speedResult.value = null
             profileRepo.selectProfile(id)
+            // Cache name for widget (avoids main-thread DB query)
+            profileRepo.getById(id)?.let { p ->
+                (getApplication() as com.smarttools.netguard.App)
+                    .getPreferences().edit()
+                    .putLong("last_profile_id", id)
+                    .putString("last_profile_name", p.name)
+                    .apply()
+                com.smarttools.netguard.widget.VpnWidget.updateAllWidgets(getApplication())
+            }
             if (wasConnected) {
                 TunnelVpnService.start(getApplication(), id)
                 // Auto-run speed test if previous result was displayed

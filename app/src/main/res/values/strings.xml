@@ -126,6 +126,7 @@
 
     <!-- DNS validation -->
     <string name="invalid_dns">Invalid DNS address</string>
+    <string name="invalid_values_rejected">Invalid values rejected: %1$s</string>
 
     <!-- Subscription validation -->
     <string name="subscription_https_only">Only HTTPS subscription URLs are supported</string>
@@ -221,6 +222,27 @@
     <string name="evil_twin_warning_detail">WiFi \"%1$s\" has a different access point (BSSID: %2$s) than the trusted one. This could be an Evil Twin attack. VPN has been enabled for your protection.</string>
     <string name="wifi_security_channel">WiFi Security</string>
     <string name="wifi_security_channel_desc">Alerts about suspicious WiFi networks</string>
+
+    <!-- TLS Fragment -->
+    <string name="tls_fragment">TLS Fragment</string>
+    <string name="tls_fragment_desc">Fragment TLS ClientHello to bypass DPI inspection</string>
+    <string name="tls_fragment_enable">Enable TLS Fragment</string>
+    <string name="tls_fragment_packets">Packets (e.g. tlshello)</string>
+    <string name="tls_fragment_length">Length (e.g. 100-200)</string>
+    <string name="tls_fragment_interval">Interval ms (e.g. 10-20)</string>
+
+    <!-- Traffic Stats -->
+    <string name="traffic_stats">Traffic Statistics</string>
+    <string name="traffic_stats_desc">Display mode for traffic stats on home screen</string>
+    <string name="traffic_stats_chart">Chart (7 days)</string>
+    <string name="traffic_stats_simple">Simple (today/week/total)</string>
+    <string name="traffic_stats_hidden">Hidden</string>
+
+    <!-- Bypass List -->
+    <string name="bypass_list">Bypass List</string>
+    <string name="bypass_list_desc">Domains and IPs that bypass VPN (go direct)</string>
+    <string name="bypass_domains_hint">Domains (one per line)</string>
+    <string name="bypass_ips_hint">IPs / CIDR (one per line)</string>
 
     <!-- About -->
     <string name="created_by">Created by KOKOS</string>

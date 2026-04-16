@@ -93,6 +93,7 @@
     <string name="export_warning">Конфиг содержит учётные данные. Буфер обмена доступен другим приложениям.</string>
     <string name="backup_warning">Резервная копия содержит учётные данные. Храните в безопасном месте.</string>
     <string name="invalid_dns">Неверный DNS-адрес</string>
+    <string name="invalid_values_rejected">Отклонены неверные значения: %1$s</string>
     <string name="subscription_https_only">Поддерживаются только HTTPS-подписки</string>
     <string name="status_error">Ошибка</string>
     <string name="auto_select">Лучший сервер</string>
@@ -158,4 +159,23 @@
     <string name="evil_twin_warning_detail">WiFi \"%1$s\" имеет другую точку доступа (BSSID: %2$s), чем доверенная. Возможна атака Evil Twin. VPN включён для вашей защиты.</string>
     <string name="wifi_security_channel">Безопасность WiFi</string>
     <string name="wifi_security_channel_desc">Оповещения о подозрительных WiFi-сетях</string>
+    <!-- TLS Fragment -->
+    <string name="tls_fragment">TLS-фрагментация</string>
+    <string name="tls_fragment_desc">Фрагментация TLS ClientHello для обхода DPI</string>
+    <string name="tls_fragment_enable">Включить TLS-фрагментацию</string>
+    <string name="tls_fragment_packets">Пакеты (напр. tlshello)</string>
+    <string name="tls_fragment_length">Длина (напр. 100-200)</string>
+    <string name="tls_fragment_interval">Интервал мс (напр. 10-20)</string>
+    <!-- Traffic Stats -->
+    <string name="traffic_stats">Статистика трафика</string>
+    <string name="traffic_stats_desc">Режим отображения статистики на главном экране</string>
+    <string name="traffic_stats_chart">График (7 дней)</string>
+    <string name="traffic_stats_simple">Простой (сегодня/неделя/всего)</string>
+    <string name="traffic_stats_hidden">Скрыть</string>
+
+    <!-- Bypass List -->
+    <string name="bypass_list">Список обхода</string>
+    <string name="bypass_list_desc">Домены и IP, которые идут напрямую (минуя VPN)</string>
+    <string name="bypass_domains_hint">Домены (по одному на строку)</string>
+    <string name="bypass_ips_hint">IP / CIDR (по одному на строку)</string>
 </resources>

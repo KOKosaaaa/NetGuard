@@ -71,6 +71,17 @@
             android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
             android:layout_marginBottom="4dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_traffic_stats_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/traffic_stats"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/traffic_stats_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
         <CheckBox android:id="@+id/cb_auto_connect_wifi" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="@string/auto_connect_wifi" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -85,6 +96,126 @@
             android:text="@string/trusted_wifi"
             android:layout_marginStart="32dp"
             style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
+
+        <!-- ===== TLS FRAGMENT ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/tls_fragment"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/tls_fragment_desc"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/cb_tls_fragment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/tls_fragment_enable" />
+
+        <LinearLayout
+            android:id="@+id/ll_tls_fragment_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/tls_fragment_packets">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_tls_packets"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:text="tlshello" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/tls_fragment_length">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_tls_length"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:text="100-200" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/tls_fragment_interval">
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_tls_interval"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:text="10-20" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp"
+            android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
+
+        <!-- ===== BYPASS LIST ===== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/bypass_list"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/bypass_list_desc"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/bypass_domains_hint">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_bypass_domains"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:minLines="2"
+                android:gravity="top" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:hint="@string/bypass_ips_hint">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_bypass_ips"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:minLines="2"
+                android:gravity="top" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <View android:layout_width="match_parent" android:layout_height="1dp"
             android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
@@ -191,14 +322,6 @@
             android:text="@string/speed_notif_desc" android:textSize="11sp"
             android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
             android:layout_marginBottom="4dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_save_dns"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/save"
-            android:layout_marginTop="8dp"
-            style="@style/Widget.Material3.Button.TonalButton" />
 
         <View android:layout_width="match_parent" android:layout_height="1dp"
             android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />

@@ -39,6 +39,17 @@
             android:layout_marginStart="8dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toEndOf="@id/tv_protocol"
+            app:layout_constraintEnd_toStartOf="@id/iv_favorite" />
+
+        <ImageView
+            android:id="@+id/iv_favorite"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_star_outline"
+            android:contentDescription="Favorite"
+            android:layout_marginEnd="4dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="@id/tv_name"
             app:layout_constraintEnd_toStartOf="@id/tv_ping" />
 
         <TextView

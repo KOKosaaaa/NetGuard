@@ -36,13 +36,12 @@ object XrayConfigGenerator {
             socksUser = user
             socksPass = pass
             val httpPort = CredentialManager.getHttpPort()!!
-            val noAuthSocksPort = CredentialManager.getNoAuthSocksPort()!!
-            root.add("inbounds", buildInbounds(port, httpPort, noAuthSocksPort, user, pass))
+            root.add("inbounds", buildInbounds(port, httpPort, user, pass))
         } else {
             root.add("inbounds", JsonArray())
         }
 
-        root.add("outbounds", buildOutbounds(profile))
+        root.add("outbounds", buildOutbounds(profile, settings))
         root.add("routing", buildRouting(settings))
 
         return GeneratedConfig(
@@ -91,7 +90,7 @@ object XrayConfigGenerator {
         }
     }
 
-    private fun buildInbounds(socksPort: Int, httpPort: Int, noAuthSocksPort: Int, user: String, pass: String): JsonArray {
+    private fun buildInbounds(socksPort: Int, httpPort: Int, user: String, pass: String): JsonArray {
         val socksInbound = JsonObject().apply {
             addProperty("tag", "tun-in")
             addProperty("port", socksPort)
@@ -133,48 +132,64 @@ object XrayConfigGenerator {
                 addProperty("allowTransparent", false)
             })
         }
-        // No-auth SOCKS5 for speed test — localhost only, no security risk
-        // routeOnly=false so xray overrides destination from SNI (fixes poisoned DNS)
-        val noAuthSocksInbound = JsonObject().apply {
-            addProperty("tag", "speedtest-in")
-            addProperty("port", noAuthSocksPort)
-            addProperty("listen", "127.0.0.1")
-            addProperty("protocol", "socks")
-            add("settings", JsonObject().apply {
-                addProperty("auth", "noauth")
-                addProperty("udp", false)
-            })
-            add("sniffing", JsonObject().apply {
-                addProperty("enabled", true)
-                add("destOverride", JsonArray().apply {
-                    add("http")
-                    add("tls")
-                    add("quic")
-                })
-            })
-        }
+        // SECURITY: no-auth SOCKS5 inbound intentionally absent.
+        // 2026-04 VLESS vuln (Happ/v2rayTUN/Hiddify): any app on device can reach
+        // 127.0.0.1 and leak the server IP through an unauthenticated local proxy.
+        // All internal clients (SpeedTester, ServiceTester) use the authenticated
+        // http-in with HTTP Basic auth via OkHttp proxyAuthenticator.
         return JsonArray().apply {
             add(socksInbound)
             add(httpInbound)
-            add(noAuthSocksInbound)
         }
     }
 
-    private fun buildOutbounds(profile: ServerProfile): JsonArray {
+    private fun buildOutbounds(profile: ServerProfile, settings: AppSettings): JsonArray {
         val outbounds = JsonArray()
-        outbounds.add(buildProxyOutbound(profile))
+        outbounds.add(buildProxyOutbound(profile, settings))
         outbounds.add(buildDirectOutbound())
         outbounds.add(buildBlockOutbound())
+        if (settings.tlsFragmentEnabled) {
+            outbounds.add(buildFragmentOutbound(settings))
+        }
         return outbounds
     }
 
-    private fun buildProxyOutbound(profile: ServerProfile): JsonObject {
-        return when (profile.protocol) {
+    private fun buildProxyOutbound(profile: ServerProfile, settings: AppSettings): JsonObject {
+        val outbound = when (profile.protocol) {
             Protocol.VLESS -> buildVlessOutbound(profile)
             Protocol.VMESS -> buildVmessOutbound(profile)
             Protocol.TROJAN -> buildTrojanOutbound(profile)
             Protocol.SHADOWSOCKS -> buildShadowsocksOutbound(profile)
             Protocol.HYSTERIA2 -> buildHysteria2Outbound(profile)
+        }
+        // TLS Fragment: route proxy's TCP through the fragment outbound
+        if (settings.tlsFragmentEnabled) {
+            val stream = outbound.getAsJsonObject("streamSettings")
+            if (stream != null) {
+                stream.add("sockopt", JsonObject().apply {
+                    addProperty("dialerProxy", "fragment")
+                })
+            }
+        }
+        return outbound
+    }
+
+    private fun buildFragmentOutbound(settings: AppSettings): JsonObject {
+        return JsonObject().apply {
+            addProperty("tag", "fragment")
+            addProperty("protocol", "freedom")
+            add("settings", JsonObject())
+            add("streamSettings", JsonObject().apply {
+                addProperty("security", "none")
+                add("sockopt", JsonObject().apply {
+                    addProperty("tcpKeepAliveIdle", 100)
+                    add("fragment", JsonObject().apply {
+                        addProperty("packets", settings.tlsFragmentPackets)
+                        addProperty("length", settings.tlsFragmentLength)
+                        addProperty("interval", settings.tlsFragmentInterval)
+                    })
+                })
+            })
         }
     }
 
@@ -498,6 +513,32 @@ object XrayConfigGenerator {
                         addProperty("outboundTag", "direct")
                         add("domain", JsonArray().apply {
                             add("geosite:private")
+                        })
+                    })
+                }
+
+                // User bypass domains → direct
+                val bypassDomains = settings.bypassDomains.lines()
+                    .map { it.trim() }.filter { it.isNotEmpty() }
+                if (bypassDomains.isNotEmpty()) {
+                    add(JsonObject().apply {
+                        addProperty("type", "field")
+                        addProperty("outboundTag", "direct")
+                        add("domain", JsonArray().apply {
+                            bypassDomains.forEach { add(it) }
+                        })
+                    })
+                }
+
+                // User bypass IPs → direct
+                val bypassIps = settings.bypassIps.lines()
+                    .map { it.trim() }.filter { it.isNotEmpty() }
+                if (bypassIps.isNotEmpty()) {
+                    add(JsonObject().apply {
+                        addProperty("type", "field")
+                        addProperty("outboundTag", "direct")
+                        add("ip", JsonArray().apply {
+                            bypassIps.forEach { add(it) }
                         })
                     })
                 }

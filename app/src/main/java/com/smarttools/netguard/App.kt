@@ -83,7 +83,16 @@ class App : Application() {
             showConnectionMap = prefs.getBoolean("show_connection_map", true),
             showSpeedTest = prefs.getBoolean("show_speed_test", true),
             autoConnectWifi = prefs.getBoolean("auto_connect_wifi", false),
-            trustedWifiList = prefs.getStringSet("trusted_wifi_list", emptySet()) ?: emptySet()
+            trustedWifiList = prefs.getStringSet("trusted_wifi_list", emptySet()) ?: emptySet(),
+            tlsFragmentEnabled = prefs.getBoolean("tls_fragment_enabled", false),
+            tlsFragmentPackets = prefs.getString("tls_fragment_packets", "tlshello") ?: "tlshello",
+            tlsFragmentLength = prefs.getString("tls_fragment_length", "100-200") ?: "100-200",
+            tlsFragmentInterval = prefs.getString("tls_fragment_interval", "10-20") ?: "10-20",
+            bypassDomains = prefs.getString("bypass_domains", "") ?: "",
+            bypassIps = prefs.getString("bypass_ips", "") ?: "",
+            trafficStatsMode = safeEnum(
+                prefs.getString("traffic_stats_mode", null), TrafficStatsMode.SIMPLE
+            )
         )
     }
 
@@ -143,6 +152,13 @@ class App : Application() {
             putBoolean("show_speed_test", settings.showSpeedTest)
             putBoolean("auto_connect_wifi", settings.autoConnectWifi)
             putStringSet("trusted_wifi_list", settings.trustedWifiList)
+            putBoolean("tls_fragment_enabled", settings.tlsFragmentEnabled)
+            putString("tls_fragment_packets", settings.tlsFragmentPackets)
+            putString("tls_fragment_length", settings.tlsFragmentLength)
+            putString("tls_fragment_interval", settings.tlsFragmentInterval)
+            putString("bypass_domains", settings.bypassDomains)
+            putString("bypass_ips", settings.bypassIps)
+            putString("traffic_stats_mode", settings.trafficStatsMode.name)
             apply()
         }
     }

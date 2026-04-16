@@ -30,6 +30,8 @@ class ProfileRepository(private val dao: ProfileDao) {
 
     suspend fun updatePing(id: Long, ms: Int) = dao.updatePing(id, ms)
 
+    suspend fun toggleFavorite(id: Long) = dao.toggleFavorite(id)
+
     suspend fun updateSortOrders(profiles: List<ServerProfile>) {
         val pairs = profiles.mapIndexed { index, profile -> Pair(profile.id, index) }
         dao.updateSortOrdersBatch(pairs)

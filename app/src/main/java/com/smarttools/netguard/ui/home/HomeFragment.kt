@@ -19,6 +19,7 @@ import com.smarttools.netguard.MainActivity
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentHomeBinding
 import com.smarttools.netguard.model.ConnectionState
+import com.smarttools.netguard.model.TrafficStatsMode
 import com.smarttools.netguard.util.GeoLookup
 import com.smarttools.netguard.util.TrafficFormatter
 import com.smarttools.netguard.viewmodel.MainViewModel
@@ -196,10 +197,32 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateSessionStats() {
-        val stats = (requireActivity().application as App).statsRepository.getStats()
-        binding.tvStatsToday.text = TrafficFormatter.formatBytes(stats.todayRx + stats.todayTx)
-        binding.tvStatsWeek.text = TrafficFormatter.formatBytes(stats.weekRx + stats.weekTx)
-        binding.tvStatsTotal.text = TrafficFormatter.formatBytes(stats.totalRx + stats.totalTx)
+        val app = requireActivity().application as App
+        val statsRepo = app.statsRepository
+        val mode = app.loadSettings().trafficStatsMode
+
+        when (mode) {
+            TrafficStatsMode.CHART -> {
+                binding.trafficChart.visibility = View.VISIBLE
+                binding.layoutSessionStats.visibility = View.VISIBLE
+                binding.trafficChart.setData(statsRepo.getDailyHistory(7))
+            }
+            TrafficStatsMode.SIMPLE -> {
+                binding.trafficChart.visibility = View.GONE
+                binding.layoutSessionStats.visibility = View.VISIBLE
+            }
+            TrafficStatsMode.HIDDEN -> {
+                binding.trafficChart.visibility = View.GONE
+                binding.layoutSessionStats.visibility = View.GONE
+            }
+        }
+
+        if (mode != TrafficStatsMode.HIDDEN) {
+            val stats = statsRepo.getStats()
+            binding.tvStatsToday.text = TrafficFormatter.formatBytes(stats.todayRx + stats.todayTx)
+            binding.tvStatsWeek.text = TrafficFormatter.formatBytes(stats.weekRx + stats.weekTx)
+            binding.tvStatsTotal.text = TrafficFormatter.formatBytes(stats.totalRx + stats.totalTx)
+        }
     }
 
     private fun updateUI(state: ConnectionState) {

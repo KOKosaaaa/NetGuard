@@ -1,7 +1,9 @@
 package com.smarttools.netguard.repository
 
 import android.content.Context
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 class StatsRepository(context: Context) {
 
@@ -16,6 +18,15 @@ class StatsRepository(context: Context) {
         val totalRx: Long,
         val totalTx: Long
     )
+
+    data class DayTraffic(
+        val date: String, // "MM/dd"
+        val dayOfWeek: String, // "Mon", "Tue", etc.
+        val rx: Long,
+        val tx: Long
+    ) {
+        val total: Long get() = rx + tx
+    }
 
     private fun safeAdd(current: Long, delta: Long): Long {
         return if (current > Long.MAX_VALUE - delta) Long.MAX_VALUE else current + delta
@@ -57,6 +68,69 @@ class StatsRepository(context: Context) {
         }
     }
 
+    fun getDailyHistory(days: Int = 7): List<DayTraffic> {
+        synchronized(lock) {
+            val result = mutableListOf<DayTraffic>()
+            val dateFmt = SimpleDateFormat("MM/dd", Locale.US)
+            val dayFmt = SimpleDateFormat("EEE", Locale.getDefault())
+            val keyFmt = SimpleDateFormat("yyyyMMdd", Locale.US)
+
+            for (i in days - 1 downTo 0) {
+                val c = Calendar.getInstance()
+                c.add(Calendar.DAY_OF_YEAR, -i)
+                val key = keyFmt.format(c.time)
+                val rx: Long
+                val tx: Long
+                if (i == 0) {
+                    // Today = live counters
+                    rx = prefs.getLong("today_rx", 0)
+                    tx = prefs.getLong("today_tx", 0)
+                } else {
+                    rx = prefs.getLong("hist_${key}_rx", 0)
+                    tx = prefs.getLong("hist_${key}_tx", 0)
+                }
+                result.add(DayTraffic(
+                    date = dateFmt.format(c.time),
+                    dayOfWeek = dayFmt.format(c.time),
+                    rx = rx,
+                    tx = tx
+                ))
+            }
+            return result
+        }
+    }
+
+    private fun archiveDay(cal: Calendar) {
+        val keyFmt = SimpleDateFormat("yyyyMMdd", Locale.US)
+        // Archive yesterday's stats
+        val yesterday = Calendar.getInstance()
+        yesterday.timeInMillis = cal.timeInMillis
+        yesterday.add(Calendar.DAY_OF_YEAR, -1)
+        val key = keyFmt.format(yesterday.time)
+
+        val todayRx = prefs.getLong("today_rx", 0)
+        val todayTx = prefs.getLong("today_tx", 0)
+        if (todayRx > 0 || todayTx > 0) {
+            prefs.edit()
+                .putLong("hist_${key}_rx", todayRx)
+                .putLong("hist_${key}_tx", todayTx)
+                .apply()
+        }
+
+        // Clean history older than 30 days — batched, wide window to catch gaps
+        // when app wasn't opened for >60 days
+        val editor = prefs.edit()
+        val old = Calendar.getInstance()
+        for (d in 31..400) {
+            old.timeInMillis = cal.timeInMillis
+            old.add(Calendar.DAY_OF_YEAR, -d)
+            val oldKey = keyFmt.format(old.time)
+            editor.remove("hist_${oldKey}_rx")
+            editor.remove("hist_${oldKey}_tx")
+        }
+        editor.apply()
+    }
+
     private fun resetIfNeeded() {
         val cal = Calendar.getInstance()
         val currentDay = cal.get(Calendar.DAY_OF_YEAR)
@@ -68,6 +142,10 @@ class StatsRepository(context: Context) {
 
         val editor = prefs.edit()
         if (savedDay != currentDay || savedYear != currentYear) {
+            // Archive yesterday's stats before resetting
+            if (savedDay != -1) {
+                archiveDay(cal)
+            }
             editor.putLong("today_rx", 0)
             editor.putLong("today_tx", 0)
             editor.putInt("last_day", currentDay)

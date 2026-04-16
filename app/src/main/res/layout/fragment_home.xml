@@ -1,262 +1,263 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.core.widget.NestedScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurface"
-    android:padding="16dp">
-
-    <TextView
-        android:id="@+id/tv_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/status_disconnected"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="32dp" />
-
-    <com.smarttools.netguard.widget.ConnectionMapView
-        android:id="@+id/connection_map"
-        android:layout_width="0dp"
-        android:layout_height="130dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/tv_status"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="8dp" />
-
-    <ImageButton
-        android:id="@+id/btn_connect"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:src="@drawable/ic_power"
-        android:scaleType="center"
-        android:background="@drawable/bg_button_disconnected"
-        android:contentDescription="@string/connect"
-        android:filterTouchesWhenObscured="true"
-        app:layout_constraintTop_toBottomOf="@id/connection_map"
-        app:layout_constraintBottom_toTopOf="@id/tv_profile_name"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="8dp" />
-
-    <TextView
-        android:id="@+id/tv_profile_name"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/no_profile_selected"
-        android:textSize="14sp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        app:layout_constraintBottom_toTopOf="@id/layout_auto_select"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="2dp" />
+    android:fillViewport="true"
+    android:overScrollMode="never">
 
     <LinearLayout
-        android:id="@+id/layout_auto_select"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        app:layout_constraintBottom_toTopOf="@id/layout_speed_test"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="4dp">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_auto_select"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/auto_select"
-            android:textSize="12sp"
-            style="@style/Widget.Material3.Button.TonalButton" />
-
-        <ProgressBar
-            android:id="@+id/progress_auto_select"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_marginStart="8dp"
-            android:visibility="gone" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/tv_timer"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="00:00"
-        android:textSize="24sp"
-        android:fontFamily="monospace"
-        android:textColor="?attr/colorOnSurface"
-        app:layout_constraintTop_toBottomOf="@id/btn_connect"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp" />
-
-    <LinearLayout
-        android:id="@+id/layout_speed_test"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:gravity="center"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/layout_stats"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginBottom="4dp">
+        android:gravity="center_horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/status_disconnected"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <com.smarttools.netguard.widget.ConnectionMapView
+            android:id="@+id/connection_map"
+            android:layout_width="match_parent"
+            android:layout_height="130dp"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp" />
+
+        <ImageButton
+            android:id="@+id/btn_connect"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:src="@drawable/ic_power"
+            android:scaleType="center"
+            android:background="@drawable/bg_button_disconnected"
+            android:contentDescription="@string/connect"
+            android:layout_marginTop="16dp"
+            android:filterTouchesWhenObscured="true" />
+
+        <TextView
+            android:id="@+id/tv_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="00:00"
+            android:textSize="24sp"
+            android:fontFamily="monospace"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:id="@+id/tv_profile_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/no_profile_selected"
+            android:textSize="14sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="8dp" />
 
         <LinearLayout
+            android:id="@+id/layout_auto_select"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:layout_marginTop="12dp">
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_speed_test"
+                android:id="@+id/btn_auto_select"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/speed_test"
+                android:text="@string/auto_select"
                 android:textSize="12sp"
                 style="@style/Widget.Material3.Button.TonalButton" />
 
             <ProgressBar
-                android:id="@+id/progress_speed_test"
+                android:id="@+id/progress_auto_select"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:layout_marginStart="8dp"
                 android:visibility="gone" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/tv_speed_result"
+        <LinearLayout
+            android:id="@+id/layout_speed_test"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:fontFamily="monospace"
-            android:textColor="?attr/colorOnSurfaceVariant"
+            android:orientation="vertical"
+            android:gravity="center"
             android:visibility="gone"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="8dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_speed_test"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/speed_test"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.TonalButton" />
+
+                <ProgressBar
+                    android:id="@+id/progress_speed_test"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="8dp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_speed_result"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+        <!-- Single weighted space — pushes stats to bottom, nothing above shifts -->
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Speed stats -->
+        <LinearLayout
+            android:id="@+id/layout_stats"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="\u2193"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:id="@+id/tv_down_speed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 B/s"
+                    android:textSize="16sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tv_down_total"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 B"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="\u2191"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:id="@+id/tv_up_speed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 B/s"
+                    android:textSize="16sp"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/tv_up_total"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 B"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Traffic chart -->
+        <com.smarttools.netguard.widget.TrafficChartView
+            android:id="@+id/traffic_chart"
+            android:layout_width="match_parent"
+            android:layout_height="70dp"
+            android:layout_marginBottom="2dp" />
+
+        <!-- Session stats -->
+        <LinearLayout
+            android:id="@+id/layout_session_stats"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="4dp"
+            android:paddingHorizontal="16dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/stats_today" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                <TextView android:id="@+id/tv_stats_today" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0 B" android:textSize="13sp" android:fontFamily="monospace" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/stats_week" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                <TextView android:id="@+id/tv_stats_week" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0 B" android:textSize="13sp" android:fontFamily="monospace" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/stats_total" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                <TextView android:id="@+id/tv_stats_total" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0 B" android:textSize="13sp" android:fontFamily="monospace" />
+            </LinearLayout>
+        </LinearLayout>
+
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/layout_stats"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        app:layout_constraintBottom_toTopOf="@id/layout_session_stats"
-        android:layout_marginBottom="8dp"
-        android:padding="16dp">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="\u2193"
-                android:textSize="20sp" />
-
-            <TextView
-                android:id="@+id/tv_down_speed"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0 B/s"
-                android:textSize="16sp"
-                android:fontFamily="monospace" />
-
-            <TextView
-                android:id="@+id/tv_down_total"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0 B"
-                android:textSize="12sp"
-                android:textColor="?attr/colorOnSurfaceVariant" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="\u2191"
-                android:textSize="20sp" />
-
-            <TextView
-                android:id="@+id/tv_up_speed"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0 B/s"
-                android:textSize="16sp"
-                android:fontFamily="monospace" />
-
-            <TextView
-                android:id="@+id/tv_up_total"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0 B"
-                android:textSize="12sp"
-                android:textColor="?attr/colorOnSurfaceVariant" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/layout_session_stats"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        app:layout_constraintBottom_toBottomOf="parent"
-        android:layout_marginBottom="8dp"
-        android:paddingHorizontal="16dp">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/stats_today" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" />
-            <TextView android:id="@+id/tv_stats_today" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:text="0 B" android:textSize="13sp" android:fontFamily="monospace" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/stats_week" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" />
-            <TextView android:id="@+id/tv_stats_week" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:text="0 B" android:textSize="13sp" android:fontFamily="monospace" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="@string/stats_total" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" />
-            <TextView android:id="@+id/tv_stats_total" android:layout_width="wrap_content"
-                android:layout_height="wrap_content" android:text="0 B" android:textSize="13sp" android:fontFamily="monospace" />
-        </LinearLayout>
-    </LinearLayout>
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.core.widget.NestedScrollView>

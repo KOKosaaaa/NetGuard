@@ -26,6 +26,7 @@ import com.smarttools.netguard.model.PerAppMode
 import com.smarttools.netguard.service.WifiAutoConnectManager
 import com.smarttools.netguard.model.RoutingMode
 import com.smarttools.netguard.model.ThemeMode
+import com.smarttools.netguard.model.TrafficStatsMode
 import com.smarttools.netguard.util.SecuritySelfTest
 import com.smarttools.netguard.viewmodel.SettingsViewModel
 import androidx.navigation.fragment.findNavController
@@ -46,11 +47,15 @@ class SettingsFragment : Fragment() {
             "العربية", "Español", "Français", "Português",
             "한국어", "Bahasa Indonesia", "Tiếng Việt", "ไทย", "Italiano"
         )
+
+        private val TLS_PACKETS_VALID = setOf("tlshello", "http")
+        private val RANGE_REGEX = Regex("^\\d+-\\d+$")
     }
 
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
     private val viewModel: SettingsViewModel by activityViewModels()
+    private var updatingFromFlow = false
 
     private val backupLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -76,7 +81,10 @@ class SettingsFragment : Fragment() {
         setupSettings()
         setupLanguage()
         setupFeatureToggles()
+        setupTrafficStatsMode()
         setupAutoConnectWifi()
+        setupTlsFragment()
+        setupBypassList()
         setupSecurityTest()
         setupExportImport()
         setupKillSwitch()
@@ -88,6 +96,7 @@ class SettingsFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.settings.collect { s ->
+                        updatingFromFlow = true
                         binding.btnTheme.text = when (s.themeMode) {
                             ThemeMode.DARK -> getString(R.string.theme_dark)
                             ThemeMode.LIGHT -> getString(R.string.theme_light)
@@ -102,8 +111,6 @@ class SettingsFragment : Fragment() {
                                 RoutingMode.DIRECT -> R.id.rb_direct
                             }
                         )
-                        binding.etPrimaryDns.setText(s.primaryDns)
-                        binding.etSecondaryDns.setText(s.secondaryDns)
                         binding.cbDoh.isChecked = s.dohEnabled
                         binding.cbBypassLan.isChecked = s.bypassLan
                         binding.cbIpv6.isChecked = s.enableIpv6
@@ -117,6 +124,7 @@ class SettingsFragment : Fragment() {
                                 PerAppMode.BLACKLIST -> R.id.rb_per_app_blacklist
                             }
                         )
+                        updatingFromFlow = false
                     }
                 }
                 launch {
@@ -195,39 +203,38 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupSettings() {
+        // Initialize DNS fields
+        val s = viewModel.settings.value
+        binding.etPrimaryDns.setText(s.primaryDns)
+        binding.etSecondaryDns.setText(s.secondaryDns)
+
         binding.rgRouting.setOnCheckedChangeListener { _, checkedId ->
-            viewModel.updateSettings { s ->
-                s.copy(
-                    routingMode = when (checkedId) {
-                        R.id.rb_global -> RoutingMode.GLOBAL_PROXY
-                        R.id.rb_rules -> RoutingMode.RULE_BASED
-                        R.id.rb_direct -> RoutingMode.DIRECT
-                        else -> s.routingMode
-                    }
-                )
+            if (!updatingFromFlow) {
+                viewModel.updateSettings { s ->
+                    s.copy(
+                        routingMode = when (checkedId) {
+                            R.id.rb_global -> RoutingMode.GLOBAL_PROXY
+                            R.id.rb_rules -> RoutingMode.RULE_BASED
+                            R.id.rb_direct -> RoutingMode.DIRECT
+                            else -> s.routingMode
+                        }
+                    )
+                }
             }
         }
 
-        binding.btnSaveDns.setOnClickListener {
-            val primary = binding.etPrimaryDns.text.toString().trim().ifEmpty { "1.1.1.1" }
-            val secondary = binding.etSecondaryDns.text.toString().trim().ifEmpty { "8.8.8.8" }
-
-            if (!isValidDns(primary) || !isValidDns(secondary)) {
-                Toast.makeText(requireContext(), R.string.invalid_dns, Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            viewModel.updateSettings { s ->
-                s.copy(
-                    primaryDns = primary,
-                    secondaryDns = secondary,
-                    dohEnabled = binding.cbDoh.isChecked,
-                    bypassLan = binding.cbBypassLan.isChecked,
-                    enableIpv6 = binding.cbIpv6.isChecked,
-                    showSpeedInNotification = binding.cbSpeedNotification.isChecked,
-                )
-            }
-            Toast.makeText(requireContext(), R.string.saved, Toast.LENGTH_SHORT).show()
+        // Checkboxes save immediately
+        binding.cbDoh.setOnCheckedChangeListener { _, checked ->
+            if (!updatingFromFlow) viewModel.updateSettings { it.copy(dohEnabled = checked) }
+        }
+        binding.cbBypassLan.setOnCheckedChangeListener { _, checked ->
+            if (!updatingFromFlow) viewModel.updateSettings { it.copy(bypassLan = checked) }
+        }
+        binding.cbIpv6.setOnCheckedChangeListener { _, checked ->
+            if (!updatingFromFlow) viewModel.updateSettings { it.copy(enableIpv6 = checked) }
+        }
+        binding.cbSpeedNotification.setOnCheckedChangeListener { _, checked ->
+            if (!updatingFromFlow) viewModel.updateSettings { it.copy(showSpeedInNotification = checked) }
         }
     }
 
@@ -286,6 +293,39 @@ class SettingsFragment : Fragment() {
         }
         binding.cbSpeedTest.setOnCheckedChangeListener { _, checked ->
             viewModel.updateSettings { it.copy(showSpeedTest = checked) }
+        }
+    }
+
+    private fun setupTrafficStatsMode() {
+        val s = viewModel.settings.value
+        updateTrafficStatsButtonText(s.trafficStatsMode)
+
+        binding.btnTrafficStatsMode.setOnClickListener {
+            val modes = TrafficStatsMode.entries.toTypedArray()
+            val names = arrayOf(
+                getString(R.string.traffic_stats_chart),
+                getString(R.string.traffic_stats_simple),
+                getString(R.string.traffic_stats_hidden)
+            )
+            val current = modes.indexOf(viewModel.settings.value.trafficStatsMode).coerceAtLeast(0)
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.traffic_stats)
+                .setSingleChoiceItems(names, current) { dialog, which ->
+                    val mode = modes[which]
+                    viewModel.updateSettings { it.copy(trafficStatsMode = mode) }
+                    updateTrafficStatsButtonText(mode)
+                    dialog.dismiss()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+    }
+
+    private fun updateTrafficStatsButtonText(mode: TrafficStatsMode) {
+        binding.btnTrafficStatsMode.text = when (mode) {
+            TrafficStatsMode.CHART -> "${getString(R.string.traffic_stats)}: ${getString(R.string.traffic_stats_chart)}"
+            TrafficStatsMode.SIMPLE -> "${getString(R.string.traffic_stats)}: ${getString(R.string.traffic_stats_simple)}"
+            TrafficStatsMode.HIDDEN -> "${getString(R.string.traffic_stats)}: ${getString(R.string.traffic_stats_hidden)}"
         }
     }
 
@@ -367,6 +407,26 @@ class SettingsFragment : Fragment() {
             .show()
     }
 
+    private fun setupTlsFragment() {
+        val s = viewModel.settings.value
+        binding.cbTlsFragment.isChecked = s.tlsFragmentEnabled
+        binding.llTlsFragmentSettings.visibility = if (s.tlsFragmentEnabled) View.VISIBLE else View.GONE
+        binding.etTlsPackets.setText(s.tlsFragmentPackets)
+        binding.etTlsLength.setText(s.tlsFragmentLength)
+        binding.etTlsInterval.setText(s.tlsFragmentInterval)
+
+        binding.cbTlsFragment.setOnCheckedChangeListener { _, checked ->
+            binding.llTlsFragmentSettings.visibility = if (checked) View.VISIBLE else View.GONE
+            viewModel.updateSettings { it.copy(tlsFragmentEnabled = checked) }
+        }
+    }
+
+    private fun setupBypassList() {
+        val s = viewModel.settings.value
+        binding.etBypassDomains.setText(s.bypassDomains)
+        binding.etBypassIps.setText(s.bypassIps)
+    }
+
     private fun setupSecurityTest() {
         binding.btnSecurityTest.setOnClickListener {
             viewModel.runSecurityTest()
@@ -416,12 +476,14 @@ class SettingsFragment : Fragment() {
 
     private fun setupPerApp() {
         binding.rgPerAppMode.setOnCheckedChangeListener { _, checkedId ->
-            viewModel.updateSettings { s ->
-                s.copy(perAppMode = when (checkedId) {
-                    R.id.rb_per_app_whitelist -> PerAppMode.WHITELIST
-                    R.id.rb_per_app_blacklist -> PerAppMode.BLACKLIST
-                    else -> PerAppMode.DISABLED
-                })
+            if (!updatingFromFlow) {
+                viewModel.updateSettings { s ->
+                    s.copy(perAppMode = when (checkedId) {
+                        R.id.rb_per_app_whitelist -> PerAppMode.WHITELIST
+                        R.id.rb_per_app_blacklist -> PerAppMode.BLACKLIST
+                        else -> PerAppMode.DISABLED
+                    })
+                }
             }
         }
 
@@ -485,6 +547,64 @@ class SettingsFragment : Fragment() {
             restoreLauncher.launch(arrayOf("application/json", "*/*"))
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        if (_binding != null) {
+            saveTextFields()
+        }
+    }
+
+    private fun saveTextFields() {
+        val current = viewModel.settings.value
+        val rejected = mutableListOf<String>()
+
+        val primaryRaw = binding.etPrimaryDns.text.toString().trim().ifEmpty { "1.1.1.1" }
+        val primary = if (isValidDns(primaryRaw)) primaryRaw else {
+            rejected.add("DNS1"); current.primaryDns
+        }
+        val secondaryRaw = binding.etSecondaryDns.text.toString().trim().ifEmpty { "8.8.8.8" }
+        val secondary = if (isValidDns(secondaryRaw)) secondaryRaw else {
+            rejected.add("DNS2"); current.secondaryDns
+        }
+
+        val packetsRaw = binding.etTlsPackets.text.toString().trim().ifEmpty { "tlshello" }
+        val packets = if (packetsRaw in TLS_PACKETS_VALID) packetsRaw else {
+            rejected.add("TLS packets"); current.tlsFragmentPackets
+        }
+        val lengthRaw = binding.etTlsLength.text.toString().trim().ifEmpty { "100-200" }
+        val length = if (RANGE_REGEX.matches(lengthRaw)) lengthRaw else {
+            rejected.add("TLS length"); current.tlsFragmentLength
+        }
+        val intervalRaw = binding.etTlsInterval.text.toString().trim().ifEmpty { "10-20" }
+        val interval = if (RANGE_REGEX.matches(intervalRaw)) intervalRaw else {
+            rejected.add("TLS interval"); current.tlsFragmentInterval
+        }
+
+        val domains = binding.etBypassDomains.text.toString()
+        val ips = binding.etBypassIps.text.toString()
+
+        viewModel.updateSettings {
+            it.copy(
+                primaryDns = primary,
+                secondaryDns = secondary,
+                tlsFragmentPackets = packets,
+                tlsFragmentLength = length,
+                tlsFragmentInterval = interval,
+                bypassDomains = domains,
+                bypassIps = ips
+            )
+        }
+
+        if (rejected.isNotEmpty()) {
+            Toast.makeText(
+                requireContext(),
+                getString(R.string.invalid_values_rejected, rejected.joinToString(", ")),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
 
     override fun onDestroyView() {
         _binding?.root?.handler?.removeCallbacksAndMessages(null)

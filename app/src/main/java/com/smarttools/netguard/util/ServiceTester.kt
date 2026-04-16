@@ -60,29 +60,23 @@ object ServiceTester {
             .readTimeout(10, TimeUnit.SECONDS)
             .followRedirects(true)
 
-        // Prefer SOCKS5 no-auth (works on all server configs)
-        val noAuthPort = CredentialManager.getNoAuthSocksPort()
-        if (noAuthPort != null) {
-            Log.d(TAG, "Testing through SOCKS5 no-auth 127.0.0.1:$noAuthPort")
-            builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", noAuthPort)))
-        } else {
-            // Fallback to HTTP proxy
-            val httpPort = CredentialManager.getHttpPort()
-            val user = CredentialManager.getUser()
-            val pass = CredentialManager.getPass()
-            if (httpPort != null && user != null && pass != null) {
-                Log.d(TAG, "Testing through HTTP proxy 127.0.0.1:$httpPort")
-                val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
-                builder.proxy(proxy)
-                builder.proxyAuthenticator { _: Route?, response: Response ->
-                    val credential = Credentials.basic(user, pass)
-                    response.request.newBuilder()
-                        .header("Proxy-Authorization", credential)
-                        .build()
-                }
-            } else {
-                Log.d(TAG, "No proxy available, testing direct connection")
+        // Use authenticated HTTP proxy (http-in). No-auth SOCKS5 removed for security
+        // (2026-04 VLESS vuln — any local app could hit an unauth SOCKS5 and leak server IP).
+        val httpPort = CredentialManager.getHttpPort()
+        val user = CredentialManager.getUser()
+        val pass = CredentialManager.getPass()
+        if (httpPort != null && user != null && pass != null) {
+            Log.d(TAG, "Testing through HTTP proxy 127.0.0.1:$httpPort")
+            val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+            builder.proxy(proxy)
+            builder.proxyAuthenticator { _: Route?, response: Response ->
+                val credential = Credentials.basic(user, pass)
+                response.request.newBuilder()
+                    .header("Proxy-Authorization", credential)
+                    .build()
             }
+        } else {
+            Log.d(TAG, "No proxy available, testing direct connection")
         }
 
         return builder.build()

@@ -14,7 +14,8 @@ import java.util.Collections
 class ProfileAdapter(
     private val onItemClick: (ServerProfile) -> Unit,
     private val onItemLongClick: (ServerProfile) -> Unit,
-    private val onPingClick: (ServerProfile) -> Unit
+    private val onPingClick: (ServerProfile) -> Unit,
+    private val onFavoriteClick: (ServerProfile) -> Unit
 ) : ListAdapter<ServerProfile, ProfileAdapter.ViewHolder>(DIFF) {
 
     companion object {
@@ -87,6 +88,13 @@ class ProfileAdapter(
         } else {
             b.root.setCardBackgroundColor(ContextCompat.getColor(ctx, R.color.card_normal))
         }
+
+        // Favorite star
+        b.ivFavorite.setImageResource(
+            if (profile.isFavorite) R.drawable.ic_star_filled
+            else R.drawable.ic_star_outline
+        )
+        b.ivFavorite.setOnClickListener { onFavoriteClick(profile) }
 
         b.root.setOnClickListener { onItemClick(profile) }
         b.root.setOnLongClickListener {

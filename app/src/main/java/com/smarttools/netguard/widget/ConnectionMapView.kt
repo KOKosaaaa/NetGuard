@@ -6,6 +6,7 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import com.smarttools.netguard.util.GeoLookup
 
 class ConnectionMapView @JvmOverloads constructor(
@@ -20,17 +21,21 @@ class ConnectionMapView @JvmOverloads constructor(
     private var isConnected = false
     private var lineProgress = 0f
     private var pulsePhase = 0f
+    private var dashPhase = 0f
     private var lineAnimator: ValueAnimator? = null
     private var pulseAnimator: ValueAnimator? = null
+    private var dashAnimator: ValueAnimator? = null
 
     private val dp = resources.displayMetrics.density
     private val primaryColor: Int
     private val surfaceColor: Int
+    private val isLightTheme: Boolean
 
     private val accentGreen = Color.parseColor("#4CAF50")
 
     private val landColor: Int
     private val oceanColor: Int
+    private val dotCenterColor: Int
 
     init {
         val ta = context.obtainStyledAttributes(intArrayOf(
@@ -41,8 +46,20 @@ class ConnectionMapView @JvmOverloads constructor(
         surfaceColor = ta.getColor(1, Color.BLACK)
         ta.recycle()
 
-        oceanColor = blendColors(surfaceColor, Color.WHITE, 0.05f)
-        landColor = blendColors(surfaceColor, Color.WHITE, 0.15f)
+        val luminance = (0.299 * Color.red(surfaceColor) +
+                0.587 * Color.green(surfaceColor) +
+                0.114 * Color.blue(surfaceColor)) / 255.0
+        isLightTheme = luminance > 0.5
+
+        if (isLightTheme) {
+            oceanColor = blendColors(surfaceColor, Color.BLACK, 0.04f)
+            landColor = blendColors(surfaceColor, Color.BLACK, 0.15f)
+            dotCenterColor = Color.BLACK
+        } else {
+            oceanColor = blendColors(surfaceColor, Color.WHITE, 0.05f)
+            landColor = blendColors(surfaceColor, Color.WHITE, 0.15f)
+            dotCenterColor = Color.WHITE
+        }
     }
 
     // Paints
@@ -70,7 +87,17 @@ class ConnectionMapView @JvmOverloads constructor(
 
     // Optional map image (from drawable resource)
     private var mapBitmap: Bitmap? = null
-    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        if (isLightTheme) {
+            // Grayscale + invert: dark JPG becomes light-themed
+            colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+                -0.299f, -0.587f, -0.114f, 0f, 255f,
+                -0.299f, -0.587f, -0.114f, 0f, 255f,
+                -0.299f, -0.587f, -0.114f, 0f, 255f,
+                0f, 0f, 0f, 1f, 0f
+            )))
+        }
+    }
 
     // Cached continent paths (fallback when no image)
     private var continentPaths: List<Path>? = null
@@ -114,11 +141,22 @@ class ConnectionMapView @JvmOverloads constructor(
                 addUpdateListener { pulsePhase = it.animatedValue as Float; invalidate() }
                 start()
             }
+            // Dash flow: one full pattern cycle = 5+3 dp. Negative phase → dashes move user→server
+            dashAnimator?.cancel()
+            dashAnimator = ValueAnimator.ofFloat(0f, 8f * dp).apply {
+                duration = 600
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                addUpdateListener { dashPhase = -(it.animatedValue as Float); invalidate() }
+                start()
+            }
         } else if (!connected) {
             lineAnimator?.cancel()
             pulseAnimator?.cancel()
+            dashAnimator?.cancel()
             lineProgress = 0f
             pulsePhase = 0f
+            dashPhase = 0f
         }
         isConnected = connected
         invalidate()
@@ -145,7 +183,7 @@ class ConnectionMapView @JvmOverloads constructor(
             drawMapBitmap(canvas, pad, mapW, mapH)
         } else {
             // Subtle grid lines
-            gridLinePaint.color = blendColors(oceanColor, Color.WHITE, 0.04f)
+            gridLinePaint.color = blendColors(oceanColor, if (isLightTheme) Color.BLACK else Color.WHITE, 0.04f)
             for (i in 1..5) {
                 val x = pad + mapW * i / 6f
                 canvas.drawLine(x, pad + 4 * dp, x, h - pad - 4 * dp, gridLinePaint)
@@ -197,7 +235,7 @@ class ConnectionMapView @JvmOverloads constructor(
             arcPaint.color = primaryColor
             arcPaint.alpha = (230 * lineProgress).toInt()
             arcPaint.strokeWidth = 1.5f * dp
-            arcPaint.pathEffect = DashPathEffect(floatArrayOf(5f * dp, 3f * dp), 0f)
+            arcPaint.pathEffect = DashPathEffect(floatArrayOf(5f * dp, 3f * dp), dashPhase)
             canvas.drawPath(path, arcPaint)
 
             // User dot (small)
@@ -216,7 +254,7 @@ class ConnectionMapView @JvmOverloads constructor(
             dotPaint.color = accentGreen
             dotPaint.alpha = 255
             canvas.drawCircle(sx, sy, 4f * dp, dotPaint)
-            dotPaint.color = Color.WHITE
+            dotPaint.color = dotCenterColor
             dotPaint.alpha = 220
             canvas.drawCircle(sx, sy, 1.5f * dp, dotPaint)
 
@@ -250,7 +288,7 @@ class ConnectionMapView @JvmOverloads constructor(
                 dotPaint.alpha = 180
                 canvas.drawCircle(x, y, 3f * dp, dotPaint)
                 // Center
-                dotPaint.color = Color.WHITE
+                dotPaint.color = dotCenterColor
                 dotPaint.alpha = 140
                 canvas.drawCircle(x, y, 1f * dp, dotPaint)
             }
@@ -423,8 +461,10 @@ class ConnectionMapView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         lineAnimator?.cancel()
         pulseAnimator?.cancel()
+        dashAnimator?.cancel()
         lineAnimator = null
         pulseAnimator = null
+        dashAnimator = null
         super.onDetachedFromWindow()
     }
 }

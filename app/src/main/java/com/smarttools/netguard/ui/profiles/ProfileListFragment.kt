@@ -55,6 +55,9 @@ class ProfileListFragment : Fragment() {
             },
             onPingClick = { profile ->
                 viewModel.pingProfile(profile)
+            },
+            onFavoriteClick = { profile ->
+                viewModel.toggleFavorite(profile.id)
             }
         )
 

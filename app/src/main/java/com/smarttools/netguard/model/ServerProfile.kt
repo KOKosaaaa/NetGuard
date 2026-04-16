@@ -65,7 +65,8 @@ data class ServerProfile(
     val subscriptionId: Long = 0,
     val sortOrder: Int = 0,
     val lastPingMs: Int = -1,
-    val isSelected: Boolean = false
+    val isSelected: Boolean = false,
+    val isFavorite: Boolean = false
 ) {
     fun toUri(): String {
         return when (protocol) {

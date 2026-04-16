@@ -73,6 +73,7 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Security hardening
 
+- **Not vulnerable to the April 2026 VLESS local-SOCKS leak** affecting Happ, v2rayTUN, Hiddify, v2rayNG, NekoBox and others. No unauthenticated local SOCKS5 inbound is ever exposed — both internal bridges (SOCKS5 for tun2socks, HTTP for internal speed/service tests) require the ephemeral 32-char password. See *Ephemeral authenticated SOCKS5* above.
 - Encrypted database (SQLCipher AES-256 + EncryptedSharedPreferences)
 - Log redaction — UUIDs, passwords, Bearer tokens masked automatically
 - SSRF protection — private/loopback/link-local IPv4 and IPv6 blocked in profile parser
@@ -82,8 +83,34 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 - No cleartext traffic (except speed test domains through VPN tunnel)
 - No backup (`android:allowBackup="false"`)
 - DNS leak prevention — all port 53 traffic forced through proxy
+- DNS address validation — loopback, private ranges and garbage strings rejected before they reach xray
 - Input size limits on URIs, subscriptions, imports
 - Evil Twin WiFi detection (SSID+BSSID pair validation)
+
+## Release notes
+
+### v1.1.3 — 2026-04-17
+
+**Security**
+- Removed the unauthenticated local SOCKS5 inbound (`speedtest-in`) that was used for internal speed/service tests. This closes the same class of leak disclosed for Happ/v2rayTUN/Hiddify/v2rayNG in April 2026, where any app on the device could reach `127.0.0.1:<port>` and tunnel traffic to learn the real VPN server IP. Internal tests now go through the authenticated HTTP bridge (`http-in`).
+- DNS field validation restored on the settings-save path (was silently accepting loopback / private / garbage strings after the old explicit "Save" button was removed).
+- TLS-fragment and routing fields gain format validation with a "rejected values" toast instead of silently saving whatever was typed.
+
+**New features**
+- **TLS Fragment** — bypass DPI by splitting the TLS ClientHello into smaller pieces. Configurable packets / length / interval in Settings.
+- **Favorites** — star any server to pin it to the top of the list. Room schema v2→v3 migration.
+- **Domain / IP Bypass List** — free-form lists of domains and IPs that should go direct instead of through the VPN (independent of the global routing mode).
+- **Traffic Statistics Graph** — 7-day history chart on the Home tab. 30 days of daily history retained.
+- **Widget Enhancement** — the home-screen widget grew from a 1×1 icon to a 3×1 card showing the selected server name and connection status. Tap anywhere on the widget to toggle the VPN.
+
+**UI / cosmetic**
+- Subscription list: Share / Update / Delete buttons no longer overlap the subscription name and URL; icons are theme-tinted so they stay visible on light and dark backgrounds.
+- Server favorites: flat vector stars replace the Android 2.x glossy 3D star drawable.
+- Connection map: adapts to light theme (bitmap is grayscale-inverted on the fly, land/ocean tints swap), and the dashed connection arc now animates from the user to the server while the VPN is connected.
+
+**Reliability**
+- Home-screen widget no longer runs a blocking Room query on the main broadcast thread (potential ANR if the DB was locked during a subscription sync). The selected server name is read from a small SharedPreferences cache that's updated on profile select and VPN start.
+- Traffic-history cleanup is batched into a single `SharedPreferences.apply()` (was 30 individual commits per day archive) and the cleanup window is wide enough to recover history after the app hasn't been opened for >60 days.
 
 ## Build
 

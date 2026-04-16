@@ -15,7 +15,14 @@ data class AppSettings(
     val showConnectionMap: Boolean = true,
     val showSpeedTest: Boolean = true,
     val autoConnectWifi: Boolean = false,
-    val trustedWifiList: Set<String> = emptySet()
+    val trustedWifiList: Set<String> = emptySet(),
+    val tlsFragmentEnabled: Boolean = false,
+    val tlsFragmentPackets: String = "tlshello",
+    val tlsFragmentLength: String = "100-200",
+    val tlsFragmentInterval: String = "10-20",
+    val bypassDomains: String = "",
+    val bypassIps: String = "",
+    val trafficStatsMode: TrafficStatsMode = TrafficStatsMode.SIMPLE
 )
 
 enum class RoutingMode {
@@ -36,4 +43,10 @@ enum class PerAppMode {
     DISABLED,
     WHITELIST,
     BLACKLIST
+}
+
+enum class TrafficStatsMode {
+    CHART,
+    SIMPLE,
+    HIDDEN
 }

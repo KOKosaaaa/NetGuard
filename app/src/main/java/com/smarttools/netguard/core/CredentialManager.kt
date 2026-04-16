@@ -11,7 +11,7 @@ object CredentialManager {
 
     private data class Credentials(
         val user: String, val pass: String,
-        val port: Int, val httpPort: Int, val noAuthSocksPort: Int
+        val port: Int, val httpPort: Int
     )
 
     @Volatile
@@ -27,9 +27,8 @@ object CredentialManager {
         }
         val port = RandomPort.getAvailable()
         val httpPort = RandomPort.getAvailable()
-        val noAuthSocksPort = RandomPort.getAvailable()
 
-        current = Credentials(user, pass, port, httpPort, noAuthSocksPort)
+        current = Credentials(user, pass, port, httpPort)
 
         return Triple(user, pass, port)
     }
@@ -38,7 +37,6 @@ object CredentialManager {
     fun getPass(): String? = current?.pass
     fun getPort(): Int? = current?.port
     fun getHttpPort(): Int? = current?.httpPort
-    fun getNoAuthSocksPort(): Int? = current?.noAuthSocksPort
 
     fun clear() {
         current = null

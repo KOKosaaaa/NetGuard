@@ -55,8 +55,7 @@ object SpeedTester {
     }
 
     /**
-     * Download test using OkHttp through SOCKS5 no-auth proxy.
-     * Same approach as ServiceTester (which works reliably).
+     * Download test using OkHttp through authenticated HTTP proxy.
      * Returns -1.0 if all endpoints fail.
      */
     private fun runDownloadOkHttp(): Double {
@@ -125,39 +124,29 @@ object SpeedTester {
     }
 
     /**
-     * Build OkHttp client through SOCKS5 proxy (same as ServiceTester).
+     * Build OkHttp client through authenticated HTTP proxy (http-in).
+     * No-auth SOCKS5 removed for security — see ServiceTester.
      */
     private fun buildOkHttpClient(): OkHttpClient? {
-        val builder = OkHttpClient.Builder()
+        val httpPort = CredentialManager.getHttpPort() ?: return null.also {
+            Log.w(TAG, "No HTTP proxy port available for OkHttp")
+        }
+        val user = CredentialManager.getUser() ?: return null
+        val pass = CredentialManager.getPass() ?: return null
+
+        Log.d(TAG, "OkHttp via HTTP proxy 127.0.0.1:$httpPort")
+        return OkHttpClient.Builder()
             .connectTimeout(TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
             .readTimeout(TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
             .followRedirects(true)
-
-        // Prefer SOCKS5 no-auth (works on all configs)
-        val noAuthPort = CredentialManager.getNoAuthSocksPort()
-        if (noAuthPort != null) {
-            Log.d(TAG, "OkHttp via SOCKS5 no-auth 127.0.0.1:$noAuthPort")
-            builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", noAuthPort)))
-        } else {
-            // Fallback to HTTP proxy with auth
-            val httpPort = CredentialManager.getHttpPort()
-            val user = CredentialManager.getUser()
-            val pass = CredentialManager.getPass()
-            if (httpPort != null && user != null && pass != null) {
-                Log.d(TAG, "OkHttp via HTTP proxy 127.0.0.1:$httpPort")
-                builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort)))
-                builder.proxyAuthenticator { _, response ->
-                    val credential = okhttp3.Credentials.basic(user, pass)
-                    response.request.newBuilder()
-                        .header("Proxy-Authorization", credential)
-                        .build()
-                }
-            } else {
-                Log.w(TAG, "No proxy available for OkHttp")
-                return null
+            .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort)))
+            .proxyAuthenticator { _, response ->
+                val credential = okhttp3.Credentials.basic(user, pass)
+                response.request.newBuilder()
+                    .header("Proxy-Authorization", credential)
+                    .build()
             }
-        }
-        return builder.build()
+            .build()
     }
 
     /**

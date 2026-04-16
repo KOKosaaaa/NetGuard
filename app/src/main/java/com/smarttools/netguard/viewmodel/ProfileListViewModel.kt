@@ -88,6 +88,12 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun toggleFavorite(id: Long) {
+        viewModelScope.launch {
+            profileRepo.toggleFavorite(id)
+        }
+    }
+
     fun pingAll() {
         if (_pinging.value) return // prevent double-tap: already pinging
         viewModelScope.launch {

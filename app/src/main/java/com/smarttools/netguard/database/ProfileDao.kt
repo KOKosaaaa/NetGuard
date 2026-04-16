@@ -6,10 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProfileDao {
-    @Query("SELECT * FROM profiles ORDER BY subscriptionId ASC, sortOrder ASC")
+    @Query("SELECT * FROM profiles ORDER BY isFavorite DESC, subscriptionId ASC, sortOrder ASC")
     fun getAllFlow(): Flow<List<ServerProfile>>
 
-    @Query("SELECT * FROM profiles ORDER BY subscriptionId ASC, sortOrder ASC")
+    @Query("SELECT * FROM profiles ORDER BY isFavorite DESC, subscriptionId ASC, sortOrder ASC")
     suspend fun getAll(): List<ServerProfile>
 
     @Query("SELECT * FROM profiles WHERE id = :id")
@@ -70,6 +70,9 @@ interface ProfileDao {
     suspend fun updateSortOrdersBatch(profiles: List<Pair<Long, Int>>) {
         profiles.forEach { (id, order) -> updateSortOrder(id, order) }
     }
+
+    @Query("UPDATE profiles SET isFavorite = NOT isFavorite WHERE id = :id")
+    suspend fun toggleFavorite(id: Long)
 
     @Query("SELECT COUNT(*) FROM profiles")
     suspend fun count(): Int
