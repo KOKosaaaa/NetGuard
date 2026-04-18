@@ -31,18 +31,23 @@ object SecuritySelfTest {
         15345, 16000, 16100, 19090, 20170, 28981, 51837
     )
 
+    // Real VLESS/Xray/WireGuard/OpenVPN package names on the Play Store and
+    // F-Droid as of April 2026. Used only by testNeighboringVpn() below, as an
+    // informational heads-up — the presence of another VPN client is not itself
+    // a vulnerability, but the April-2026 local-SOCKS leak specifically affects
+    // several of these so the user may want to know they are installed.
     private val KNOWN_VPN_PACKAGES = listOf(
-        "com.v2ray.ang", "ang.v2ray.com", "com.github.nicknob",
-        "com.neko.box", "com.neko.nekorelay", "app.hiddify.com",
-        "com.github.nicknob.trojan", "org.nicknob.hiddify",
-        "com.github.nicknob.tunProxy", "com.karing.app",
-        "com.v2ray.v2raytun", "com.github.nicknob.happ",
-        "com.github.nicknob.hiddify", "com.github.nicknob.nekoray",
-        "com.github.nicknob.sing_box", "org.nicknob.singbox",
-        "com.zaneschepke.wireguardautotunnel",
-        "com.wireguard.android", "org.strongswan.android",
-        "de.blinkt.openvpn", "com.github.nicknob.clash",
-        "com.github.nicknob.surfboard"
+        "com.v2ray.ang",                      // v2rayNG
+        "com.v2ray.v2raytun",                 // v2rayTUN
+        "app.hiddify.com",                    // Hiddify
+        "com.happproxy",                      // Happ
+        "io.nekohasekai.sfa",                 // sing-box for Android (SFA)
+        "com.neko.v2rayng",                   // NekoBox fork
+        "com.karing.app",                     // Karing
+        "com.wireguard.android",              // WireGuard
+        "com.zaneschepke.wireguardautotunnel",// WG Tunnel
+        "org.strongswan.android",             // strongSwan
+        "de.blinkt.openvpn",                  // OpenVPN for Android
     )
 
     private val VPN_KEYWORDS_IN_PACKAGE = listOf(
@@ -62,8 +67,36 @@ object SecuritySelfTest {
             async { testTransportVpnFlag(context) },
             async { testMtuAnomaly() },
             async { testPackageDetectable(context) },
+            async { testNeighboringVpn(context) },
         )
         results.awaitAll()
+    }
+
+    // 10. Neighboring VPN clients that may be vulnerable to the April 2026
+    // local-SOCKS leak. Informational — their presence alone is not a
+    // NetGuard issue, but the user should know another VPN on the device
+    // may open an unauthenticated 127.0.0.1 port that NetGuard's traffic
+    // could race against.
+    private suspend fun testNeighboringVpn(context: Context): TestResult = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val found = KNOWN_VPN_PACKAGES.filter { pkg ->
+            try {
+                pm.getPackageInfo(pkg, 0)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+        if (found.isEmpty()) {
+            TestResult("Neighboring VPNs", true, details = "No other known VPN clients installed")
+        } else {
+            TestResult(
+                "Neighboring VPNs",
+                passed = true,
+                warning = true,
+                details = "Other VPN clients installed (some may be affected by the April 2026 local-SOCKS leak): ${found.joinToString()}"
+            )
+        }
     }
 
     // 1. SOCKS5 port 10808 without auth
@@ -268,7 +301,14 @@ object SecuritySelfTest {
         }
     }
 
-    // 8. MTU anomaly
+    // 8. MTU report (informational only — see comment below)
+    //
+    // Any working VPN tunnel needs MTU < 1500 because TLS/VLESS/TCP overhead eats
+    // into the outer packet budget. That means "tun interface with MTU < 1500" is
+    // the normal state for VPNs, not an anomaly. We intentionally keep NetGuard's
+    // own TUN at 1500 as a stealth trade-off (at the cost of some fragmentation);
+    // flagging other interfaces as "anomalous" for doing the conventional thing
+    // would be misleading. This check is therefore reported as informational.
     private suspend fun testMtuAnomaly(): TestResult = withContext(Dispatchers.IO) {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
@@ -280,19 +320,13 @@ object SecuritySelfTest {
                 return@withContext TestResult("MTU Check", true, details = "No TUN interface detected")
             }
 
-            val mtuIssues = mutableListOf<String>()
-            for (iface in tunInterfaces) {
-                val mtu = iface.mtu
-                if (mtu in 1..1499) {
-                    mtuIssues.add("${iface.name}: MTU=$mtu (detectable, should be 1500)")
-                }
-            }
-
-            if (mtuIssues.isEmpty()) {
-                TestResult("MTU Check", true, details = "TUN interface MTU is 1500 (standard)")
-            } else {
-                TestResult("MTU Check", false, details = "MTU anomaly: ${mtuIssues.joinToString("; ")}")
-            }
+            val summary = tunInterfaces.joinToString("; ") { "${it.name}: MTU=${it.mtu}" }
+            TestResult(
+                "MTU Check",
+                passed = true,
+                warning = true,
+                details = "Informational only: $summary. MTU alone is not a reliable VPN indicator."
+            )
         } catch (_: Exception) {
             TestResult("MTU Check", true, warning = true, details = "Cannot check interface MTU")
         }

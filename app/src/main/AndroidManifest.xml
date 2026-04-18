@@ -4,12 +4,25 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- VPN-tunnel FGS. We keep `specialUse` because Android 14's
+         `connectedDevice` type additionally requires holding at least one of
+         the BLUETOOTH_*/NFC/USB/CHANGE_WIFI_STATE runtime permissions — which
+         a VPN does not legitimately need. `systemExempted` is also requested
+         so BootReceiver-triggered auto-reconnect is allowed before the user
+         has foregrounded the app. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Android 13+ requires NEARBY_WIFI_DEVICES to read SSID/BSSID via
+         WifiManager. Without it, WifiAutoConnectManager silently gets nulls on
+         Android 13 and above. neverForLocation is mandatory for Play review. -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="33" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
@@ -53,7 +66,7 @@
         <service
             android:name=".service.TunnelVpnService"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|systemExempted"
             android:permission="android.permission.BIND_VPN_SERVICE">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
@@ -61,6 +74,11 @@
             <meta-data
                 android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
                 android:value="true" />
+            <!-- Android 14+ requires an explicit subtype string for any FGS
+                 declared as `specialUse`. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="VPN tunnel for encrypted proxy access" />
         </service>
 
         <service

@@ -1,12 +1,15 @@
 package com.smarttools.netguard.repository
 
+import com.smarttools.netguard.BuildConfig
 import com.smarttools.netguard.core.ProfileParser
 import com.smarttools.netguard.database.ProfileDao
 import com.smarttools.netguard.database.SubscriptionDao
 import com.smarttools.netguard.model.Subscription
+import com.smarttools.netguard.util.AddressValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import okhttp3.Dns
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,11 +35,32 @@ class SubscriptionRepository(
         chain.proceed(request)
     }
 
+    /**
+     * DNS rebinding guard. Without this, an attacker controlling the DNS
+     * response for a subscription host can return a public IP on the first
+     * (URL-validation) lookup and a private IP on the second (OkHttp connect)
+     * lookup — TOCTOU, SSRF into the device's LAN. We perform the system
+     * lookup ourselves and drop any private/reserved addresses before OkHttp
+     * ever sees them, so the connect phase is forced to use an address that
+     * already passed [AddressValidator].
+     */
+    private val safeDns = object : Dns {
+        override fun lookup(hostname: String): List<java.net.InetAddress> {
+            val resolved = Dns.SYSTEM.lookup(hostname)
+            val safe = resolved.filterNot { AddressValidator.isPrivateOrReserved(it) }
+            if (safe.isEmpty()) {
+                throw IOException("All resolved addresses for $hostname are private/reserved")
+            }
+            return safe
+        }
+    }
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
+        .dns(safeDns)
         .addNetworkInterceptor(redirectSafetyInterceptor)
         .build()
 
@@ -60,38 +84,12 @@ class SubscriptionRepository(
      * Used by both initial URL check and redirect interceptor.
      */
     private fun validateHost(host: String) {
-        val h = host.lowercase().removeSurrounding("[", "]")
-        // IPv4 private/loopback
-        if (h == "localhost" || h.startsWith("127.") || h.startsWith("10.") ||
-            h.startsWith("192.168.") || h.startsWith("169.254.") ||
-            h.startsWith("0.")
-        ) {
-            throw IOException("Private/loopback address blocked: $h")
+        val cleaned = host.removeSurrounding("[", "]")
+        if (cleaned.equals("localhost", ignoreCase = true)) {
+            throw IOException("Private/loopback address blocked: $cleaned")
         }
-        // IPv4 172.16.0.0/12
-        if (h.startsWith("172.")) {
-            val second = h.split(".").getOrNull(1)?.toIntOrNull()
-            if (second != null && second in 16..31) {
-                throw IOException("Private address blocked: $h")
-            }
-        }
-        // IPv6 loopback, unique-local (fc00::/7), link-local (fe80::/10)
-        if (h == "::1" || h.startsWith("fc") || h.startsWith("fd") ||
-            h.startsWith("fe8") || h.startsWith("fe9") ||
-            h.startsWith("fea") || h.startsWith("feb") ||
-            h == "::" || h.startsWith("::ffff:127.") || h.startsWith("::ffff:10.") ||
-            h.startsWith("::ffff:192.168.") || h.startsWith("::ffff:169.254.") ||
-            h.startsWith("::ffff:0.")
-        ) {
-            throw IOException("Private/loopback IPv6 address blocked: $h")
-        }
-        // IPv6-mapped 172.16.0.0/12
-        if (h.startsWith("::ffff:172.")) {
-            val mapped = h.removePrefix("::ffff:")
-            val second = mapped.split(".").getOrNull(1)?.toIntOrNull()
-            if (second != null && second in 16..31) {
-                throw IOException("Private IPv6-mapped address blocked: $h")
-            }
+        if (AddressValidator.isPrivateOrReserved(cleaned)) {
+            throw IOException("Private/reserved address blocked: $cleaned")
         }
     }
 
@@ -116,7 +114,7 @@ class SubscriptionRepository(
 
             val request = Request.Builder()
                 .url(sub.url)
-                .header("User-Agent", "NetGuard/1.0")
+                .header("User-Agent", "NetGuard/${BuildConfig.VERSION_NAME}")
                 .get()
                 .build()
 

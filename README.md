@@ -12,11 +12,11 @@ When you switch between WiFi and mobile data, typical clients tear down the enti
 
 ### Ephemeral authenticated SOCKS5
 
-Every connection generates a fresh random port, a UUID username, and a 32-character cryptographic password for the local SOCKS5 bridge between tun2socks and xray. Credentials are wiped from memory immediately after handshake. Even if another app scans localhost ports, it can't authenticate.
+Every connection generates a fresh random port, a UUID username, and a 32-character random password for the local SOCKS5 bridge between tun2socks and xray. Credentials are cleared from memory on disconnect or network reconnect (they are kept alive during a session so that internal speed-test / service-test requests can reauthenticate through the HTTP bridge). Even if another app scans localhost ports, it cannot authenticate without the ephemeral password.
 
-### Config never touches disk
+### Config minimally exposed on disk
 
-The xray JSON config (containing server credentials, UUIDs, passwords) is written to a temp file, xray reads it, and the file is deleted — all within the same connection sequence. No config.json sitting in `/data/data/` for forensic extraction.
+The xray JSON config (containing server credentials, UUIDs, passwords) is written to app-private internal storage only long enough for xray to read it, then immediately `unlink()`ed once the SOCKS inbound is up. No config.json is kept across sessions, and it is never visible to other apps. Note that on ext4/F2FS the underlying blocks may persist until overwritten — this is a brief-exposure design, not a never-on-disk one.
 
 ### Built-in security self-test
 
@@ -27,7 +27,7 @@ The xray JSON config (containing server credentials, UUIDs, passwords) is writte
 - Clash REST API exposure
 - `/proc/net/tcp` analysis for unexpected listeners
 - VPN transport flag detection
-- MTU anomaly detection
+- MTU informational report (non-decisive — see self-test details)
 - Package name stealth analysis
 
 ### Evil Twin WiFi protection
@@ -74,7 +74,8 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 ## Security hardening
 
 - **Not vulnerable to the April 2026 VLESS local-SOCKS leak** affecting Happ, v2rayTUN, Hiddify, v2rayNG, NekoBox and others. No unauthenticated local SOCKS5 inbound is ever exposed — both internal bridges (SOCKS5 for tun2socks, HTTP for internal speed/service tests) require the ephemeral 32-char password. See *Ephemeral authenticated SOCKS5* above.
-- Encrypted database (SQLCipher AES-256 + EncryptedSharedPreferences)
+- **Honest caveat on password surface.** The SOCKS5 username and password are passed to the `tun2socks` helper process via command-line arguments, so they appear in `/proc/<tun2socks_pid>/cmdline`. On modern Android this file is protected by SELinux `app_data_file` contexts and hidepid, so other apps cannot read it, but a rooted attacker or the same-uid process can. The password is ephemeral per session, so disclosure only compromises the current tunnel's local bridge, not the server credentials. Migration to stdin / fd-based credential passing is tracked as a future hardening step.
+- EncryptedSharedPreferences via `androidx.security:security-crypto` for small secrets (DB key material placeholder, credentials cache). Full database-level encryption via SQLCipher is on the roadmap — see *Known limitations* below.
 - Log redaction — UUIDs, passwords, Bearer tokens masked automatically
 - SSRF protection — private/loopback/link-local IPv4 and IPv6 blocked in profile parser
 - Tapjacking protection on critical buttons (filterTouchesWhenObscured)
@@ -87,7 +88,44 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 - Input size limits on URIs, subscriptions, imports
 - Evil Twin WiFi detection (SSID+BSSID pair validation)
 
+## Known limitations
+
+- **Room database is currently plain**, despite earlier wording. The SQLCipher dependency was declared but never wired as the Room `SupportFactory`, and the app deletes any previously-encrypted DB on first launch of a new version (see `AppDatabase.deleteEncryptedIfNeeded`). Profile data is already re-fetchable from subscriptions, so this is low-impact, but a proper SQLCipher integration is tracked as future work.
+- **`androidx.security:security-crypto` was deprecated by Google in 2024.** The 1.1.0-alpha06 release still works on current Android, but Android 15/16 may change backing-store behaviour without backward-compatibility guarantees. Migration path: move to `java.security.KeyStore.getInstance("AndroidKeyStore")` directly, generate the AES-256 key via `KeyGenerator`, and store ciphertext in plain `SharedPreferences`. Tracked, not urgent.
+- **tun2socks credential exposure.** See *Security hardening → honest caveat on password surface* above.
+
 ## Release notes
+
+### v1.1.4 — 2026-04-18
+
+**Security**
+- **SSRF hardening.** All private / loopback / link-local / CGNAT (`100.64.0.0/10`) / reserved (`240.0.0.0/4`) / IPv4-mapped-IPv6 / hex-and-octal IPv4 literals (`0x7f.0.0.1`, `0177.0.0.1`) are now rejected by a single `AddressValidator`. The old spot checks on `startsWith("10.")`, `"192.168."` etc. were trivially defeated by alternative textual forms; the new validator resolves literals numerically via `InetAddress` and inspects the resulting bytes.
+- **DNS rebinding guard.** Subscription fetches now go through a custom OkHttp `Dns` resolver that re-validates every address returned at connect time, so an attacker who controls the subscription host's DNS cannot swap the validated public IP for a private LAN IP between validation and connection.
+- **Ephemeral SOCKS credentials.** The local SOCKS5 / HTTP bridge credentials are now stored as `CharArray` inside `CredentialManager` and actively zeroed on `clear()`, instead of lingering as immutable `String` heap residue until GC.
+- **No-leak network switching.** `VpnService.setUnderlyingNetworks()` is now pinned to the active non-VPN network both at tunnel establishment and on every WiFi↔LTE switch, eliminating the narrow window where xray's outbound socket could transiently route over the old interface.
+- **Honest README.** Claims that were not strictly true in the code — "credentials wiped from memory immediately after handshake", "config never touches disk", "encrypted database" — have been rewritten to reflect what actually happens. The matching *Known limitations* section documents tracked items (SQLCipher integration, `security-crypto` deprecation, tun2socks credential argv exposure).
+
+**Platform compat**
+- **Android 14 FGS.** Foreground-service type migrated to `specialUse | systemExempted` with the required `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` declaration. The previous `specialUse` on Android 14 raised a runtime `SecurityException` at `startForeground()`; a naive migration to `connectedDevice` also fails because that type requires holding one of BLUETOOTH/USB/NFC permissions that a VPN legitimately cannot claim.
+- **Android 13+ WiFi.** `NEARBY_WIFI_DEVICES` permission (with `neverForLocation`) is now declared and requested at runtime when the user opens the Trusted WiFi dialog or flips the auto-connect toggle; without it, SSID read silently returned `<unknown ssid>` on stock Android 13+.
+- **IPv6 route is now conditional on the `Enable IPv6` setting.** Previously `addRoute("::", 0)` was claimed unconditionally — on IPv4-only servers, AAAA-bound traffic disappeared into tun2socks instead of falling back gracefully.
+
+**WiFi auto-connect reliability**
+- SSID/BSSID lookup falls back to `WifiManager.connectionInfo` when Android strips `transportInfo` from background callbacks.
+- Events are de-duplicated by `(SSID, BSSID)` so the throttled `onCapabilitiesChanged` firehose (RSSI / link-speed / validation updates) no longer spams `TunnelVpnService.start()`.
+- If the first capability event arrives with `<unknown ssid>` (Wi-Fi still associating), the manager retries at 2 s / 5 s / 10 s via `WifiManager` instead of losing the event.
+- An initial probe runs after `registerNetworkCallback` so sessions that start while already on Wi-Fi are handled, not only subsequent network switches.
+- Trusted WiFi dialog works even before enabling auto-connect — it uses a transient manager instance to read SSID/BSSID.
+
+**Code quality**
+- New `Security self-test`: "Neighboring VPNs" check scans for other installed VPN clients (v2rayNG, Hiddify, Happ, SFA, Karing, WireGuard, OpenVPN, strongSwan, …) that may be vulnerable to the April 2026 local-SOCKS leak.
+- `MTU` self-test is now correctly reported as informational: flagging `MTU != 1500` as a "VPN anomaly" was both false-positive on well-behaved VPNs and contradicted NetGuard's own stealth choice of MTU=1500.
+- Speed-test URLs switched to HTTPS where the endpoint supports it; cleartext exception narrowed to `speedtest.tele2.net` only (was three domains).
+- Removed unused `ConfigBuilder.kt` wrapper, cleaned out imaginary `com.github.nicknob.*` entries from `KNOWN_VPN_PACKAGES`, removed the dead `SQLCipher` dependency (was declared but never wired into Room).
+- First unit tests: `AddressValidatorTest` covers the SSRF-critical logic (16 cases, including CGNAT, hex/octal IPv4, IPv4-mapped IPv6).
+- CI: GitHub Actions workflow runs `./gradlew testDebugUnitTest` on push / PR.
+- `SECURITY.md` with responsible-disclosure policy.
+- `User-Agent` now reads from `BuildConfig.VERSION_NAME` instead of the hard-coded `"NetGuard/1.0"`.
 
 ### v1.1.3 — 2026-04-17
 
@@ -112,12 +150,17 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 - Home-screen widget no longer runs a blocking Room query on the main broadcast thread (potential ANR if the DB was locked during a subscription sync). The selected server name is read from a small SharedPreferences cache that's updated on profile select and VPN start.
 - Traffic-history cleanup is batched into a single `SharedPreferences.apply()` (was 30 individual commits per day archive) and the cleanup window is wide enough to recover history after the app hasn't been opened for >60 days.
 
-## Build
+## Setup
 
-```bash
-# Requires Android Studio with JBR (JetBrains Runtime)
-JAVA_HOME="/path/to/android-studio/jbr" ./gradlew assembleDebug
-```
+1. Clone the repository.
+2. Drop the libXray AAR into `app/libs/` — see [`app/libs/README.md`](app/libs/README.md) for the exact download link and version. Without this step the build will fail with unresolved native symbols.
+3. (Release builds only) copy `keystore.properties.template` → `keystore.properties` and point it at your signing key. Debug builds auto-sign with the SDK debug key and do not need this.
+4. Build:
+
+   ```bash
+   # Requires Android Studio with JBR (JetBrains Runtime)
+   JAVA_HOME="/path/to/android-studio/jbr" ./gradlew assembleDebug
+   ```
 
 **Requirements:**
 - Android SDK 34

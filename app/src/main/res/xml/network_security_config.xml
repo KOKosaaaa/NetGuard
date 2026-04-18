@@ -5,10 +5,13 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <!-- Allow HTTP for speed test endpoints (traffic goes through VPN tunnel) -->
+    <!-- Cloudflare and OVH serve the same speed-test endpoints over HTTPS, so
+         they no longer need a cleartext exception. Only speedtest.tele2.net
+         does not offer HTTPS and is kept here. Even though this traffic goes
+         through the VPN tunnel, narrowing the whitelist reduces the chance of
+         an accidental HTTP call leaking metadata inside the tunnel to a
+         captive portal or TLS-downgrade attacker on a hostile WiFi. -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">speed.cloudflare.com</domain>
         <domain includeSubdomains="true">speedtest.tele2.net</domain>
-        <domain includeSubdomains="true">proof.ovh.net</domain>
     </domain-config>
 </network-security-config>

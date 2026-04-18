@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import com.google.gson.JsonParser
 import com.smarttools.netguard.model.*
+import com.smarttools.netguard.util.AddressValidator
 import java.net.URI
 import java.net.URLDecoder
 
@@ -343,38 +344,16 @@ object ProfileParser {
         }
         if (host.isEmpty()) throw IllegalArgumentException("Empty host in URI")
         if (port !in 1..65535) throw IllegalArgumentException("Invalid port: $port")
-        // Block connections to localhost/private/reserved IPs
+        // localhost and obviously-bogus strings that InetAddress would not reject
+        // by resolution alone.
         val h = host.lowercase()
-        if (h == "localhost" || h == "127.0.0.1" || h == "::1" || h == "::" || h == "0.0.0.0" ||
-            h.startsWith("10.") || h.startsWith("192.168.") || h.startsWith("169.254.")
-        ) {
+        if (h == "localhost") {
             throw IllegalArgumentException("Private/loopback address not allowed: $host")
         }
-        if (h.startsWith("172.")) {
-            val second = h.split(".").getOrNull(1)?.toIntOrNull()
-            if (second != null && second in 16..31) {
-                throw IllegalArgumentException("Private address not allowed: $host")
-            }
-        }
-        // IPv6 ULA (fc00::/7), link-local (fe80::/10), multicast (ff00::/8)
-        if (h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80") || h.startsWith("ff")) {
-            throw IllegalArgumentException("Private/reserved IPv6 address not allowed: $host")
-        }
-        // IPv6-mapped IPv4 private ranges
-        if (h.startsWith("::ffff:")) {
-            val mapped = h.removePrefix("::ffff:")
-            if (mapped.startsWith("10.") || mapped.startsWith("192.168.") ||
-                mapped.startsWith("169.254.") || mapped.startsWith("127.") || mapped.startsWith("0.")
-            ) {
-                throw IllegalArgumentException("Private IPv6-mapped address not allowed: $host")
-            }
-            if (mapped.startsWith("172.")) {
-                val second = mapped.split(".").getOrNull(1)?.toIntOrNull()
-                if (second != null && second in 16..31) {
-                    throw IllegalArgumentException("Private IPv6-mapped address not allowed: $host")
-                }
-            }
-        }
+        // All other private / reserved / CGNAT / hex-IPv4 / IPv6-mapped checks
+        // now live in AddressValidator (resolves numerically so alternative
+        // textual forms of the same address cannot bypass the filter).
+        AddressValidator.requirePublicAddress(host)
         return Pair(host, port)
     }
 

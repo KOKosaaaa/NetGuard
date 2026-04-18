@@ -21,8 +21,10 @@ android {
         applicationId = "com.smarttools.netguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.1.3"
+        versionCode = 5
+        versionName = "1.1.4"
+
+        buildConfigField("String", "VERSION_NAME", "\"$versionName\"")
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -71,6 +73,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     packaging {
@@ -101,11 +104,13 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
 
-    // Room + SQLCipher encryption
+    // Room
+    // SQLCipher was listed here historically but never wired in as a
+    // SupportFactory, so the DB has always been plain. See README "Known
+    // limitations" for the migration plan.
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
-    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
     // Encrypted SharedPreferences (for DB key storage)
@@ -139,4 +144,7 @@ dependencies {
 
     // WorkManager (subscription auto-update)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Unit tests (JVM, no Android instrumentation)
+    testImplementation("junit:junit:4.13.2")
 }

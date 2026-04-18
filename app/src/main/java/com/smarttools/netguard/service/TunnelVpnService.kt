@@ -2,6 +2,7 @@ package com.smarttools.netguard.service
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -91,6 +92,35 @@ class TunnelVpnService : VpnService() {
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
+    /**
+     * Android 14 (API 34) enforces that every call to [startForeground] for a
+     * service with a typed `foregroundServiceType` declaration specifies
+     * matching bits at call-site. We use `connectedDevice` (the VPN tunnel
+     * role) combined with `systemExempted` (so auto-connect from
+     * [BootReceiver] is allowed before the user has foregrounded the app).
+     * On API < 29 the typed overload does not exist; fall back to the 2-arg
+     * form which the platform happily accepts.
+     */
+    private fun startForegroundCompat(notification: android.app.Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // API 34+: FGS type is mandatory at call site and must match the
+            // manifest declaration. `specialUse` requires the subtype property
+            // that is declared inside the <service> element. `systemExempted`
+            // is OR-ed in so BootReceiver auto-reconnect is permitted.
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED
+            startForeground(NotificationHelper.NOTIFICATION_ID, notification, type)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // specialUse was added in API 30.
+            startForeground(
+                NotificationHelper.NOTIFICATION_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -106,7 +136,7 @@ class TunnelVpnService : VpnService() {
                 }
                 // Show "Connecting..." notification immediately to avoid ANR
                 val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
-                startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+                startForegroundCompat(notification)
                 startTunnel(profileId)
             }
             else -> {
@@ -115,7 +145,7 @@ class TunnelVpnService : VpnService() {
                     .getLong("last_profile_id", -1)
                 if (lastProfileId != -1L) {
                     val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
-                    startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+                    startForegroundCompat(notification)
                     startTunnel(lastProfileId)
                 } else {
                     stopSelf()
@@ -308,7 +338,11 @@ class TunnelVpnService : VpnService() {
 
         val sockPath = File(filesDir, "sock_path").absolutePath
 
-        // badvpn-tun2socks: receives TUN fd via Unix domain socket
+        // badvpn-tun2socks: receives TUN fd via Unix domain socket.
+        // FIXME(security): --username/--password are visible in /proc/<pid>/cmdline.
+        // SELinux + hidepid hide this from other apps on stock Android, but same-uid
+        // processes and root can read it. Migrate to stdin pipe or fd-based creds
+        // once the tun2socks fork supports it (see README security-hardening section).
         val pb = ProcessBuilder(
             tun2socksBin.absolutePath,
             "--netif-ipaddr", "10.10.10.2",
@@ -428,7 +462,17 @@ class TunnelVpnService : VpnService() {
         val builder = Builder()
             .addAddress("10.10.10.1", 30)
             .addRoute("0.0.0.0", 0)
-            .addRoute("::", 0)
+            .apply {
+                // Only claim the IPv6 default route when the user has IPv6 enabled.
+                // If we claim it but can't tunnel v6 (server is v4-only, or the
+                // user disabled v6), packets disappear into tun2socks and fail —
+                // worse than useless, because Android's Happy Eyeballs may then
+                // try to reach AAAA targets via system DNS and leak.
+                if (settings.enableIpv6) {
+                    addAddress("fd00::1", 126)
+                    addRoute("::", 0)
+                }
+            }
             // CRITICAL: two DNS servers — if primary is unreachable, secondary
             // prevents Android from falling back to system DNS (which leaks IP)
             .addDnsServer(primaryDns)
@@ -464,7 +508,18 @@ class TunnelVpnService : VpnService() {
             }
         }
 
-        return builder.establish()
+        val fd = builder.establish()
+        // Bind VpnService to the currently active non-VPN network. Without this,
+        // xray's outbound socket may take the system default, which on some OEMs
+        // is re-chosen on every network change and can transiently pick the old
+        // network. Explicit underlying-network binding closes that leak window.
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            cm.activeNetwork?.let { setUnderlyingNetworks(arrayOf(it)) }
+        } catch (e: Exception) {
+            Log.w(TAG, "setUnderlyingNetworks(establish) failed: ${e.message}")
+        }
+        return fd
     }
 
     private fun registerNetworkCallback() {
@@ -480,6 +535,15 @@ class TunnelVpnService : VpnService() {
             override fun onAvailable(network: Network) {
                 val prev = currentNetwork
                 currentNetwork = network
+                // Pin VpnService to the new underlying network so outbound sockets
+                // from xray route through it immediately instead of Android's
+                // default, which can briefly resolve to the old (possibly gone)
+                // network during a WiFi↔LTE switch.
+                try {
+                    setUnderlyingNetworks(arrayOf(network))
+                } catch (e: Exception) {
+                    Log.w(TAG, "setUnderlyingNetworks(onAvailable) failed: ${e.message}")
+                }
                 // Only reconnect if we had a DIFFERENT underlying network before (WiFi↔LTE switch)
                 if (prev != null && prev != network &&
                     _connectionState.value is ConnectionState.Connected &&

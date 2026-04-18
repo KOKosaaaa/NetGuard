@@ -335,13 +335,9 @@ class SettingsFragment : Fragment() {
 
         binding.cbAutoConnectWifi.setOnCheckedChangeListener { _, checked ->
             if (checked) {
-                // Request location permission if needed (for SSID access)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                        requireContext(), android.Manifest.permission.ACCESS_FINE_LOCATION
-                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) {
-                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                val missing = missingWifiPermissions()
+                if (missing.isNotEmpty()) {
+                    wifiPermissionLauncher.launch(missing)
                     return@setOnCheckedChangeListener
                 }
             }
@@ -350,14 +346,48 @@ class SettingsFragment : Fragment() {
         }
 
         binding.btnTrustedWifi.setOnClickListener {
-            showTrustedWifiDialog()
+            val missing = missingWifiPermissions()
+            if (missing.isNotEmpty()) {
+                // The Trusted-WiFi dialog is useless without the permissions
+                // required to read the current SSID/BSSID, so request them
+                // first and re-open the dialog when the user decides.
+                trustedWifiPermissionLauncher.launch(missing)
+            } else {
+                showTrustedWifiDialog()
+            }
         }
     }
 
-    private val locationPermissionLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
+    /**
+     * Permissions we need before we can read the current SSID/BSSID:
+     *  * ACCESS_FINE_LOCATION — required on all versions.
+     *  * NEARBY_WIFI_DEVICES — required additionally on Android 13+
+     *    (SDK 33+); without it, `WifiInfo.ssid` comes back as
+     *    `<unknown ssid>` even though ACCESS_FINE_LOCATION is granted.
+     */
+    private fun missingWifiPermissions(): Array<String> {
+        val ctx = requireContext()
+        val missing = mutableListOf<String>()
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            missing += android.Manifest.permission.ACCESS_FINE_LOCATION
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.NEARBY_WIFI_DEVICES
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            missing += android.Manifest.permission.NEARBY_WIFI_DEVICES
+        }
+        return missing.toTypedArray()
+    }
+
+    private val wifiPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.all { it }) {
             viewModel.updateSettings { it.copy(autoConnectWifi = true) }
             (requireActivity().application as App).updateWifiAutoConnect(true)
         } else {
@@ -366,11 +396,26 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private val trustedWifiPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.all { it }) {
+            showTrustedWifiDialog()
+        } else {
+            Toast.makeText(requireContext(), R.string.location_needed_for_wifi, Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun showTrustedWifiDialog() {
         val app = requireActivity().application as App
         val trusted = viewModel.settings.value.trustedWifiList.toMutableList()
-        val currentSsid = app.wifiAutoConnectManager?.getCurrentSsid()
-        val currentBssid = app.wifiAutoConnectManager?.getCurrentBssid()
+        // Read SSID/BSSID even when the auto-connect feature is disabled:
+        // the stored manager is only spun up on `autoConnectWifi = true`, but
+        // a user who is about to build a trusted list should be able to see
+        // and add the currently-connected WiFi before flipping the switch.
+        val probe = app.wifiAutoConnectManager ?: WifiAutoConnectManager(app)
+        val currentSsid = probe.getCurrentSsid()
+        val currentBssid = probe.getCurrentBssid()
 
         // Display names for existing entries
         val displayItems = trusted.map { WifiAutoConnectManager.displayName(it) }.toMutableList()
