@@ -243,6 +243,8 @@
     <string name="bypass_list_desc">Domains and IPs that bypass VPN (go direct)</string>
     <string name="bypass_domains_hint">Domains (one per line)</string>
     <string name="bypass_ips_hint">IPs / CIDR (one per line)</string>
+    <string name="bypass_too_broad_warning">Pattern \"%1$s\" is too broad — it may send most traffic outside the VPN</string>
+    <string name="bypass_too_broad_toast">Some bypass rules are too broad and may effectively disable the VPN</string>
 
     <!-- About -->
     <string name="created_by">Created by KOKOS</string>

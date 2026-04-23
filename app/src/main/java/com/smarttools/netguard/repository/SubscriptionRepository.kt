@@ -9,6 +9,7 @@ import com.smarttools.netguard.util.AddressValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import okhttp3.CertificatePinner
 import okhttp3.Dns
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -55,6 +56,22 @@ class SubscriptionRepository(
         }
     }
 
+    /**
+     * Pin the subscription host we control (example.test). Three pins:
+     * leaf (rotates ~90d), Google Trust Services WE1 intermediate, GTS R4 root.
+     * Any of the three matching in the chain validates the connection, so a
+     * routine leaf rotation does not brick the app. If GTS R4 is ever rotated
+     * out, bundle a new pin in a release before the old one expires.
+     *
+     * Pins for user-supplied hosts are NOT added — we do not control those
+     * CAs and the user has opted into that trust model by adding the URL.
+     */
+    private val certificatePinner = CertificatePinner.Builder()
+        .add("example.test", "sha256/REDACTED")
+        .add("example.test", "sha256/REDACTED")
+        .add("example.test", "sha256/REDACTED")
+        .build()
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -62,6 +79,7 @@ class SubscriptionRepository(
         .followSslRedirects(true)
         .dns(safeDns)
         .addNetworkInterceptor(redirectSafetyInterceptor)
+        .certificatePinner(certificatePinner)
         .build()
 
     fun getAllFlow(): Flow<List<Subscription>> = subDao.getAllFlow()

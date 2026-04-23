@@ -57,6 +57,23 @@ class SettingsFragment : Fragment() {
     private val viewModel: SettingsViewModel by activityViewModels()
     private var updatingFromFlow = false
 
+    // Remembers what each text field was populated with, so onPause can tell
+    // "user edited this" apart from "settings changed under us (e.g. restore
+    // from backup) and the field never got refreshed" — only the former
+    // should be written back. Prevents stale onPause from clobbering settings
+    // that were updated externally while the fragment was foreground.
+    private val fieldBaselines = mutableMapOf<Int, String>()
+
+    private fun EditText.setTextAndBaseline(value: String) {
+        setText(value)
+        fieldBaselines[id] = value
+    }
+
+    private fun EditText.hasUserEdit(): Boolean {
+        val baseline = fieldBaselines[id] ?: return false
+        return text.toString() != baseline
+    }
+
     private val backupLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -205,8 +222,8 @@ class SettingsFragment : Fragment() {
     private fun setupSettings() {
         // Initialize DNS fields
         val s = viewModel.settings.value
-        binding.etPrimaryDns.setText(s.primaryDns)
-        binding.etSecondaryDns.setText(s.secondaryDns)
+        binding.etPrimaryDns.setTextAndBaseline(s.primaryDns)
+        binding.etSecondaryDns.setTextAndBaseline(s.secondaryDns)
 
         binding.rgRouting.setOnCheckedChangeListener { _, checkedId ->
             if (!updatingFromFlow) {
@@ -456,9 +473,9 @@ class SettingsFragment : Fragment() {
         val s = viewModel.settings.value
         binding.cbTlsFragment.isChecked = s.tlsFragmentEnabled
         binding.llTlsFragmentSettings.visibility = if (s.tlsFragmentEnabled) View.VISIBLE else View.GONE
-        binding.etTlsPackets.setText(s.tlsFragmentPackets)
-        binding.etTlsLength.setText(s.tlsFragmentLength)
-        binding.etTlsInterval.setText(s.tlsFragmentInterval)
+        binding.etTlsPackets.setTextAndBaseline(s.tlsFragmentPackets)
+        binding.etTlsLength.setTextAndBaseline(s.tlsFragmentLength)
+        binding.etTlsInterval.setTextAndBaseline(s.tlsFragmentInterval)
 
         binding.cbTlsFragment.setOnCheckedChangeListener { _, checked ->
             binding.llTlsFragmentSettings.visibility = if (checked) View.VISIBLE else View.GONE
@@ -468,8 +485,61 @@ class SettingsFragment : Fragment() {
 
     private fun setupBypassList() {
         val s = viewModel.settings.value
-        binding.etBypassDomains.setText(s.bypassDomains)
-        binding.etBypassIps.setText(s.bypassIps)
+        binding.etBypassDomains.setTextAndBaseline(s.bypassDomains)
+        binding.etBypassIps.setTextAndBaseline(s.bypassIps)
+
+        binding.etBypassDomains.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(c: CharSequence?, s: Int, b: Int, a: Int) {}
+            override fun onTextChanged(c: CharSequence?, s: Int, b: Int, a: Int) {}
+            override fun afterTextChanged(e: android.text.Editable?) {
+                binding.tilBypassDomains.error =
+                    findBroadBypassPattern(e?.toString().orEmpty(), isIpList = false)
+                        ?.let { getString(R.string.bypass_too_broad_warning, it) }
+            }
+        })
+        binding.etBypassIps.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(c: CharSequence?, s: Int, b: Int, a: Int) {}
+            override fun onTextChanged(c: CharSequence?, s: Int, b: Int, a: Int) {}
+            override fun afterTextChanged(e: android.text.Editable?) {
+                binding.tilBypassIps.error =
+                    findBroadBypassPattern(e?.toString().orEmpty(), isIpList = true)
+                        ?.let { getString(R.string.bypass_too_broad_warning, it) }
+            }
+        })
+    }
+
+    /**
+     * Returns the first line that would cause the vast majority of traffic to
+     * bypass the VPN, or null if all lines look normal. Conservative — we only
+     * flag patterns that are almost certainly a mistake, not arbitrary broad
+     * rules the user might actually want.
+     */
+    private fun findBroadBypassPattern(text: String, isIpList: Boolean): String? {
+        for (raw in text.lines()) {
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith("#")) continue
+            if (isIpList) {
+                // Catch /0 and /1 CIDRs (half the internet or more)
+                if (line == "0.0.0.0/0" || line == "::/0") return line
+                val slash = line.lastIndexOf('/')
+                if (slash > 0) {
+                    val prefix = line.substring(slash + 1).toIntOrNull()
+                    if (prefix != null && prefix <= 1) return line
+                }
+                if (line.equals("geoip:all", ignoreCase = true)) return line
+            } else {
+                if (line == "*" || line == "." || line == "..") return line
+                // Regex that matches everything
+                if (line.startsWith("regexp:", ignoreCase = true)) {
+                    val pat = line.substringAfter(":").trim()
+                    if (pat == ".*" || pat == ".+" || pat == "." || pat == "^.*$" || pat == ".*\$") return line
+                }
+                // Xray substring match with no dot and ≤3 chars — e.g. "ru", "com" — hits millions of domains
+                val stripped = line.substringAfter("domain:").substringAfter("full:")
+                if (!stripped.contains('.') && !stripped.startsWith("geosite:") && stripped.length <= 3) return line
+            }
+        }
+        return null
     }
 
     private fun setupSecurityTest() {
@@ -601,33 +671,45 @@ class SettingsFragment : Fragment() {
     }
 
     private fun saveTextFields() {
+        // Re-read current settings snapshot — external updates (e.g. restore from
+        // backup) may have changed settings since the fragment opened. For each
+        // text field, only apply the EditText value if the user actually edited
+        // it (dirty vs baseline); otherwise fall through to the latest settings.
         val current = viewModel.settings.value
         val rejected = mutableListOf<String>()
 
-        val primaryRaw = binding.etPrimaryDns.text.toString().trim().ifEmpty { "1.1.1.1" }
-        val primary = if (isValidDns(primaryRaw)) primaryRaw else {
-            rejected.add("DNS1"); current.primaryDns
-        }
-        val secondaryRaw = binding.etSecondaryDns.text.toString().trim().ifEmpty { "8.8.8.8" }
-        val secondary = if (isValidDns(secondaryRaw)) secondaryRaw else {
-            rejected.add("DNS2"); current.secondaryDns
-        }
+        val primary = if (binding.etPrimaryDns.hasUserEdit()) {
+            val raw = binding.etPrimaryDns.text.toString().trim().ifEmpty { "1.1.1.1" }
+            if (isValidDns(raw)) raw else { rejected.add("DNS1"); current.primaryDns }
+        } else current.primaryDns
 
-        val packetsRaw = binding.etTlsPackets.text.toString().trim().ifEmpty { "tlshello" }
-        val packets = if (packetsRaw in TLS_PACKETS_VALID) packetsRaw else {
-            rejected.add("TLS packets"); current.tlsFragmentPackets
-        }
-        val lengthRaw = binding.etTlsLength.text.toString().trim().ifEmpty { "100-200" }
-        val length = if (RANGE_REGEX.matches(lengthRaw)) lengthRaw else {
-            rejected.add("TLS length"); current.tlsFragmentLength
-        }
-        val intervalRaw = binding.etTlsInterval.text.toString().trim().ifEmpty { "10-20" }
-        val interval = if (RANGE_REGEX.matches(intervalRaw)) intervalRaw else {
-            rejected.add("TLS interval"); current.tlsFragmentInterval
-        }
+        val secondary = if (binding.etSecondaryDns.hasUserEdit()) {
+            val raw = binding.etSecondaryDns.text.toString().trim().ifEmpty { "8.8.8.8" }
+            if (isValidDns(raw)) raw else { rejected.add("DNS2"); current.secondaryDns }
+        } else current.secondaryDns
 
-        val domains = binding.etBypassDomains.text.toString()
-        val ips = binding.etBypassIps.text.toString()
+        val packets = if (binding.etTlsPackets.hasUserEdit()) {
+            val raw = binding.etTlsPackets.text.toString().trim().ifEmpty { "tlshello" }
+            if (raw in TLS_PACKETS_VALID) raw else { rejected.add("TLS packets"); current.tlsFragmentPackets }
+        } else current.tlsFragmentPackets
+
+        val length = if (binding.etTlsLength.hasUserEdit()) {
+            val raw = binding.etTlsLength.text.toString().trim().ifEmpty { "100-200" }
+            if (RANGE_REGEX.matches(raw)) raw else { rejected.add("TLS length"); current.tlsFragmentLength }
+        } else current.tlsFragmentLength
+
+        val interval = if (binding.etTlsInterval.hasUserEdit()) {
+            val raw = binding.etTlsInterval.text.toString().trim().ifEmpty { "10-20" }
+            if (RANGE_REGEX.matches(raw)) raw else { rejected.add("TLS interval"); current.tlsFragmentInterval }
+        } else current.tlsFragmentInterval
+
+        val domains = if (binding.etBypassDomains.hasUserEdit())
+            binding.etBypassDomains.text.toString() else current.bypassDomains
+        val ips = if (binding.etBypassIps.hasUserEdit())
+            binding.etBypassIps.text.toString() else current.bypassIps
+
+        val broadBypass = findBroadBypassPattern(domains, isIpList = false)
+            ?: findBroadBypassPattern(ips, isIpList = true)
 
         viewModel.updateSettings {
             it.copy(
@@ -639,6 +721,14 @@ class SettingsFragment : Fragment() {
                 bypassDomains = domains,
                 bypassIps = ips
             )
+        }
+
+        if (broadBypass != null) {
+            Toast.makeText(
+                requireContext(),
+                getString(R.string.bypass_too_broad_toast),
+                Toast.LENGTH_LONG
+            ).show()
         }
 
         if (rejected.isNotEmpty()) {
