@@ -3,6 +3,9 @@
     <!-- App name — NEUTRAL, no VPN/proxy keywords -->
     <string name="app_name">NetGuard</string>
 
+    <string name="sub_expires_at">expires %1$s</string>
+    <string name="sub_expired">expired %1$s</string>
+
     <!-- Navigation -->
     <string name="nav_home">Home</string>
     <string name="nav_profiles">Servers</string>

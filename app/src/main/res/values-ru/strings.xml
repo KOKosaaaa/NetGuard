@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NetGuard</string>
+
+    <string name="sub_expires_at">истекает %1$s</string>
+    <string name="sub_expired">истекла %1$s</string>
+
     <string name="nav_home">Главная</string>
     <string name="nav_profiles">Серверы</string>
     <string name="nav_subscriptions">Подписки</string>

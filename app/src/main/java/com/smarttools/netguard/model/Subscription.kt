@@ -12,5 +12,6 @@ data class Subscription(
     val profileCount: Int = 0,
     val lastUpdatedMs: Long = 0,
     val autoUpdateHours: Int = 0,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val expireMs: Long = 0
 )

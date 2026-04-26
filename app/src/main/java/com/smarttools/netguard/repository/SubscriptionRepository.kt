@@ -137,10 +137,13 @@ class SubscriptionRepository(
                 .build()
 
             val response = httpClient.newCall(request).execute()
+            @Suppress("RedundantExplicitType")
+            var expireMs: Long = 0L
             val body = response.use { resp ->
                 if (!resp.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${resp.code}"))
                 }
+                expireMs = parseExpireFromHeaders(resp.header("subscription-userinfo"))
                 val respBody = resp.body ?: return@withContext Result.failure(Exception("Empty response"))
                 // Limit response to 2MB to prevent OOM from malicious servers
                 val maxBytes = 2L * 1024 * 1024
@@ -171,7 +174,8 @@ class SubscriptionRepository(
             subDao.update(
                 sub.copy(
                     profileCount = profiles.size,
-                    lastUpdatedMs = System.currentTimeMillis()
+                    lastUpdatedMs = System.currentTimeMillis(),
+                    expireMs = expireMs
                 )
             )
 
@@ -179,6 +183,26 @@ class SubscriptionRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Parse expiration unix timestamp (seconds) from the standard
+     * `subscription-userinfo` header. Format (RFC-style key=value pairs
+     * separated by `;`):
+     *   upload=...; download=...; total=...; expire=<unix-seconds>
+     * Returns 0 if header is null/empty/malformed/expire missing/zero.
+     */
+    private fun parseExpireFromHeaders(header: String?): Long {
+        if (header.isNullOrBlank()) return 0L
+        for (part in header.split(';')) {
+            val kv = part.trim().split('=', limit = 2)
+            if (kv.size == 2 && kv[0].equals("expire", ignoreCase = true)) {
+                val seconds = kv[1].trim().toLongOrNull() ?: return 0L
+                if (seconds <= 0) return 0L
+                return seconds * 1000L
+            }
+        }
+        return 0L
     }
 
     suspend fun updateAll(): Map<Long, Result<Int>> {

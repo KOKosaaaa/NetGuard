@@ -214,6 +214,7 @@ class SubAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val sub = getItem(position)
+        val ctx = holder.binding.root.context
         holder.binding.tvSubName.text = sub.name
         holder.binding.tvSubUrl.text = sub.url
         holder.binding.tvSubCount.text = "${sub.profileCount} profiles"
@@ -221,6 +222,16 @@ class SubAdapter(
             java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
                 .format(java.util.Date(sub.lastUpdatedMs))
         } else "-"
+        if (sub.expireMs > 0) {
+            val date = java.text.SimpleDateFormat("d.MM.yyyy", java.util.Locale.getDefault())
+                .format(java.util.Date(sub.expireMs))
+            val expired = sub.expireMs < System.currentTimeMillis()
+            val resId = if (expired) R.string.sub_expired else R.string.sub_expires_at
+            holder.binding.tvSubExpire.text = ctx.getString(resId, date)
+            holder.binding.tvSubExpire.visibility = View.VISIBLE
+        } else {
+            holder.binding.tvSubExpire.visibility = View.GONE
+        }
         holder.binding.btnShare.setOnClickListener { onShare(sub) }
         holder.binding.btnUpdate.setOnClickListener { onUpdate(sub) }
         holder.binding.btnDelete.setOnClickListener { onDelete(sub) }
