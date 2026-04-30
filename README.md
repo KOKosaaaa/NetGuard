@@ -96,6 +96,20 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Release notes
 
+### v1.1.6 — 2026-04-30
+
+**Security audit (P0/P1 fixes)**
+- **No more HTTP fallback in geo-IP lookup.** `GeoLookup.kt` previously fell back to `http://ip-api.com/json/` when the HTTPS `ipwho.is` provider was unreachable. Any on-path observer would have seen the real source IP in plaintext during that fallback. The HTTP path is now removed entirely; if HTTPS lookup fails, the result is simply `null`.
+- **Geo cache moved to `EncryptedSharedPreferences`.** User coordinates were previously cached in plain `SharedPreferences` (`/data/data/<pkg>/shared_prefs/geo_cache.xml`). A privileged co-resident process or root could read them. The cache is now stored under `geo_cache_enc` with `MasterKey` AES-256-GCM, with a one-shot migration that wipes the legacy plaintext on first launch.
+- **Profile validation before xray config build.** `XrayConfigGenerator.validateProfile()` now rejects `port` outside `1..65535` and any control-character (`\x00..\x1f`, `\x7f`) in `address`, `host`, `path`, `sni`, `serviceName`, `authority`, `publicKey`, `shortId`, `alpn` *before* the JSON is fed to xray. A corrupt stored profile no longer kills the tunnel through the watchdog loop; instead a single readable error surfaces.
+- **No more `Thread.sleep` on Dispatchers.IO.** `sendTunFd()` and `startTun2socksProcess()` are now `suspend` and use `delay()` while waiting for the tun2socks Unix-domain socket. The previous `Thread.sleep(200)` calls were blocking IO worker threads up to 2 s per startup.
+- **Concurrency: `@Volatile` on cross-thread service state.** `vpnFd`, `serviceScope`, `trafficMonitor`, `xrayProcess`, `tun2socksProcess`, `networkCallback`, `currentProfileId`, `showSpeedNotification`, `xrayWatchdogJob`, `tun2socksWatchdogJob`, `lastNotificationUpdate` are now all `@Volatile` (or `synchronized(fdLock)` for `vpnFd`). Writes from the main thread are now visible immediately to the watchdogs running on `Dispatchers.IO`, so a watchdog cannot see a stale `null` and skip recovery.
+- **Faster network-switch reconnect.** WiFi↔LTE handover debounce reduced from 2000 ms to 500 ms — the TUN black-hole window during a clean handover is now sub-second.
+- **`ACCESS_FINE_LOCATION` capped at API 32.** `NEARBY_WIFI_DEVICES` (`neverForLocation`) covers SSID/BSSID reads on Android 13+, so the privacy-sensitive permission is no longer requested on devices where it is no longer needed.
+
+**VPN-detection bypass (per-app)**
+- **New "Exclude all Russian apps" / "Исключить приложения РФ" button** in *Settings → Per-app routing*. One tap sweeps every installed non-system app whose `packageName` starts with `ru.` and adds them to the per-app list, plus a curated set of Russian apps that publish under `com.*` / `io.*` (Tinkoff, Sberbank, Otkritie, Wildberries, Ozon, ICBC, AliExpress AER, the full Yandex stack, etc.). When `PerAppMode.BLACKLIST` is active, those apps see the real underlying network instead of the tunnel — their IP / GeoIP / `TRANSPORT_VPN` flag stays consistent with the SIM/Wi-Fi region. This is the only client-side mitigation available without root against the published "VPN/Proxy detection on client devices" methodology, which relies on `ConnectivityManager.NetworkCapabilities.TRANSPORT_VPN`, `VpnTransportInfo`, and `dumpsys vpn_management` — none of which can be hidden by an app from another app at the OS level. The button is locale-gated (visible only on `ru` / `en`) so non-Russian-locale users do not see an unhelpful action.
+
 ### v1.1.4 — 2026-04-18
 
 **Security**

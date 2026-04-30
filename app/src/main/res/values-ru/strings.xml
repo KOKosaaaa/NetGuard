@@ -71,6 +71,8 @@
     <string name="search_apps">Поиск приложений…</string>
     <string name="show_system_apps">Показать системные</string>
     <string name="apps_selected">Выбрано: %d</string>
+    <string name="add_ru_bypass_apps">Исключить приложения РФ</string>
+    <string name="ru_bypass_added">Добавлено приложений: %d</string>
     <string name="backup_restore">Резервное копирование</string>
     <string name="backup_to_file">Сохранить в файл</string>
     <string name="restore_from_file">Восстановить из файла</string>

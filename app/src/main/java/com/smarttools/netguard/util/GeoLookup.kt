@@ -1,7 +1,10 @@
 package com.smarttools.netguard.util
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -220,8 +223,7 @@ object GeoLookup {
     }
 
     /**
-     * Lookup server location by IP address.
-     * Tries ip-api.com first, then ipwho.is as fallback.
+     * Lookup server location by IP address via ipwho.is (HTTPS only).
      * Caches results. Returns null on failure.
      */
     fun fromIp(ip: String): LatLon? {
@@ -247,8 +249,10 @@ object GeoLookup {
             }
         }
 
-        // ipwho.is first (HTTPS), ip-api.com fallback (HTTP — only works if cleartext allowed)
-        val result = tryIpWhoIs(resolvedIp) ?: tryIpApi(resolvedIp)
+        // HTTPS only — HTTP fallback to ip-api.com removed (audit P0): plaintext
+        // request would expose the real source IP to any on-path observer when
+        // the VPN tunnel itself is the subject of the lookup.
+        val result = tryIpWhoIs(resolvedIp)
         if (result != null) {
             ipCache[ip] = result
             if (resolvedIp != ip) ipCache[resolvedIp] = result
@@ -256,23 +260,6 @@ object GeoLookup {
             negativeLookups.add(ip)
         }
         return result
-    }
-
-    private fun tryIpApi(ip: String): LatLon? {
-        return try {
-            val conn = URL("http://ip-api.com/json/$ip?fields=status,lat,lon").openConnection() as HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            val json = conn.inputStream.bufferedReader().readText()
-            conn.disconnect()
-            val obj = JSONObject(json)
-            if (obj.optString("status") == "success") {
-                LatLon(obj.getDouble("lat"), obj.getDouble("lon"))
-            } else null
-        } catch (e: Exception) {
-            Log.w("GeoLookup", "ip-api.com failed for $ip: ${e.message}")
-            null
-        }
     }
 
     private fun tryIpWhoIs(ip: String): LatLon? {
@@ -303,10 +290,16 @@ object GeoLookup {
 
     /**
      * Initialize with Application context. Loads persisted user location.
+     * Cache is stored in EncryptedSharedPreferences — coordinates are PII and
+     * a privileged co-resident process / root could otherwise read them in
+     * plaintext from /data/data/<pkg>/shared_prefs/.
+     * One-time migration from the legacy plaintext "geo_cache" prefs runs on
+     * first init.
      */
     fun init(context: Context) {
         appCtx = context.applicationContext
-        val prefs = appCtx!!.getSharedPreferences("geo_cache", Context.MODE_PRIVATE)
+        val prefs = encryptedPrefs(appCtx!!)
+        migrateLegacyGeoCache(appCtx!!, prefs)
         val lat = prefs.getFloat("user_lat", Float.MIN_VALUE).toDouble()
         val lon = prefs.getFloat("user_lon", Float.MIN_VALUE).toDouble()
         cachedTimestamp = prefs.getLong("user_geo_ts", 0L)
@@ -314,6 +307,41 @@ object GeoLookup {
             cachedUserLocation = LatLon(lat, lon)
             Log.d("GeoLookup", "Loaded cached user location: $lat, $lon (age: ${(System.currentTimeMillis() - cachedTimestamp) / 3_600_000}h)")
         }
+    }
+
+    private fun encryptedPrefs(ctx: Context): SharedPreferences {
+        val masterKey = MasterKey.Builder(ctx)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            ctx,
+            "geo_cache_enc",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    private fun migrateLegacyGeoCache(ctx: Context, target: SharedPreferences) {
+        val legacy = ctx.getSharedPreferences("geo_cache", Context.MODE_PRIVATE)
+        if (legacy.all.isEmpty()) return
+        val lat = legacy.getFloat("user_lat", Float.MIN_VALUE)
+        val lon = legacy.getFloat("user_lon", Float.MIN_VALUE)
+        val ts = legacy.getLong("user_geo_ts", 0L)
+        if (lat != Float.MIN_VALUE) {
+            target.edit()
+                .putFloat("user_lat", lat)
+                .putFloat("user_lon", lon)
+                .putLong("user_geo_ts", ts)
+                .apply()
+        }
+        // Wipe plaintext copy
+        legacy.edit().clear().apply()
+        // Best-effort: also drop the file from disk so the plaintext blob is gone
+        try {
+            ctx.deleteSharedPreferences("geo_cache")
+        } catch (_: Throwable) { /* API 24+ only, harmless on older */ }
+        Log.i("GeoLookup", "Migrated geo_cache to EncryptedSharedPreferences")
     }
 
     /**
@@ -337,12 +365,13 @@ object GeoLookup {
         val stale = now - cachedTimestamp > REFRESH_INTERVAL_MS
         if (cachedUserLocation != null && !stale) return cachedUserLocation
 
-        val result = tryIpWhoIsSelf() ?: tryIpApiSelf()
+        // HTTPS only — see fromIp() comment about HTTP fallback removal.
+        val result = tryIpWhoIsSelf()
         if (result != null) {
             cachedUserLocation = result
             cachedTimestamp = now
             appCtx?.let { ctx ->
-                ctx.getSharedPreferences("geo_cache", Context.MODE_PRIVATE).edit()
+                encryptedPrefs(ctx).edit()
                     .putFloat("user_lat", result.lat.toFloat())
                     .putFloat("user_lon", result.lon.toFloat())
                     .putLong("user_geo_ts", now)
@@ -351,20 +380,6 @@ object GeoLookup {
             Log.d("GeoLookup", "Fetched user location: ${result.lat}, ${result.lon}")
         }
         return result ?: cachedUserLocation
-    }
-
-    private fun tryIpApiSelf(): LatLon? {
-        return try {
-            val conn = URL("http://ip-api.com/json/?fields=status,lat,lon").openConnection() as HttpURLConnection
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            val json = conn.inputStream.bufferedReader().readText()
-            conn.disconnect()
-            val obj = JSONObject(json)
-            if (obj.optString("status") == "success") {
-                LatLon(obj.getDouble("lat"), obj.getDouble("lon"))
-            } else null
-        } catch (e: Exception) { null }
     }
 
     private fun tryIpWhoIsSelf(): LatLon? {

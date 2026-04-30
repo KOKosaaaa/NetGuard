@@ -13,11 +13,43 @@ object XrayConfigGenerator {
         val socksPass: String?
     )
 
+    /**
+     * Validate profile fields before serialising into Xray config. Gson encodes
+     * strings safely (no JSON injection through addProperty), but Xray itself
+     * crashes on out-of-range ports and certain control characters. Catching
+     * these here prevents a stale/corrupt profile from killing the tunnel
+     * process repeatedly through the watchdog.
+     */
+    private fun validateProfile(profile: ServerProfile) {
+        require(profile.port in 1..65535) {
+            "Invalid port ${profile.port} for profile '${profile.name}' (must be 1..65535)"
+        }
+        // Reject any control character or NUL in fields that flow into the
+        // proxy/transport configuration. Xray will refuse them, but catching
+        // here gives a single, readable error instead of a process exit code.
+        val unsafe = Regex("[\\x00-\\x1f\\x7f]")
+        fun guard(field: String, value: String) {
+            require(!unsafe.containsMatchIn(value)) {
+                "Profile '${profile.name}' field '$field' contains control characters"
+            }
+        }
+        guard("address", profile.address)
+        guard("host", profile.host)
+        guard("path", profile.path)
+        guard("sni", profile.sni)
+        guard("serviceName", profile.serviceName)
+        guard("authority", profile.authority)
+        guard("publicKey", profile.publicKey)
+        guard("shortId", profile.shortId)
+        guard("alpn", profile.alpn)
+    }
+
     fun generate(
         profile: ServerProfile,
         settings: AppSettings,
         useSocksInbound: Boolean = true
     ): GeneratedConfig {
+        validateProfile(profile)
         val root = JsonObject()
 
         root.add("log", buildLog())

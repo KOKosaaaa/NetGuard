@@ -71,20 +71,35 @@ class TunnelVpnService : VpnService() {
     )
 
     private val fdLock = Any()
+    // All mutable references below cross thread boundaries: process watchdogs
+    // run on Dispatchers.IO while start/stop/onDestroy run on Main. @Volatile
+    // (or fdLock for vpnFd) guarantees the cross-thread visibility we need;
+    // without it a watchdog could see a stale `null` and skip recovery.
+    @Volatile
     private var vpnFd: ParcelFileDescriptor? = null
+    @Volatile
     private var serviceScope: CoroutineScope? = null
+    @Volatile
     private var trafficMonitor: TrafficMonitor? = null
+    @Volatile
     private var xrayProcess: Process? = null
+    @Volatile
     private var tun2socksProcess: Process? = null
+    @Volatile
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    @Volatile
     private var currentProfileId: Long = -1
     @Volatile
     private var isReconnecting = false
     @Volatile
     private var isStarting = false
+    @Volatile
     private var showSpeedNotification = false
+    @Volatile
     private var xrayWatchdogJob: Job? = null
+    @Volatile
     private var tun2socksWatchdogJob: Job? = null
+    @Volatile
     private var lastNotificationUpdate = 0L
 
     override fun onCreate() {
@@ -332,7 +347,7 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun startTun2socksProcess(fd: ParcelFileDescriptor, port: Int, user: String, pass: String) {
+    private suspend fun startTun2socksProcess(fd: ParcelFileDescriptor, port: Int, user: String, pass: String) {
         val tun2socksBin = File(applicationInfo.nativeLibraryDir, "libtun2socks.so")
         if (!tun2socksBin.exists()) throw IllegalStateException("tun2socks binary not found at ${tun2socksBin.absolutePath}")
 
@@ -379,11 +394,12 @@ class TunnelVpnService : VpnService() {
         sendTunFd(sockPath, fd)
     }
 
-    private fun sendTunFd(sockPath: String, fd: ParcelFileDescriptor) {
-        // Retry loop: wait for tun2socks to create the Unix socket
+    private suspend fun sendTunFd(sockPath: String, fd: ParcelFileDescriptor) {
+        // Retry loop: wait for tun2socks to create the Unix socket.
+        // Uses suspend `delay()` so we don't block a Dispatchers.IO worker.
         var connected = false
         for (attempt in 1..10) {
-            try { Thread.sleep(200) } catch (_: InterruptedException) { break }
+            delay(200)
             val sockFile = File(sockPath)
             if (sockFile.exists()) {
                 connected = true
@@ -552,7 +568,11 @@ class TunnelVpnService : VpnService() {
                     isReconnecting = true
                     serviceScope?.launch {
                         try {
-                            delay(2000)
+                            // Short debounce — long enough to coalesce multiple
+                            // onAvailable bursts during a single network swap,
+                            // short enough that the TUN black-hole window stays
+                            // sub-second on a clean handover.
+                            delay(500)
                             if (currentProfileId != -1L) {
                                 // CRITICAL: only restart xray+tun2socks, keep TUN fd alive
                                 // This prevents ANY traffic from leaking during reconnect

@@ -85,6 +85,8 @@
     <string name="search_apps">Search apps…</string>
     <string name="show_system_apps">Show system apps</string>
     <string name="apps_selected">%d apps selected</string>
+    <string name="add_ru_bypass_apps">Exclude all Russian apps</string>
+    <string name="ru_bypass_added">Added %d apps to bypass list</string>
 
     <!-- Backup / Restore -->
     <string name="backup_restore">Backup / Restore</string>

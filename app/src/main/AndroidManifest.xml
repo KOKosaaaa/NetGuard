@@ -16,7 +16,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- ACCESS_FINE_LOCATION is required to read SSID/BSSID via WifiManager
+         only on Android 12 and below. From API 33 (Android 13) the runtime
+         gate is NEARBY_WIFI_DEVICES with neverForLocation, declared below.
+         Capping maxSdkVersion lets us stop requesting a privacy-sensitive
+         permission on devices where it is no longer needed. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
     <!-- Android 13+ requires NEARBY_WIFI_DEVICES to read SSID/BSSID via
          WifiManager. Without it, WifiAutoConnectManager silently gets nulls on
          Android 13 and above. neverForLocation is mandatory for Play review. -->
