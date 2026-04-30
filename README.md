@@ -1,6 +1,10 @@
 # NetGuard
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Android VPN client built for privacy, security, and stealth. Powered by xray-core.
+
+Licensed under the **Apache License, Version 2.0** — see [`LICENSE`](LICENSE). You are free to use, modify, distribute, and sublicense the code (including for commercial use), provided you preserve the copyright notice. The Apache-2.0 patent grant also protects downstream users from patent claims by contributors.
 
 ## What makes NetGuard different
 
