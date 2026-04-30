@@ -1,0 +1,39 @@
+name: 💡 Feature request / Предложить функцию
+description: Suggest a new feature or improvement. / Предложите новую функцию или улучшение.
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a feature.
+        Please describe **what problem you are trying to solve** rather than just **how to solve it** — that gives us flexibility to find the best implementation.
+
+        Спасибо за идею! Опишите **проблему**, которую вы хотите решить, а не только конкретную реализацию — так нам будет проще найти лучшее решение.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve? *
+      description: A clear and concise description of the pain point. / Опишите проблему.
+      placeholder: |
+        When I switch between Wi-Fi and LTE on the train, NetGuard takes 5 s to reconnect, and during that time my YouTube stream stalls.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed solution / Предложение
+      description: Optional — what you would like to see happen. / Что вы хотели бы увидеть.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered / Рассмотренные альтернативы
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context / Дополнительный контекст
+      description: Screenshots, links, related work in other apps, etc.
