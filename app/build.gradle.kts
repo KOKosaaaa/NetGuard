@@ -76,6 +76,16 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            // Without this, any unit test that touches android.util.Log
+            // throws "Method d in android.util.Log not mocked." We only
+            // call Log for diagnostic messages, so default-value stubs
+            // (return 0 / null) are exactly what we want.
+            isReturnDefaultValues = true
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

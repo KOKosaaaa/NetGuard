@@ -44,6 +44,28 @@ object XrayConfigGenerator {
         guard("alpn", profile.alpn)
     }
 
+    /**
+     * Resolve the uTLS fingerprint string fed to xray TLS / REALITY settings.
+     * Profile-level override (when non-empty) always wins over the global
+     * setting — that handles per-server quirks like Reality endpoints that
+     * insist on a specific fingerprint. Otherwise we honour the global
+     * setting; in RANDOM mode we pick one fresh per connection so DPI
+     * systems cannot correlate consecutive sessions by ClientHello shape.
+     */
+    private val randomFingerprints = listOf("chrome", "firefox", "safari", "ios", "edge")
+
+    private fun resolveFingerprint(profile: ServerProfile, settings: AppSettings): String {
+        if (profile.fingerprint.isNotEmpty()) return profile.fingerprint
+        return when (settings.tlsFingerprintMode) {
+            TlsFingerprintMode.CHROME -> "chrome"
+            TlsFingerprintMode.FIREFOX -> "firefox"
+            TlsFingerprintMode.SAFARI -> "safari"
+            TlsFingerprintMode.IOS -> "ios"
+            TlsFingerprintMode.EDGE -> "edge"
+            TlsFingerprintMode.RANDOM -> randomFingerprints.random()
+        }
+    }
+
     fun generate(
         profile: ServerProfile,
         settings: AppSettings,
@@ -73,7 +95,11 @@ object XrayConfigGenerator {
             root.add("inbounds", JsonArray())
         }
 
-        root.add("outbounds", buildOutbounds(profile, settings))
+        // Per-connection fingerprint resolution: stable for this config
+        // generation pass (so Reality and TLS outbounds agree), but reshuffled
+        // every reconnect when RANDOM mode is on.
+        val fingerprint = resolveFingerprint(profile, settings)
+        root.add("outbounds", buildOutbounds(profile, settings, fingerprint))
         root.add("routing", buildRouting(settings))
 
         return GeneratedConfig(
@@ -175,9 +201,9 @@ object XrayConfigGenerator {
         }
     }
 
-    private fun buildOutbounds(profile: ServerProfile, settings: AppSettings): JsonArray {
+    private fun buildOutbounds(profile: ServerProfile, settings: AppSettings, fingerprint: String): JsonArray {
         val outbounds = JsonArray()
-        outbounds.add(buildProxyOutbound(profile, settings))
+        outbounds.add(buildProxyOutbound(profile, settings, fingerprint))
         outbounds.add(buildDirectOutbound())
         outbounds.add(buildBlockOutbound())
         if (settings.tlsFragmentEnabled) {
@@ -186,13 +212,13 @@ object XrayConfigGenerator {
         return outbounds
     }
 
-    private fun buildProxyOutbound(profile: ServerProfile, settings: AppSettings): JsonObject {
+    private fun buildProxyOutbound(profile: ServerProfile, settings: AppSettings, fingerprint: String): JsonObject {
         val outbound = when (profile.protocol) {
-            Protocol.VLESS -> buildVlessOutbound(profile)
-            Protocol.VMESS -> buildVmessOutbound(profile)
-            Protocol.TROJAN -> buildTrojanOutbound(profile)
-            Protocol.SHADOWSOCKS -> buildShadowsocksOutbound(profile)
-            Protocol.HYSTERIA2 -> buildHysteria2Outbound(profile)
+            Protocol.VLESS -> buildVlessOutbound(profile, fingerprint)
+            Protocol.VMESS -> buildVmessOutbound(profile, fingerprint)
+            Protocol.TROJAN -> buildTrojanOutbound(profile, fingerprint)
+            Protocol.SHADOWSOCKS -> buildShadowsocksOutbound(profile, fingerprint)
+            Protocol.HYSTERIA2 -> buildHysteria2Outbound(profile, fingerprint)
         }
         // TLS Fragment: route proxy's TCP through the fragment outbound
         if (settings.tlsFragmentEnabled) {
@@ -225,7 +251,7 @@ object XrayConfigGenerator {
         }
     }
 
-    private fun buildVlessOutbound(profile: ServerProfile): JsonObject {
+    private fun buildVlessOutbound(profile: ServerProfile, fingerprint: String): JsonObject {
         return JsonObject().apply {
             addProperty("tag", "proxy")
             addProperty("protocol", "vless")
@@ -246,11 +272,11 @@ object XrayConfigGenerator {
                     })
                 })
             })
-            add("streamSettings", buildStreamSettings(profile))
+            add("streamSettings", buildStreamSettings(profile, fingerprint))
         }
     }
 
-    private fun buildVmessOutbound(profile: ServerProfile): JsonObject {
+    private fun buildVmessOutbound(profile: ServerProfile, fingerprint: String): JsonObject {
         return JsonObject().apply {
             addProperty("tag", "proxy")
             addProperty("protocol", "vmess")
@@ -269,11 +295,11 @@ object XrayConfigGenerator {
                     })
                 })
             })
-            add("streamSettings", buildStreamSettings(profile))
+            add("streamSettings", buildStreamSettings(profile, fingerprint))
         }
     }
 
-    private fun buildTrojanOutbound(profile: ServerProfile): JsonObject {
+    private fun buildTrojanOutbound(profile: ServerProfile, fingerprint: String): JsonObject {
         return JsonObject().apply {
             addProperty("tag", "proxy")
             addProperty("protocol", "trojan")
@@ -286,11 +312,11 @@ object XrayConfigGenerator {
                     })
                 })
             })
-            add("streamSettings", buildStreamSettings(profile))
+            add("streamSettings", buildStreamSettings(profile, fingerprint))
         }
     }
 
-    private fun buildShadowsocksOutbound(profile: ServerProfile): JsonObject {
+    private fun buildShadowsocksOutbound(profile: ServerProfile, fingerprint: String): JsonObject {
         return JsonObject().apply {
             addProperty("tag", "proxy")
             addProperty("protocol", "shadowsocks")
@@ -304,11 +330,11 @@ object XrayConfigGenerator {
                     })
                 })
             })
-            add("streamSettings", buildStreamSettings(profile))
+            add("streamSettings", buildStreamSettings(profile, fingerprint))
         }
     }
 
-    private fun buildHysteria2Outbound(profile: ServerProfile): JsonObject {
+    private fun buildHysteria2Outbound(profile: ServerProfile, fingerprint: String): JsonObject {
         return JsonObject().apply {
             addProperty("tag", "proxy")
             addProperty("protocol", "hysteria2")
@@ -347,7 +373,7 @@ object XrayConfigGenerator {
         }
     }
 
-    private fun buildStreamSettings(profile: ServerProfile): JsonObject {
+    private fun buildStreamSettings(profile: ServerProfile, fingerprint: String): JsonObject {
         return JsonObject().apply {
             addProperty("network", profile.network.value)
 
@@ -449,9 +475,7 @@ object XrayConfigGenerator {
                         if (profile.sni.isNotEmpty()) {
                             addProperty("serverName", profile.sni)
                         }
-                        if (profile.fingerprint.isNotEmpty()) {
-                            addProperty("fingerprint", profile.fingerprint)
-                        }
+                        addProperty("fingerprint", fingerprint)
                         if (profile.alpn.isNotEmpty()) {
                             add("alpn", JsonArray().apply {
                                 profile.alpn.split(",").forEach { add(it.trim()) }
@@ -466,7 +490,7 @@ object XrayConfigGenerator {
                         if (profile.sni.isNotEmpty()) {
                             addProperty("serverName", profile.sni)
                         }
-                        addProperty("fingerprint", profile.fingerprint.ifEmpty { "chrome" })
+                        addProperty("fingerprint", fingerprint)
                         addProperty("publicKey", profile.publicKey)
                         if (profile.shortId.isNotEmpty()) {
                             addProperty("shortId", profile.shortId)
