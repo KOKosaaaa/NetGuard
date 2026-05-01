@@ -77,6 +77,16 @@ class SettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Restore scroll position after navigating back from sub-screens
+        binding.settingsScroll.post {
+            if (_binding != null) {
+                binding.settingsScroll.scrollTo(0, viewModel.settingsScrollY)
+            }
+        }
+        binding.settingsScroll.setOnScrollChangeListener { _, _, y, _, _ ->
+            viewModel.settingsScrollY = y
+        }
+
         setupTheme()
         setupSettings()
         setupLanguage()
@@ -489,6 +499,10 @@ class SettingsFragment : Fragment() {
 
         binding.btnSelectApps.setOnClickListener {
             findNavController().navigate(R.id.action_settings_to_per_app)
+        }
+
+        binding.btnOpenTrigger.setOnClickListener {
+            findNavController().navigate(R.id.action_settings_to_trigger)
         }
     }
 

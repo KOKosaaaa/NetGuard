@@ -100,9 +100,13 @@ class VpnTileService : TileService() {
                         TunnelVpnService.start(applicationContext, profileId)
                     }
                 } else {
-                    // No profile — open app
+                    // No saved profile — open app with auto_connect flag so
+                    // MainActivity runs auto-select-and-connect (best non-RU
+                    // server) and brings the tunnel up without user picking
+                    // anything manually.
                     val intent = Intent(applicationContext, MainActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        putExtra("auto_connect", true)
                     }
                     collapseAndStart(intent)
                 }

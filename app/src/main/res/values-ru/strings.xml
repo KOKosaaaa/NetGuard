@@ -77,7 +77,34 @@
     <string name="notif_title_connecting">Подключение…</string>
     <string name="notif_text">Сетевой сервис работает</string>
     <string name="notif_text_connecting">Установка соединения</string>
+    <string name="notif_title_quarantine">Триггер-карантин активен</string>
+    <string name="notif_text_quarantine">Выбранные приложения отключены от сети, пока ты их не откроешь</string>
     <string name="notif_stop">Стоп</string>
+
+    <!-- Trigger watcher -->
+    <string name="trigger_watcher_channel">Слежение за запуском приложений</string>
+    <string name="trigger_watcher_channel_desc">Активирует подключение при открытии выбранных приложений</string>
+    <string name="trigger_watcher_title">Слежение активно</string>
+    <string name="trigger_watcher_text">Отслеживаем выбранные приложения</string>
+    <string name="trigger_watcher_stop">Выключить</string>
+
+    <!-- Trigger settings UI -->
+    <string name="trigger_title">Триггер по запуску</string>
+    <string name="trigger_subtitle">VPN включается автоматически только для выбранных приложений</string>
+    <string name="trigger_enable">Включить триггер-режим</string>
+    <string name="trigger_explainer">Только выбранные приложения идут через VPN — все остальные приложения (Яндекс, банки, Кинопоиск и т.д.) работают через обычный интернет, как будто VPN нет. Выбранные приложения не имеют другого пути в сеть кроме VPN: твой реальный IP они не увидят даже на долю секунды.</string>
+    <string name="trigger_pick_apps">Выбрать приложения для VPN</string>
+    <string name="trigger_no_permission">Нужно разрешение «Доступ к статистике использования»</string>
+    <string name="trigger_grant_permission">Выдать разрешение</string>
+    <string name="trigger_auto_stop">Отключать туннель когда приложение свёрнуто (экономия батареи)</string>
+    <string name="trigger_no_profile">Сервер не выбран. Сначала выбери сервер.</string>
+    <string name="trigger_always_on_title">Защита от выключения NetGuard</string>
+    <string name="trigger_always_on_desc">Для надёжности: в системных настройках включи только Always-on VPN. НЕ включай «Блокировать соединения без VPN» — иначе все обычные приложения (Яндекс и т.д.) тоже потеряют интернет. Триггер-режим сам по себе блокирует выбранные приложения когда туннель не активен.</string>
+    <string name="trigger_open_vpn_settings">Открыть настройки VPN Android</string>
+    <string name="trigger_collapse">Скрыть описание</string>
+    <string name="trigger_expand">Показать описание и переключатели</string>
+    <string name="trigger_perapp_conflict">Per-App маршрутизация была включена — триггер-режим сам управляет маршрутизацией. Per-App переключён в ВЫКЛЮЧЕНО.</string>
+
     <string name="paste_from_clipboard">Вставить</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>
     <string name="clipboard_no_profile">Профиль не найден в буфере</string>
@@ -128,7 +155,7 @@
     <string name="speed_notif_desc">Показывать скорость в строке состояния</string>
     <string name="security_test_desc">Проверить целостность и безопасность VPN-туннеля</string>
     <string name="kill_switch_full_desc">Блокирует весь интернет при отключении VPN. Включите «Постоянный VPN» в настройках Android.</string>
-    <string name="per_app_desc">Выберите, какие приложения используют или обходят VPN</string>
+    <string name="per_app_desc">Только для глобального VPN. Если используешь триггер-режим — оставь ВЫКЛЮЧЕНО, триггер сам управляет маршрутизацией.</string>
     <string name="export_import_desc">Копировать конфигурацию в буфер обмена для передачи</string>
     <string name="backup_restore_desc">Сохранить профили в файл или восстановить из резервной копии</string>
     <!-- Server switching -->

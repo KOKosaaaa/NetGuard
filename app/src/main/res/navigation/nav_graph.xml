@@ -49,12 +49,20 @@
         <action
             android:id="@+id/action_settings_to_per_app"
             app:destination="@id/nav_per_app" />
+        <action
+            android:id="@+id/action_settings_to_trigger"
+            app:destination="@id/nav_trigger" />
     </fragment>
 
     <fragment
         android:id="@+id/nav_per_app"
         android:name="com.smarttools.netguard.ui.settings.PerAppFragment"
         android:label="@string/per_app_vpn" />
+
+    <fragment
+        android:id="@+id/nav_trigger"
+        android:name="com.smarttools.netguard.ui.settings.TriggerAppsFragment"
+        android:label="@string/trigger_title" />
 
     <fragment
         android:id="@+id/nav_logs"

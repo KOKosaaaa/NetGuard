@@ -107,6 +107,25 @@ object NotificationHelper {
         nm.notify(NOTIFICATION_ID, createConnectedNotification(context))
     }
 
+    fun createQuarantineNotification(context: Context): Notification {
+        createChannel(context)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(context.getString(R.string.notif_title_quarantine))
+            .setContentText(context.getString(R.string.notif_text_quarantine))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(getContentIntent(context))
+            .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
+    fun showQuarantineNotification(context: Context) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIFICATION_ID, createQuarantineNotification(context))
+    }
+
     fun updateSpeedNotification(context: Context, rxSpeed: Long, txSpeed: Long) {
         val speedText = "\u2193 ${TrafficFormatter.formatSpeed(rxSpeed)}  \u2191 ${TrafficFormatter.formatSpeed(txSpeed)}"
         // Skip if text hasn't changed

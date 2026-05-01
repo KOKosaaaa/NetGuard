@@ -73,7 +73,7 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Security hardening
 
-- **Not vulnerable to the April 2026 VLESS local-SOCKS leak** affecting Happ, v2rayTUN, Hiddify, v2rayNG, NekoBox and others. No unauthenticated local SOCKS5 inbound is ever exposed — both internal bridges (SOCKS5 for tun2socks, HTTP for internal speed/service tests) require the ephemeral 32-char password. See *Ephemeral authenticated SOCKS5* above.
+- **Not vulnerable to the April 2026 VLESS local-SOCKS leak** that hit Happ, v2rayTUN, Hiddify, v2rayNG and NekoBox. NetGuard does not open any unauthenticated local SOCKS5 inbound. Both internal bridges (SOCKS5 for tun2socks, HTTP for internal tests) require the ephemeral 32-char password. See *Ephemeral authenticated SOCKS5* above.
 - Encrypted database (SQLCipher AES-256 + EncryptedSharedPreferences)
 - Log redaction — UUIDs, passwords, Bearer tokens masked automatically
 - SSRF protection — private/loopback/link-local IPv4 and IPv6 blocked in profile parser
@@ -89,28 +89,54 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Release notes
 
-### v1.1.3 — 2026-04-17
+### v1.1.7 (2026-05-02)
+
+**App-launch trigger mode** — the headline feature. Pick which apps go through the VPN; everything else (banking, maps, your usual browser) keeps using the regular connection. The selected apps have no fallback path: if the tunnel is down, their packets are black-holed in the TUN — they never see your real IP, not even for a moment.
+
+- New `ForegroundAppWatcher` service polls `UsageStatsManager` (250ms) to detect when a trigger app comes to the foreground.
+- Pre-warm: when trigger mode is enabled, the tunnel comes up immediately and stays ready, so opening a trigger app is instant — no "Connecting…" delay.
+- Optional auto-stop on background to save battery (xray killed, TUN keeps the apps black-holed).
+- Boot-survival: `BootReceiver` re-arms the watcher and tunnel after device reboot.
+- Auto-recover: if xray crashes, up to 3 silent restarts before any user-visible failure. In trigger mode the TUN is preserved as a quarantine even after xray gives up — never falls back to "no VPN" for trigger apps.
+- Network sanity: skipping activation when no underlying network is available, surfacing it as "Нет сети" / "No network" instead of a stale "Connecting…".
+- UI: dedicated screen with Material 3 switches, collapsible explainer, search box, system-app filter, save/cancel. Big red banner explains the Always-on VPN sweet spot ("turn ON Always-on, leave Block-without-VPN OFF").
+
+**Bug fixes**
+- Backup / Restore: profiles now keep their subscription link. Old format (v1, plain URI list) is still accepted; new exports use v2 with `{uri, subscription}` per profile.
+- Settings: scroll position is preserved when you navigate into a sub-screen and back.
+- Settings: bottom-nav tap always returns to the root of the tab — no more "I went into Trigger then tapped Servers and came back to Trigger with the wrong tab highlighted".
+- Quick Settings tile: when there is no saved profile, opening the tile now triggers auto-select (best non-RU server) instead of silently doing nothing.
+- DNS: when a non-empty Per-App blacklist is active, the VPN no longer overrides system DNS for the excluded apps. Previously they were forced onto Cloudflare/Google DNS, which is filtered by some Russian ISPs and broke their resolution.
+- Connect button now triggers auto-select when no profile is picked, instead of doing nothing.
+- Per-App routing description rewritten to make the relationship to Trigger mode obvious; toggling Trigger automatically disables Per-App routing to avoid silent conflict.
+
+**Internals**
+- Tunnel start re-ordered: TUN comes up before xray now, eliminating the leak window during start.
+- Faster activation: tighter polling in `sendTunFd` and `waitForPort`, 100ms watcher tick, 50ms post-establish delay — saves ~600-700ms on cold open of a trigger app.
+- `setUnderlyingNetworks` now passes ALL non-VPN networks (cellular + wifi if both available) instead of just the first one.
+
+### v1.1.3 (2026-04-17)
 
 **Security**
-- Removed the unauthenticated local SOCKS5 inbound (`speedtest-in`) that was used for internal speed/service tests. This closes the same class of leak disclosed for Happ/v2rayTUN/Hiddify/v2rayNG in April 2026, where any app on the device could reach `127.0.0.1:<port>` and tunnel traffic to learn the real VPN server IP. Internal tests now go through the authenticated HTTP bridge (`http-in`).
-- DNS field validation restored on the settings-save path (was silently accepting loopback / private / garbage strings after the old explicit "Save" button was removed).
-- TLS-fragment and routing fields gain format validation with a "rejected values" toast instead of silently saving whatever was typed.
+- Dropped the unauthenticated local SOCKS5 inbound (`speedtest-in`). That same pattern was disclosed as a leak for Happ, v2rayTUN, Hiddify and v2rayNG in April 2026: any app on the device could reach `127.0.0.1` and tunnel traffic through the VPN to learn the real server IP. Internal speed/service tests now talk to the authenticated `http-in` bridge instead.
+- Restored DNS validation on the settings save path. It had regressed when the explicit "Save" button was removed, so `127.0.0.1`, `localhost`, private ranges and random typos were being silently accepted.
+- TLS fragment and routing fields reject malformed input with a short toast instead of passing garbage through to xray.
 
 **New features**
-- **TLS Fragment** — bypass DPI by splitting the TLS ClientHello into smaller pieces. Configurable packets / length / interval in Settings.
-- **Favorites** — star any server to pin it to the top of the list. Room schema v2→v3 migration.
-- **Domain / IP Bypass List** — free-form lists of domains and IPs that should go direct instead of through the VPN (independent of the global routing mode).
-- **Traffic Statistics Graph** — 7-day history chart on the Home tab. 30 days of daily history retained.
-- **Widget Enhancement** — the home-screen widget grew from a 1×1 icon to a 3×1 card showing the selected server name and connection status. Tap anywhere on the widget to toggle the VPN.
+- **TLS Fragment.** Splits the TLS ClientHello into smaller pieces to slip past DPI that matches on SNI. Packets / length / interval are configurable in Settings.
+- **Favorites.** Star a server to pin it to the top of the list. Room migrates v2 → v3 on first launch.
+- **Domain / IP bypass list.** Lines of domains and IPs that go direct, regardless of the global routing mode.
+- **Traffic statistics graph.** 7-day chart on the Home tab. 30 days of history retained.
+- **Widget.** The home-screen widget is now 3×1 and shows the selected server + connection state. Tap anywhere on it to toggle the VPN.
 
 **UI / cosmetic**
-- Subscription list: Share / Update / Delete buttons no longer overlap the subscription name and URL; icons are theme-tinted so they stay visible on light and dark backgrounds.
-- Server favorites: flat vector stars replace the Android 2.x glossy 3D star drawable.
-- Connection map: adapts to light theme (bitmap is grayscale-inverted on the fly, land/ocean tints swap), and the dashed connection arc now animates from the user to the server while the VPN is connected.
+- Subscription list: the Share / Update / Delete buttons no longer overlap the subscription name and URL. Icons are theme-tinted so they stay visible on both light and dark backgrounds.
+- Flat vector favorite stars in place of the legacy 3D Android star drawable.
+- Connection map: adapts to light theme (bitmap is grayscale-inverted, land/ocean tints are swapped) and the dashed connection arc animates from the user to the server while the VPN is up.
 
 **Reliability**
-- Home-screen widget no longer runs a blocking Room query on the main broadcast thread (potential ANR if the DB was locked during a subscription sync). The selected server name is read from a small SharedPreferences cache that's updated on profile select and VPN start.
-- Traffic-history cleanup is batched into a single `SharedPreferences.apply()` (was 30 individual commits per day archive) and the cleanup window is wide enough to recover history after the app hasn't been opened for >60 days.
+- The widget no longer runs a blocking Room query on the main broadcast thread. It reads the selected server name from a small SharedPreferences cache that's refreshed on profile select and on VPN start. Removes an ANR risk when the DB was locked during a subscription sync.
+- Traffic history cleanup is one `apply()` per day archive (was 30) and the cleanup window is wide enough to recover history after the app was idle for months.
 
 ## Build
 

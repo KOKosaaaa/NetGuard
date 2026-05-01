@@ -11,6 +11,7 @@ import com.smarttools.netguard.service.NotificationHelper
 import com.smarttools.netguard.service.WifiAutoConnectManager
 import com.smarttools.netguard.worker.SubscriptionUpdateWorker
 import androidx.work.*
+import kotlinx.coroutines.launch
 import com.google.android.material.color.DynamicColors
 import java.util.concurrent.TimeUnit
 
@@ -54,6 +55,16 @@ class App : Application() {
         if (settings.autoConnectWifi) {
             wifiAutoConnectManager = WifiAutoConnectManager(this).also { it.register() }
         }
+
+        if (settings.triggerEnabled && settings.triggerApps.isNotEmpty()) {
+            triggerWatcher = com.smarttools.netguard.service.ForegroundAppWatcher(this).also { it.start() }
+            // Bring up quarantine TUN immediately — trigger apps must never
+            // hit the network without VPN, even before they're opened.
+            val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
+            if (state is com.smarttools.netguard.model.ConnectionState.Disconnected) {
+                com.smarttools.netguard.service.TunnelVpnService.startQuarantine(this)
+            }
+        }
     }
 
     fun getPreferences(): SharedPreferences {
@@ -92,7 +103,10 @@ class App : Application() {
             bypassIps = prefs.getString("bypass_ips", "") ?: "",
             trafficStatsMode = safeEnum(
                 prefs.getString("traffic_stats_mode", null), TrafficStatsMode.SIMPLE
-            )
+            ),
+            triggerEnabled = prefs.getBoolean("trigger_enabled", false),
+            triggerApps = prefs.getStringSet("trigger_apps", emptySet()) ?: emptySet(),
+            triggerAutoStop = prefs.getBoolean("trigger_auto_stop", false)
         )
     }
 
@@ -159,7 +173,53 @@ class App : Application() {
             putString("bypass_domains", settings.bypassDomains)
             putString("bypass_ips", settings.bypassIps)
             putString("traffic_stats_mode", settings.trafficStatsMode.name)
+            putBoolean("trigger_enabled", settings.triggerEnabled)
+            putStringSet("trigger_apps", settings.triggerApps)
+            putBoolean("trigger_auto_stop", settings.triggerAutoStop)
             apply()
         }
     }
+
+    var triggerWatcher: com.smarttools.netguard.service.ForegroundAppWatcher? = null
+        private set
+
+    fun updateTriggerWatcher(enabled: Boolean) {
+        if (enabled) {
+            // Pre-warm: bring up a FULL trigger tunnel (TUN + xray + tun2socks)
+            // for the trigger apps. xray sits ready, so opening a trigger app
+            // is instant — no 1-2s "Connecting…" delay.
+            val s = loadSettings()
+            if (s.triggerApps.isNotEmpty()) {
+                kotlinx.coroutines.CoroutineScope(
+                    kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+                ).launch {
+                    val profile = database.profileDao().getSelected()
+                    if (profile != null) {
+                        com.smarttools.netguard.service.TunnelVpnService.startTriggerPrewarm(
+                            this@App, profile.id
+                        )
+                    } else {
+                        // No server picked yet — fall back to quarantine so apps
+                        // still can't leak; user will be prompted to pick a server.
+                        com.smarttools.netguard.service.TunnelVpnService.startQuarantine(this@App)
+                    }
+                }
+            }
+            // Watcher only needed for autoStop bookkeeping; otherwise harmless.
+            if (triggerWatcher == null) {
+                triggerWatcher = com.smarttools.netguard.service.ForegroundAppWatcher(this).also { it.start() }
+            }
+        } else {
+            triggerWatcher?.stop()
+            triggerWatcher = null
+            val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
+            // Tear down only if the running tunnel is ours (trigger/quarantine).
+            // A user-initiated global VPN should keep working.
+            if (state is com.smarttools.netguard.model.ConnectionState.Disconnected ||
+                com.smarttools.netguard.service.TunnelVpnService.isTriggerTunnel.value) {
+                com.smarttools.netguard.service.TunnelVpnService.stop(this)
+            }
+        }
+    }
+
 }

@@ -22,7 +22,10 @@ data class AppSettings(
     val tlsFragmentInterval: String = "10-20",
     val bypassDomains: String = "",
     val bypassIps: String = "",
-    val trafficStatsMode: TrafficStatsMode = TrafficStatsMode.SIMPLE
+    val trafficStatsMode: TrafficStatsMode = TrafficStatsMode.SIMPLE,
+    val triggerEnabled: Boolean = false,
+    val triggerApps: Set<String> = emptySet(),
+    val triggerAutoStop: Boolean = false
 )
 
 enum class RoutingMode {

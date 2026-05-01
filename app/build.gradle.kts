@@ -21,8 +21,8 @@ android {
         applicationId = "com.smarttools.netguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.1.3"
+        versionCode = 31
+        versionName = "1.1.7"
 
         ndk {
             abiFilters += "arm64-v8a"

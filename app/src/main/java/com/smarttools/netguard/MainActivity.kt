@@ -56,13 +56,55 @@ class MainActivity : AppCompatActivity() {
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
         bottomNav.setupWithNavController(navController)
+        // Custom click handler: when a tab is tapped, pop everything off the
+        // backstack until we're at the root of THAT tab. Default behavior
+        // can leave sub-screens (like nav_trigger under nav_settings) on the
+        // backstack so the user comes back to the wrong fragment.
+        bottomNav.setOnItemSelectedListener { item ->
+            // Always go back to the ROOT fragment of the tab — clear any
+            // sub-screen the user opened earlier (e.g. Settings → Trigger).
+            // saveState/restoreState are intentionally false so each tab
+            // tap returns to the top of that section.
+            val options = androidx.navigation.NavOptions.Builder()
+                .setLaunchSingleTop(true)
+                .setRestoreState(false)
+                .setPopUpTo(
+                    navController.graph.startDestinationId,
+                    /* inclusive = */ false,
+                    /* saveState = */ false
+                )
+                .build()
+            try {
+                navController.navigate(item.itemId, null, options)
+                true
+            } catch (_: IllegalArgumentException) {
+                false
+            }
+        }
+        // Keep highlight in sync — if user navigates by code (e.g. into
+        // a sub-screen), reflect the parent tab on the bottom bar.
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            val topLevelId = when (destination.id) {
+                R.id.nav_per_app, R.id.nav_trigger -> R.id.nav_settings
+                R.id.nav_profile_edit, R.id.nav_qr_scan -> R.id.nav_profiles
+                else -> destination.id
+            }
+            val item = bottomNav.menu.findItem(topLevelId)
+            if (item != null && !item.isChecked) item.isChecked = true
+        }
 
         handleDeepLink(intent)
+        if (intent?.getBooleanExtra("auto_connect", false) == true) {
+            requestVpnPermissionAndConnect()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDeepLink(intent)
+        if (intent.getBooleanExtra("auto_connect", false)) {
+            requestVpnPermissionAndConnect()
+        }
     }
 
     private fun handleDeepLink(intent: Intent?) {

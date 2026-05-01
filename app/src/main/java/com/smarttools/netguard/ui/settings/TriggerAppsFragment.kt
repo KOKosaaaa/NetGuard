@@ -1,0 +1,254 @@
+package com.smarttools.netguard.ui.settings
+
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.net.Uri
+import android.net.VpnService
+import android.os.Bundle
+import android.provider.Settings
+import androidx.activity.result.contract.ActivityResultContracts
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Toast
+import androidx.core.widget.doAfterTextChanged
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.smarttools.netguard.App
+import com.smarttools.netguard.R
+import com.smarttools.netguard.databinding.FragmentTriggerAppsBinding
+import com.smarttools.netguard.service.TriggerWatcherService
+import com.smarttools.netguard.viewmodel.SettingsViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class TriggerAppsFragment : Fragment() {
+
+    private var _binding: FragmentTriggerAppsBinding? = null
+    private val binding get() = _binding!!
+    private val viewModel: SettingsViewModel by activityViewModels()
+
+    private var allApps = listOf<AppItem>()
+    private val selectedPackages = mutableSetOf<String>()
+    private var showSystemApps = false
+    private var searchQuery = ""
+
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            applyAndExit(true)
+        } else {
+            Toast.makeText(requireContext(), "VPN permission required", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        _binding = FragmentTriggerAppsBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        val settings = viewModel.settings.value
+        selectedPackages.addAll(settings.triggerApps)
+        binding.swTriggerEnable.isChecked = settings.triggerEnabled
+        binding.swTriggerAutoStop.isChecked = settings.triggerAutoStop
+
+        refreshPermissionUi()
+
+        val adapter = AppListAdapter { item ->
+            if (item.isChecked) selectedPackages.add(item.packageName)
+            else selectedPackages.remove(item.packageName)
+            updateCount()
+        }
+
+        binding.rvApps.layoutManager = LinearLayoutManager(requireContext())
+        binding.rvApps.adapter = adapter
+
+        binding.etSearch.doAfterTextChanged {
+            searchQuery = it?.toString()?.lowercase() ?: ""
+            adapter.submitList(filterApps())
+        }
+
+        binding.cbSystemApps.setOnCheckedChangeListener { _, checked ->
+            showSystemApps = checked
+            adapter.submitList(filterApps())
+        }
+
+        binding.swTriggerEnable.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
+        binding.swTriggerAutoStop.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
+
+        binding.btnOpenVpnSettings.setOnClickListener {
+            try {
+                startActivity(Intent("android.net.vpn.SETTINGS"))
+            } catch (_: Exception) {
+                try {
+                    startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
+                } catch (_: Exception) {
+                    Toast.makeText(requireContext(), "Open Settings → VPN → NetGuard manually", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        binding.btnGrantPermission.setOnClickListener {
+            try {
+                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                startActivity(intent)
+            } catch (_: Exception) {
+                // Fallback: open app's settings
+                val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", requireContext().packageName, null)
+                }
+                startActivity(fallback)
+            }
+        }
+
+        binding.btnSave.setOnClickListener { save() }
+
+        binding.btnToggleHeader.setOnClickListener {
+            val collapsed = binding.headerSection.visibility == View.GONE
+            binding.headerSection.visibility = if (collapsed) View.VISIBLE else View.GONE
+            binding.btnToggleHeader.setText(
+                if (collapsed) R.string.trigger_collapse else R.string.trigger_expand
+            )
+        }
+
+        binding.progressLoading.visibility = View.VISIBLE
+        viewLifecycleOwner.lifecycleScope.launch {
+            allApps = withContext(Dispatchers.IO) { loadApps() }
+            if (_binding == null) return@launch
+            binding.progressLoading.visibility = View.GONE
+            adapter.submitList(filterApps())
+            updateCount()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshPermissionUi()
+    }
+
+    private fun refreshPermissionUi() {
+        val granted = TriggerWatcherService.hasUsageStatsPermission(requireContext())
+        binding.btnGrantPermission.visibility = if (granted) View.GONE else View.VISIBLE
+        binding.swTriggerEnable.isEnabled = granted
+        if (!granted) {
+            binding.swTriggerEnable.isChecked = false
+            Toast.makeText(requireContext(), R.string.trigger_no_permission, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun save() {
+        val enabled = binding.swTriggerEnable.isChecked
+        val activeApps = selectedPackages.toSet()
+
+        // Conflict check: if user has BLACKLIST per-app routing with overlap,
+        // those packages would bypass the trigger tunnel — defeating the point.
+        // Auto-remove the overlap from blacklist (safer default).
+        val current = viewModel.settings.value
+        val overlap = if (enabled &&
+            current.perAppMode == com.smarttools.netguard.model.PerAppMode.BLACKLIST) {
+            current.perAppList.intersect(activeApps)
+        } else emptySet()
+        if (overlap.isNotEmpty()) {
+            Toast.makeText(
+                requireContext(),
+                "Removed ${overlap.size} app(s) from per-app blacklist (would bypass trigger)",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        // Disable any active per-app routing — Trigger mode handles routing
+        // on its own; running both at once causes confusion.
+        val perAppWasOn = enabled && current.perAppMode != com.smarttools.netguard.model.PerAppMode.DISABLED
+        if (perAppWasOn) {
+            Toast.makeText(requireContext(), R.string.trigger_perapp_conflict, Toast.LENGTH_LONG).show()
+        }
+        viewModel.updateSettings { s ->
+            val newPerAppList = if (overlap.isNotEmpty()) s.perAppList - overlap else s.perAppList
+            s.copy(
+                triggerEnabled = enabled,
+                triggerApps = activeApps,
+                triggerAutoStop = binding.swTriggerAutoStop.isChecked,
+                perAppList = newPerAppList,
+                perAppMode = if (enabled) com.smarttools.netguard.model.PerAppMode.DISABLED else s.perAppMode
+            )
+        }
+
+        if (enabled && activeApps.isNotEmpty()) {
+            // Request VPN permission first so quarantine TUN can come up.
+            val prepareIntent = VpnService.prepare(requireContext())
+            if (prepareIntent != null) {
+                vpnPermissionLauncher.launch(prepareIntent)
+                return
+            }
+            applyAndExit(true)
+        } else {
+            applyAndExit(false)
+        }
+    }
+
+    private fun applyAndExit(enable: Boolean) {
+        val app = requireContext().applicationContext as App
+        if (enable) {
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                val selected = app.database.profileDao().getSelected()
+                // Persist last_profile_id so Android Always-on auto-start can
+                // bring the tunnel up with the right server.
+                if (selected != null) {
+                    app.getPreferences().edit()
+                        .putLong("last_profile_id", selected.id)
+                        .putString("last_profile_name", selected.name)
+                        .apply()
+                }
+                withContext(Dispatchers.Main) {
+                    if (selected == null) {
+                        Toast.makeText(requireContext(), R.string.trigger_no_profile, Toast.LENGTH_LONG).show()
+                    }
+                    app.updateTriggerWatcher(true)
+                    if (isAdded) requireActivity().onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        } else {
+            app.updateTriggerWatcher(false)
+            if (isAdded) requireActivity().onBackPressedDispatcher.onBackPressed()
+        }
+    }
+
+    private fun loadApps(): List<AppItem> {
+        val pm = requireContext().packageManager
+        val apps = pm.getInstalledApplications(0)
+        return apps.map { info ->
+            AppItem(
+                packageName = info.packageName,
+                label = info.loadLabel(pm).toString(),
+                icon = try { info.loadIcon(pm) } catch (_: Exception) { null },
+                isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
+                isChecked = info.packageName in selectedPackages
+            )
+        }.sortedWith(compareBy({ !it.isChecked }, { it.label.lowercase() }))
+    }
+
+    private fun filterApps(): List<AppItem> {
+        return allApps.filter { app ->
+            (showSystemApps || !app.isSystem) &&
+                (searchQuery.isEmpty() ||
+                    app.label.lowercase().contains(searchQuery) ||
+                    app.packageName.contains(searchQuery))
+        }
+    }
+
+    private fun updateCount() {
+        binding.tvSelectedCount.text = getString(R.string.apps_selected, selectedPackages.size)
+    }
+
+    override fun onDestroyView() {
+        _binding = null
+        super.onDestroyView()
+    }
+}

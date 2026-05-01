@@ -52,6 +52,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val profile = profileRepo.getSelected()
             if (profile == null) {
+                // No server picked yet → fall back to auto-select (best non-RU
+                // server by ping). It also kicks off the connection on success.
+                autoSelectAndConnect()
                 return@launch
             }
             TunnelVpnService.start(getApplication(), profile.id)

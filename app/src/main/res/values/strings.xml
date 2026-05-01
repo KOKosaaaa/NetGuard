@@ -96,7 +96,33 @@
     <string name="notif_title_connecting">Connecting…</string>
     <string name="notif_text">Network service is running</string>
     <string name="notif_text_connecting">Establishing connection</string>
+    <string name="notif_title_quarantine">Trigger guard active</string>
+    <string name="notif_text_quarantine">Selected apps are blocked from the network until you open them</string>
     <string name="notif_stop">Stop</string>
+
+    <!-- Trigger watcher (foreground app monitor) -->
+    <string name="trigger_watcher_channel">App-launch monitor</string>
+    <string name="trigger_watcher_channel_desc">Activates connection when selected apps open</string>
+    <string name="trigger_watcher_title">App-launch monitor active</string>
+    <string name="trigger_watcher_text">Watching selected apps</string>
+    <string name="trigger_watcher_stop">Disable</string>
+
+    <!-- Trigger settings UI -->
+    <string name="trigger_title">App-launch trigger</string>
+    <string name="trigger_subtitle">VPN turns on only for the apps you pick</string>
+    <string name="trigger_enable">Enable trigger mode</string>
+    <string name="trigger_explainer">Only the apps you pick go through the VPN. Every other app (banking, maps, your usual browser, etc.) works over the normal connection as if no VPN existed. The picked apps have no other way to reach the network — so they never see your real IP, not even for a moment.</string>
+    <string name="trigger_pick_apps">Pick apps that should use VPN</string>
+    <string name="trigger_no_permission">Usage access permission required</string>
+    <string name="trigger_grant_permission">Grant usage access</string>
+    <string name="trigger_auto_stop">Disconnect tunnel when app is in background (saves battery)</string>
+    <string name="trigger_no_profile">No selected server. Select a server first.</string>
+    <string name="trigger_always_on_title">Survive NetGuard being killed</string>
+    <string name="trigger_always_on_desc">For reliability, in Android system VPN settings enable ONLY \"Always-on VPN\". Do NOT enable \"Block connections without VPN\" — that would also kill normal apps\' internet. Trigger mode already blocks the picked apps whenever the tunnel is down.</string>
+    <string name="trigger_open_vpn_settings">Open Android VPN settings</string>
+    <string name="trigger_collapse">Hide info</string>
+    <string name="trigger_expand">Show info &amp; switches</string>
+    <string name="trigger_perapp_conflict">Per-App routing was enabled — Trigger mode handles routing by itself. Per-App switched to DISABLED.</string>
 
     <!-- Clipboard -->
     <string name="paste_from_clipboard">Paste</string>
@@ -177,7 +203,7 @@
     <string name="speed_notif_desc">Show live speed in the status bar</string>
     <string name="security_test_desc">Check VPN tunnel integrity and security</string>
     <string name="kill_switch_full_desc">Blocks all internet if VPN disconnects. Enable \"Always-on VPN\" in Android settings.</string>
-    <string name="per_app_desc">Choose which apps use or bypass VPN</string>
+    <string name="per_app_desc">For global VPN only. If you use Trigger mode, leave this DISABLED — Trigger handles app routing on its own.</string>
     <string name="export_import_desc">Copy config to clipboard for sharing</string>
     <string name="backup_restore_desc">Save profiles to file or restore from backup</string>
 
