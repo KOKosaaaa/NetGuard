@@ -36,11 +36,72 @@ class TrafficChartView @JvmOverloads constructor(
 
     private val barRect = RectF()
 
-    private fun sp(value: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
+    // Cached dimensions (displayMetrics-dependent, refreshed on attach)
+    private var sp11 = 0f
+    private var sp9 = 0f
+    private var dp2 = 0f
+    private var dp3 = 0f
+    private var dp4 = 0f
+    private var dp6 = 0f
+    private var dp160 = 0
 
-    private fun dp(value: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics)
+    // Cached theme colors (refreshed on attach — one obtainStyledAttributes call for all four)
+    private var primaryColor = 0
+    private var surfaceVariantColor = 0
+    private var textColor = 0
+    private var subtextColor = 0
+
+    private val themeAttrs = intArrayOf(
+        com.google.android.material.R.attr.colorPrimary,
+        com.google.android.material.R.attr.colorSurfaceVariant,
+        com.google.android.material.R.attr.colorOnSurface,
+        com.google.android.material.R.attr.colorOnSurfaceVariant
+    )
+
+    init {
+        resolveDimensions()
+        resolveThemeColors()
+        applyPaintStyles()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Theme can change between detach/attach (night mode toggle, DynamicColors switch)
+        resolveThemeColors()
+        applyPaintStyles()
+    }
+
+    private fun resolveDimensions() {
+        val dm = resources.displayMetrics
+        sp11 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 11f, dm)
+        sp9 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 9f, dm)
+        dp2 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2f, dm)
+        dp3 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 3f, dm)
+        dp4 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4f, dm)
+        dp6 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6f, dm)
+        dp160 = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 160f, dm).toInt()
+    }
+
+    private fun resolveThemeColors() {
+        val ta = context.obtainStyledAttributes(themeAttrs)
+        try {
+            primaryColor = ta.getColor(0, 0xFF888888.toInt())
+            surfaceVariantColor = ta.getColor(1, 0xFF888888.toInt())
+            textColor = ta.getColor(2, 0xFF888888.toInt())
+            subtextColor = ta.getColor(3, 0xFF888888.toInt())
+        } finally {
+            ta.recycle()
+        }
+    }
+
+    private fun applyPaintStyles() {
+        barPaint.color = primaryColor
+        emptyBarPaint.color = surfaceVariantColor
+        labelPaint.color = subtextColor
+        labelPaint.textSize = sp11
+        valuePaint.color = textColor
+        valuePaint.textSize = sp9
+    }
 
     fun setData(history: List<StatsRepository.DayTraffic>) {
         data = history
@@ -48,13 +109,12 @@ class TrafficChartView @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val desiredHeight = dp(160f).toInt()
         val heightMode = MeasureSpec.getMode(heightMeasureSpec)
         val heightSize = MeasureSpec.getSize(heightMeasureSpec)
         val h = when (heightMode) {
             MeasureSpec.EXACTLY -> heightSize
-            MeasureSpec.AT_MOST -> desiredHeight.coerceAtMost(heightSize)
-            else -> desiredHeight
+            MeasureSpec.AT_MOST -> dp160.coerceAtMost(heightSize)
+            else -> dp160
         }
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), h)
     }
@@ -63,27 +123,14 @@ class TrafficChartView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (data.isEmpty()) return
 
-        val primaryColor = resolveThemeColor(com.google.android.material.R.attr.colorPrimary)
-        val surfaceVariantColor = resolveThemeColor(com.google.android.material.R.attr.colorSurfaceVariant)
-        val textColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSurface)
-        val subtextColor = resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant)
-
-        barPaint.color = primaryColor
-        emptyBarPaint.color = surfaceVariantColor
-        labelPaint.color = subtextColor
-        labelPaint.textSize = sp(11f)
-        valuePaint.color = textColor
-        valuePaint.textSize = sp(9f)
-
         val maxVal = data.maxOfOrNull { it.total } ?: 0L
-        val labelHeight = sp(11f) + dp(6f)
-        val valueHeight = sp(9f) + dp(4f)
-        val topPadding = valueHeight + dp(2f)
+        val labelHeight = sp11 + dp6
+        val valueHeight = sp9 + dp4
+        val topPadding = valueHeight + dp2
         val chartHeight = height - labelHeight - topPadding
         val barWidth = width.toFloat() / data.size
         val barInset = barWidth * 0.15f
-        val barRadius = dp(4f)
-        val minBarHeight = dp(4f)
+        val minBarHeight = dp4
 
         data.forEachIndexed { i, day ->
             val left = barWidth * i + barInset
@@ -95,30 +142,20 @@ class TrafficChartView @JvmOverloads constructor(
                 val barH = (chartHeight * fraction).coerceAtLeast(minBarHeight)
                 val top = topPadding + (chartHeight - barH)
                 barRect.set(left, top, right, topPadding + chartHeight)
-                canvas.drawRoundRect(barRect, barRadius, barRadius, barPaint)
+                canvas.drawRoundRect(barRect, dp4, dp4, barPaint)
 
-                // Value above bar
                 canvas.drawText(
                     TrafficFormatter.formatBytes(day.total),
                     cx,
-                    top - dp(3f),
+                    top - dp3,
                     valuePaint
                 )
             } else {
-                // Empty bar placeholder
                 barRect.set(left, topPadding + chartHeight - minBarHeight, right, topPadding + chartHeight)
-                canvas.drawRoundRect(barRect, barRadius, barRadius, emptyBarPaint)
+                canvas.drawRoundRect(barRect, dp4, dp4, emptyBarPaint)
             }
 
-            // Day label
-            canvas.drawText(day.dayOfWeek, cx, height.toFloat() - dp(2f), labelPaint)
+            canvas.drawText(day.dayOfWeek, cx, height.toFloat() - dp2, labelPaint)
         }
-    }
-
-    private fun resolveThemeColor(attr: Int): Int {
-        val ta = context.obtainStyledAttributes(intArrayOf(attr))
-        val color = ta.getColor(0, 0xFF888888.toInt())
-        ta.recycle()
-        return color
     }
 }

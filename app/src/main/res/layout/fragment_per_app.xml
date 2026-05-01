@@ -25,6 +25,15 @@
         android:text="@string/show_system_apps"
         android:paddingHorizontal="8dp" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_add_ru_bypass"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/add_ru_bypass_apps" />
+
     <TextView
         android:id="@+id/tv_selected_count"
         android:layout_width="match_parent"

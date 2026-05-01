@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">NetGuard</string>
+
+    <string name="sub_expires_at">истекает %1$s</string>
+    <string name="sub_expired">истекла %1$s</string>
+
     <string name="nav_home">Главная</string>
     <string name="nav_profiles">Серверы</string>
     <string name="nav_subscriptions">Подписки</string>
@@ -67,6 +71,8 @@
     <string name="search_apps">Поиск приложений…</string>
     <string name="show_system_apps">Показать системные</string>
     <string name="apps_selected">Выбрано: %d</string>
+    <string name="add_ru_bypass_apps">Исключить приложения РФ</string>
+    <string name="ru_bypass_added">Добавлено приложений: %d</string>
     <string name="backup_restore">Резервное копирование</string>
     <string name="backup_to_file">Сохранить в файл</string>
     <string name="restore_from_file">Восстановить из файла</string>
@@ -205,4 +211,6 @@
     <string name="bypass_list_desc">Домены и IP, которые идут напрямую (минуя VPN)</string>
     <string name="bypass_domains_hint">Домены (по одному на строку)</string>
     <string name="bypass_ips_hint">IP / CIDR (по одному на строку)</string>
+    <string name="bypass_too_broad_warning">Паттерн \"%1$s\" слишком широкий — почти весь трафик пойдёт мимо VPN</string>
+    <string name="bypass_too_broad_toast">Некоторые правила обхода слишком широкие и фактически отключают VPN</string>
 </resources>

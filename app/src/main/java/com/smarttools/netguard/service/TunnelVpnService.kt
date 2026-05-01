@@ -2,6 +2,7 @@ package com.smarttools.netguard.service
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -14,6 +15,7 @@ import com.smarttools.netguard.App
 import com.smarttools.netguard.widget.VpnWidget
 import com.smarttools.netguard.util.TrafficFormatter
 import com.smarttools.netguard.core.CredentialManager
+import com.smarttools.netguard.core.ServerPreflight
 import com.smarttools.netguard.core.XrayConfigGenerator
 import com.smarttools.netguard.model.AppSettings
 import com.smarttools.netguard.model.ConnectionState
@@ -146,12 +148,23 @@ class TunnelVpnService : VpnService() {
     )
 
     private val fdLock = Any()
+    // All mutable references below cross thread boundaries: process watchdogs
+    // run on Dispatchers.IO while start/stop/onDestroy run on Main. @Volatile
+    // (or fdLock for vpnFd) guarantees the cross-thread visibility we need;
+    // without it a watchdog could see a stale `null` and skip recovery.
+    @Volatile
     private var vpnFd: ParcelFileDescriptor? = null
+    @Volatile
     private var serviceScope: CoroutineScope? = null
+    @Volatile
     private var trafficMonitor: TrafficMonitor? = null
+    @Volatile
     private var xrayProcess: Process? = null
+    @Volatile
     private var tun2socksProcess: Process? = null
+    @Volatile
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    @Volatile
     private var currentProfileId: Long = -1
     @Volatile
     private var isReconnecting = false
@@ -165,14 +178,56 @@ class TunnelVpnService : VpnService() {
     private var triggerActive: Boolean = false
     @Volatile
     private var prewarmMode: Boolean = false
+
+    // Auto-failover state. We keep track of which profile IDs we have already
+    // tried during the current user-initiated connect, so a sequence of dead
+    // servers from the same subscription does not loop forever and the user
+    // sees a useful error after we exhaust the budget.
+    private val failoverTried = java.util.concurrent.CopyOnWriteArraySet<Long>()
+    @Volatile
+    private var failoverInProgress = false
+    private val failoverMaxAttempts = 3
+    @Volatile
     private var showSpeedNotification = false
+    @Volatile
     private var xrayWatchdogJob: Job? = null
+    @Volatile
     private var tun2socksWatchdogJob: Job? = null
+    @Volatile
     private var lastNotificationUpdate = 0L
 
     override fun onCreate() {
         super.onCreate()
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    }
+
+    /**
+     * Android 14 (API 34) enforces that every call to [startForeground] for a
+     * service with a typed `foregroundServiceType` declaration specifies
+     * matching bits at call-site. We use `connectedDevice` (the VPN tunnel
+     * role) combined with `systemExempted` (so auto-connect from
+     * [BootReceiver] is allowed before the user has foregrounded the app).
+     * On API < 29 the typed overload does not exist; fall back to the 2-arg
+     * form which the platform happily accepts.
+     */
+    private fun startForegroundCompat(notification: android.app.Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // API 34+: FGS type is mandatory at call site and must match the
+            // manifest declaration. `specialUse` requires the subtype property
+            // that is declared inside the <service> element. `systemExempted`
+            // is OR-ed in so BootReceiver auto-reconnect is permitted.
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED
+            startForeground(NotificationHelper.NOTIFICATION_ID, notification, type)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // specialUse was added in API 30.
+            startForeground(
+                NotificationHelper.NOTIFICATION_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -195,7 +250,7 @@ class TunnelVpnService : VpnService() {
                 _isTriggerTunnel.value = false
                 // Show "Connecting..." notification immediately to avoid ANR
                 val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
-                startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+                startForegroundCompat(notification)
                 startTunnel(profileId)
             }
             ACTION_START_TRIGGER -> {
@@ -315,6 +370,13 @@ class TunnelVpnService : VpnService() {
             Log.w(TAG, "startTunnel called while already starting, ignoring")
             return
         }
+        // Reset failover ledger on any user-initiated start. The ledger is
+        // additive only inside one auto-failover chain; once the user picks
+        // a profile manually we forget the previous chain entirely.
+        if (!failoverInProgress) {
+            failoverTried.clear()
+        }
+        failoverTried.add(profileId)
         // Cancel old watchdogs BEFORE killing processes — otherwise they
         // detect the intentional kill, see Connecting state, and call stopTunnel()
         xrayWatchdogJob?.cancel()
@@ -345,10 +407,26 @@ class TunnelVpnService : VpnService() {
 
                     val settings = app.loadSettings()
 
-                    // 1. Establish VPN TUN interface FIRST so target apps cannot leak
-                    //    real IP while xray is starting. Until tun2socks attaches in
-                    //    step 6, packets queued by the kernel into TUN have nowhere
-                    //    to go → black-holed (the desired behavior for trigger mode).
+                    // 0. Pre-flight reachability check. Cheap (DNS + 2s TCP)
+                    // and short-circuits a hard-down server before we burn the
+                    // 30s tunnel-establishment budget on it.
+                    when (val pf = ServerPreflight.check(profile)) {
+                        is ServerPreflight.Result.Dead -> {
+                            LogBuffer.add(LogBuffer.LogLevel.WARN, "Preflight dead: ${pf.reason}")
+                            throw IllegalStateException("Server unreachable: ${pf.reason}")
+                        }
+                        is ServerPreflight.Result.Slow -> {
+                            LogBuffer.add(LogBuffer.LogLevel.WARN, "Preflight slow: ${pf.rttMs} ms")
+                        }
+                        is ServerPreflight.Result.Ok -> {
+                            if (pf.rttMs > 0) Log.i(TAG, "Preflight OK ${pf.rttMs} ms")
+                        }
+                    }
+
+                    // 1. Establish VPN TUN interface FIRST so trigger apps
+                    //    cannot leak their real IP while xray is starting.
+                    //    Packets queued into TUN have nowhere to go until
+                    //    tun2socks attaches → black-holed (desired for trigger).
                     val fd = establishVpn(profile, settings) ?: run {
                         _connectionState.value = ConnectionState.Error("VPN permission denied")
                         stopTunnel()
@@ -422,20 +500,71 @@ class TunnelVpnService : VpnService() {
                     // Update notification from "Connecting..." to "Connected"
                     NotificationHelper.showConnectedNotification(this@TunnelVpnService)
                     VpnWidget.updateAllWidgets(applicationContext)
+                    // Successful tunnel resets the failover ledger so a future
+                    // unrelated failure doesn't reuse the in-progress chain.
+                    failoverInProgress = false
+                    failoverTried.clear()
+                    failoverTried.add(profileId)
                     Log.i(TAG, "Tunnel started for ${profile.name}")
                 }
             } catch (e: TimeoutCancellationException) {
                 Log.e(TAG, "Connection timed out after ${CONNECTION_TIMEOUT_MS / 1000}s")
-                _connectionState.value = ConnectionState.Error("Connection timed out")
-                VpnWidget.updateAllWidgets(applicationContext)
-                stopTunnel()
+                handleConnectFailure("Connection timed out", profileId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start tunnel", e)
-                _connectionState.value = ConnectionState.Error(e.message ?: "Unknown error")
-                VpnWidget.updateAllWidgets(applicationContext)
-                stopTunnel()
+                handleConnectFailure(e.message ?: "Unknown error", profileId)
             } finally {
                 isStarting = false
+            }
+        }
+    }
+
+    /**
+     * Pick the next failover candidate and re-enter [startTunnel]. We prefer
+     * untried profiles from the same subscription (so that the user stays on
+     * the kind of server they explicitly chose); if none are left we fall
+     * back to any other untried profile in the database. After
+     * [failoverMaxAttempts] tries we give up and surface the original error.
+     */
+    private fun handleConnectFailure(reason: String, failedProfileId: Long) {
+        VpnWidget.updateAllWidgets(applicationContext)
+        if (failoverTried.size >= failoverMaxAttempts) {
+            Log.w(TAG, "Failover budget exhausted (${failoverTried.size}/$failoverMaxAttempts); giving up: $reason")
+            _connectionState.value = ConnectionState.Error(reason)
+            failoverInProgress = false
+            failoverTried.clear()
+            stopTunnel()
+            return
+        }
+        serviceScope?.launch {
+            try {
+                val app = application as App
+                val failed = app.database.profileDao().getById(failedProfileId)
+                val candidates = if (failed != null && failed.subscriptionId > 0) {
+                    app.database.profileDao().getBySubscription(failed.subscriptionId)
+                } else {
+                    app.database.profileDao().getAll()
+                }
+                val next = candidates.firstOrNull { it.id !in failoverTried }
+                    ?: app.database.profileDao().getAll().firstOrNull { it.id !in failoverTried }
+                if (next == null) {
+                    Log.w(TAG, "No failover candidates left; surfacing error: $reason")
+                    _connectionState.value = ConnectionState.Error(reason)
+                    failoverInProgress = false
+                    failoverTried.clear()
+                    stopTunnel()
+                    return@launch
+                }
+                LogBuffer.add(LogBuffer.LogLevel.WARN, "Failover → ${next.name} (after \"$reason\")")
+                Log.i(TAG, "Auto-failover to profile ${next.id} (${next.name}); attempt ${failoverTried.size + 1}/$failoverMaxAttempts")
+                failoverInProgress = true
+                stopTunnelProcesses()
+                startTunnel(next.id)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failover lookup failed", e)
+                _connectionState.value = ConnectionState.Error(reason)
+                failoverInProgress = false
+                stopTunnel()
             }
         }
     }
@@ -489,13 +618,21 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun startTun2socksProcess(fd: ParcelFileDescriptor, port: Int, user: String, pass: String) {
+    private suspend fun startTun2socksProcess(fd: ParcelFileDescriptor, port: Int, user: String, pass: String) {
         val tun2socksBin = File(applicationInfo.nativeLibraryDir, "libtun2socks.so")
         if (!tun2socksBin.exists()) throw IllegalStateException("tun2socks binary not found at ${tun2socksBin.absolutePath}")
 
         val sockPath = File(filesDir, "sock_path").absolutePath
+        // tun2socks --tunmtu must match the TUN MTU set by VpnService.Builder,
+        // otherwise the helper fragments above the link MTU and we lose the
+        // benefit of probing the underlying network.
+        val tunMtu = probeUnderlyingMtu()
 
-        // badvpn-tun2socks: receives TUN fd via Unix domain socket
+        // badvpn-tun2socks: receives TUN fd via Unix domain socket.
+        // FIXME(security): --username/--password are visible in /proc/<pid>/cmdline.
+        // SELinux + hidepid hide this from other apps on stock Android, but same-uid
+        // processes and root can read it. Migrate to stdin pipe or fd-based creds
+        // once the tun2socks fork supports it (see README security-hardening section).
         val pb = ProcessBuilder(
             tun2socksBin.absolutePath,
             "--netif-ipaddr", "10.10.10.2",
@@ -503,7 +640,7 @@ class TunnelVpnService : VpnService() {
             "--socks-server-addr", "127.0.0.1:$port",
             "--username", user,
             "--password", pass,
-            "--tunmtu", "1500",
+            "--tunmtu", tunMtu.toString(),
             "--sock-path", sockPath,
             "--enable-udprelay",
             "--loglevel", "notice"
@@ -532,12 +669,12 @@ class TunnelVpnService : VpnService() {
         sendTunFd(sockPath, fd)
     }
 
-    private fun sendTunFd(sockPath: String, fd: ParcelFileDescriptor) {
+    private suspend fun sendTunFd(sockPath: String, fd: ParcelFileDescriptor) {
         // Tight poll: tun2socks usually creates the socket within ~50ms.
-        // Old code slept 200ms per attempt → up to 2s wasted.
+        // Use suspend delay() so we don't block a Dispatchers.IO worker.
         var connected = false
         for (attempt in 1..40) {
-            try { Thread.sleep(50) } catch (_: InterruptedException) { break }
+            delay(50)
             val sockFile = File(sockPath)
             if (sockFile.exists()) {
                 connected = true
@@ -691,15 +828,43 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    /**
+     * Probe the active non-VPN underlying network for its link MTU. On many
+     * mobile carriers the LTE/5G link MTU is 1428 or 1450, not 1500;
+     * forcing 1500 on the TUN causes silent IP fragmentation and a 5–15 %
+     * throughput drop. We always cap at 1500 (TUN payload max) and floor
+     * at 1280 (smallest IPv6 MTU; below that we'd black-hole v6 outright).
+     */
+    private fun probeUnderlyingMtu(): Int {
+        val standard = 1500
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val net = cm.activeNetwork ?: return standard
+            val lp = cm.getLinkProperties(net) ?: return standard
+            val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) lp.mtu else 0
+            if (raw <= 0) standard else raw.coerceIn(1280, standard)
+        } catch (e: Exception) {
+            Log.w(TAG, "MTU probe failed: ${e.message}")
+            standard
+        }
+    }
+
     private fun establishVpn(profile: ServerProfile, settings: AppSettings): ParcelFileDescriptor? {
         val primaryDns = profile.dns.ifEmpty { settings.primaryDns }
         val secondaryDns = settings.secondaryDns
+        val probedMtu = probeUnderlyingMtu()
+        Log.i(TAG, "TUN MTU = $probedMtu (probed)")
 
         val builder = Builder()
             .addAddress("10.10.10.1", 30)
             .addRoute("0.0.0.0", 0)
-            .addRoute("::", 0)
-            .setMtu(1500)           // CRITICAL: standard MTU — no anomaly detection
+            .apply {
+                if (settings.enableIpv6) {
+                    addAddress("fd00::1", 126)
+                    addRoute("::", 0)
+                }
+            }
+            .setMtu(probedMtu)      // probed from underlying link, capped 1280..1500
             .setSession("")         // CRITICAL: empty session — not "VPN"
             .setBlocking(false)
             // CRITICAL: mark as not metered so Android doesn't prefer non-VPN routes
@@ -834,6 +999,15 @@ class TunnelVpnService : VpnService() {
             override fun onAvailable(network: Network) {
                 val prev = currentNetwork
                 currentNetwork = network
+                // Pin VpnService to the new underlying network so outbound sockets
+                // from xray route through it immediately instead of Android's
+                // default, which can briefly resolve to the old (possibly gone)
+                // network during a WiFi↔LTE switch.
+                try {
+                    setUnderlyingNetworks(arrayOf(network))
+                } catch (e: Exception) {
+                    Log.w(TAG, "setUnderlyingNetworks(onAvailable) failed: ${e.message}")
+                }
                 // Only reconnect if we had a DIFFERENT underlying network before (WiFi↔LTE switch)
                 if (prev != null && prev != network &&
                     _connectionState.value is ConnectionState.Connected &&
@@ -842,7 +1016,11 @@ class TunnelVpnService : VpnService() {
                     isReconnecting = true
                     serviceScope?.launch {
                         try {
-                            delay(2000)
+                            // Short debounce — long enough to coalesce multiple
+                            // onAvailable bursts during a single network swap,
+                            // short enough that the TUN black-hole window stays
+                            // sub-second on a clean handover.
+                            delay(500)
                             if (currentProfileId != -1L) {
                                 // CRITICAL: only restart xray+tun2socks, keep TUN fd alive
                                 // This prevents ANY traffic from leaking during reconnect
@@ -1214,6 +1392,11 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun stopTunnel() {
+        // User (or onRevoke / onDestroy) asked us to fully stop. Drop any
+        // in-progress failover state — if they reconnect later we want a
+        // fresh budget, not stale ledger entries from the previous chain.
+        failoverInProgress = false
+        failoverTried.clear()
         unregisterNetworkCallback()
         trafficMonitor?.stop()
         trafficMonitor = null

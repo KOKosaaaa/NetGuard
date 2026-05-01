@@ -25,15 +25,16 @@ object SpeedTester {
         val pingMs: Int
     )
 
+    // HTTPS preferred. http://speedtest.tele2.net is the only entry still
+    // cleartext — tele2 does not serve HTTPS on that endpoint and is whitelisted
+    // in network_security_config.xml for that reason.
     private val DOWNLOAD_URLS = listOf(
-        "http://speed.cloudflare.com/__down?bytes=5000000",
-        "http://speedtest.tele2.net/1MB.zip",
-        "http://proof.ovh.net/files/1Mb.dat",
         "https://speed.cloudflare.com/__down?bytes=5000000",
+        "https://proof.ovh.net/files/1Mb.dat",
+        "http://speedtest.tele2.net/1MB.zip",
     )
 
     private val UPLOAD_URLS = listOf(
-        "http://speed.cloudflare.com/__up",
         "https://speed.cloudflare.com/__up",
     )
 

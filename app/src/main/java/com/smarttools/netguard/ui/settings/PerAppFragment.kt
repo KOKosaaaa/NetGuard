@@ -10,6 +10,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentPerAppBinding
@@ -36,6 +37,16 @@ class PerAppFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // The RU bypass shortcut is only meaningful for users who interact
+        // with Russian banking / gov apps; on other locales it would be
+        // misleading and the strings have no native translation.
+        val lang = java.util.Locale.getDefault().language
+        binding.btnAddRuBypass.visibility = if (lang == "ru" || lang == "en") {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
 
         val settings = viewModel.settings.value
         selectedPackages.addAll(settings.perAppList)
@@ -64,6 +75,40 @@ class PerAppFragment : Fragment() {
                 s.copy(perAppList = selectedPackages.toSet())
             }
             findNavController().popBackStack()
+        }
+
+        binding.btnAddRuBypass.setOnClickListener {
+            // Strategy: a hand-maintained list of every Russian app is
+            // unmaintainable. Instead we sweep all installed non-system apps
+            // and pick everything whose packageName starts with "ru." (the
+            // de-facto convention for RU vendors) PLUS a curated com.*
+            // override list for Russian apps that publish under com./io.
+            // System apps are skipped — they often carry ru.* test stubs
+            // that the user does not actually use.
+            val curatedNonRuPrefix = resources.getStringArray(R.array.bypass_packages_ru)
+                .filter { !it.startsWith("ru.") }
+                .toSet()
+            val installedNonSystem = allApps.filter { !it.isSystem }
+            var addedCount = 0
+            for (app in installedNonSystem) {
+                val pkg = app.packageName
+                if (pkg in selectedPackages) continue
+                val isRuPrefix = pkg.startsWith("ru.") || pkg == "ru" || pkg.startsWith("ru_")
+                val isCurated = pkg in curatedNonRuPrefix
+                if (isRuPrefix || isCurated) {
+                    selectedPackages.add(pkg)
+                    addedCount++
+                }
+            }
+            // Refresh checkboxes in the visible list
+            allApps = allApps.map { it.copy(isChecked = it.packageName in selectedPackages) }
+            (binding.rvApps.adapter as? AppListAdapter)?.submitList(filterApps())
+            updateCount()
+            Toast.makeText(
+                requireContext(),
+                getString(R.string.ru_bypass_added, addedCount),
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         binding.progressLoading.visibility = View.VISIBLE

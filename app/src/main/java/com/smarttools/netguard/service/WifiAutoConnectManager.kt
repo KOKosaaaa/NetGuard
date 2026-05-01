@@ -10,6 +10,8 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.smarttools.netguard.App
@@ -23,6 +25,9 @@ class WifiAutoConnectManager(private val context: Context) {
         private const val SEPARATOR = "|"
         private const val CHANNEL_ID = "wifi_security"
         private const val EVIL_TWIN_NOTIF_ID = 9001
+
+        /** Retry schedule for probing SSID when Android gives `<unknown ssid>`. */
+        private val PROBE_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L)
 
         /** Encode SSID+BSSID into a single string for storage */
         fun encode(ssid: String, bssid: String): String = "$ssid$SEPARATOR$bssid"
@@ -50,6 +55,19 @@ class WifiAutoConnectManager(private val context: Context) {
 
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
+    /**
+     * Last (SSID, BSSID) pair we acted on. Multiple `onCapabilitiesChanged`
+     * events fire throughout a single WiFi association (validation, RSSI,
+     * link-speed updates), but our business logic only needs to run when the
+     * network identity actually changes. Resetting to null on unregister so a
+     * fresh session re-triggers.
+     */
+    @Volatile
+    private var lastHandledKey: String? = null
+
+    /** Main-thread handler used for delayed SSID re-probes. */
+    private val probeHandler = Handler(Looper.getMainLooper())
+
     fun register() {
         if (networkCallback != null) return
 
@@ -62,10 +80,14 @@ class WifiAutoConnectManager(private val context: Context) {
 
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                val (ssid, bssid) = extractWifiInfo(caps)
-                if (ssid != null) {
-                    onWifiConnected(ssid, bssid)
-                }
+                handleWifiEvent(caps)
+            }
+
+            override fun onLost(network: Network) {
+                // Clear the dedup key so that re-associating to the same WiFi
+                // after a real disconnect is treated as a fresh event.
+                lastHandledKey = null
+                probeHandler.removeCallbacksAndMessages(null)
             }
         }
 
@@ -73,12 +95,17 @@ class WifiAutoConnectManager(private val context: Context) {
             cm.registerNetworkCallback(request, callback)
             networkCallback = callback
             Log.i(TAG, "WiFi auto-connect registered")
+            // Android's registerNetworkCallback does not always replay the
+            // current state to a freshly-registered callback. Probe once so a
+            // user opening the app while already on WiFi still gets handled.
+            probeHandler.post { probeCurrentWifi() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register WiFi callback", e)
         }
     }
 
     fun unregister() {
+        probeHandler.removeCallbacksAndMessages(null)
         networkCallback?.let { cb ->
             try {
                 val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -86,7 +113,56 @@ class WifiAutoConnectManager(private val context: Context) {
             } catch (_: Exception) {}
         }
         networkCallback = null
+        lastHandledKey = null
         Log.i(TAG, "WiFi auto-connect unregistered")
+    }
+
+    /**
+     * Resolve SSID/BSSID from the given caps (plus WifiManager fallback for
+     * the Android-14 redaction case), then either dispatch to
+     * [onWifiConnected] or schedule a delayed re-probe if SSID is still
+     * unresolved. The retry avoids losing events when the first
+     * `onCapabilitiesChanged` fires before Wi-Fi finishes associating and the
+     * subsequent capability updates never arrive (weak-signal roaming).
+     */
+    private fun handleWifiEvent(caps: NetworkCapabilities) {
+        val (capsSsid, capsBssid) = extractWifiInfo(caps)
+        val ssid = capsSsid ?: wifiInfoFromManager().first
+        val bssid = capsBssid ?: wifiInfoFromManager().second
+        if (ssid != null) {
+            dispatchIfNew(ssid, bssid)
+        } else {
+            scheduleProbe(0)
+        }
+    }
+
+    private fun probeCurrentWifi() {
+        val caps = findCurrentWifiCaps()
+        val capsInfo = caps?.let { extractWifiInfo(it) }
+        val ssid = capsInfo?.first ?: wifiInfoFromManager().first
+        val bssid = capsInfo?.second ?: wifiInfoFromManager().second
+        if (ssid != null) {
+            dispatchIfNew(ssid, bssid)
+        }
+    }
+
+    private fun scheduleProbe(attempt: Int) {
+        if (attempt >= PROBE_DELAYS_MS.size) return
+        probeHandler.postDelayed({
+            val (ssid, bssid) = wifiInfoFromManager()
+            if (ssid != null) {
+                dispatchIfNew(ssid, bssid)
+            } else {
+                scheduleProbe(attempt + 1)
+            }
+        }, PROBE_DELAYS_MS[attempt])
+    }
+
+    private fun dispatchIfNew(ssid: String, bssid: String?) {
+        val key = "$ssid${SEPARATOR}${bssid ?: "?"}"
+        if (key == lastHandledKey) return
+        lastHandledKey = key
+        onWifiConnected(ssid, bssid)
     }
 
     private fun extractWifiInfo(caps: NetworkCapabilities): Pair<String?, String?> {
@@ -195,18 +271,61 @@ class WifiAutoConnectManager(private val context: Context) {
     }
 
     fun getCurrentSsid(): String? {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return null
-        val caps = cm.getNetworkCapabilities(network) ?: return null
-        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return null
-        return extractWifiInfo(caps).first
+        findCurrentWifiCaps()?.let {
+            val (ssid, _) = extractWifiInfo(it)
+            if (ssid != null) return ssid
+        }
+        return wifiInfoFromManager().first
     }
 
     fun getCurrentBssid(): String? {
+        findCurrentWifiCaps()?.let {
+            val (_, bssid) = extractWifiInfo(it)
+            if (bssid != null) return bssid
+        }
+        return wifiInfoFromManager().second
+    }
+
+    /**
+     * Scan every network the system knows about and return the capabilities
+     * of the one backed by WiFi. We explicitly do **not** use
+     * `cm.activeNetwork` here: while the NetGuard VPN is running, the active
+     * network is the TUN interface, which has no TRANSPORT_WIFI flag, so the
+     * old single-lookup path returned null and the "Add current WiFi" entry
+     * never appeared in the Trusted WiFi dialog.
+     */
+    private fun findCurrentWifiCaps(): NetworkCapabilities? {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return null
-        val caps = cm.getNetworkCapabilities(network) ?: return null
-        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return null
-        return extractWifiInfo(caps).second
+        for (network in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(network) ?: continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+                !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                caps.transportInfo != null
+            ) {
+                return caps
+            }
+        }
+        return null
+    }
+
+    /**
+     * Fallback when the redacted NetworkCapabilities from `allNetworks()` drop
+     * `transportInfo`. WifiManager.connectionInfo still works with
+     * ACCESS_FINE_LOCATION + NEARBY_WIFI_DEVICES granted, at the cost of a
+     * deprecation warning.
+     */
+    @Suppress("DEPRECATION")
+    private fun wifiInfoFromManager(): Pair<String?, String?> {
+        return try {
+            val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val info = wm.connectionInfo ?: return null to null
+            val rawSsid = info.ssid?.removeSurrounding("\"")
+            val bssid = info.bssid
+            if (rawSsid.isNullOrEmpty() || rawSsid == "<unknown ssid>" || rawSsid == "0x" ||
+                bssid == null || bssid == "02:00:00:00:00:00"
+            ) null to null else rawSsid to bssid
+        } catch (_: Exception) {
+            null to null
+        }
     }
 }

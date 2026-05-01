@@ -12,6 +12,7 @@ captures/
 # Signing
 *.jks
 *.keystore
+*.bin
 keystore.properties
 
 # APK / AAB

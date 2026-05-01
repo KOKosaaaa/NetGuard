@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Curated list of Russian banking, government, telco, transport,
+        delivery, media and marketplace apps known or suspected to
+        fingerprint VPN/proxy state via ConnectivityManager.TRANSPORT_VPN,
+        VpnTransportInfo, dumpsys vpn_management, GeoIP/ASN, etc.
+
+        Adding these to PerAppMode.BLACKLIST means the listed apps see the
+        real underlying network instead of the tunnel — their IP/GeoIP
+        stays consistent with the SIM/Wi-Fi region and they do not see a
+        VPN flag on the active network. This is the only client-side
+        mitigation available without root: the OS-level VPN flag itself
+        cannot be hidden by an app from another app.
+
+        Wrong package names are silently skipped at runtime — the UI
+        button calls getPackageInfo() per entry, so the toast count
+        reflects only apps actually installed on this device.
+    -->
+    <string-array name="bypass_packages_ru" translatable="false">
+        <!-- ===== Banks ===== -->
+        <item>ru.sberbankmobile</item>
+        <item>ru.sberbank.online</item>
+        <item>ru.sberbank.android</item>
+        <item>ru.sberbank.spasibo</item>
+        <item>ru.sberbankmobile_corp</item>
+        <item>ru.sberbank.sbbol</item>
+        <item>ru.sberinvestor</item>
+        <item>com.sberbank.investor</item>
+        <item>ru.sberbank.sberkids</item>
+        <item>ru.vtb24.mobilebanking.android</item>
+        <item>ru.vtb24.privatebank</item>
+        <item>ru.vtb.mybenefit</item>
+        <item>ru.vtb24.mobile</item>
+        <item>ru.alfabank.mobile.android</item>
+        <item>ru.alfabank.oavdo.amc</item>
+        <item>ru.alfabank.mobile.app</item>
+        <item>ru.alfabank.osago</item>
+        <item>com.idamob.tinkoff.android</item>
+        <item>ru.tinkoff.sme</item>
+        <item>ru.tinkoff.investing</item>
+        <item>com.tinkoff.invest</item>
+        <item>ru.tinkoff.business</item>
+        <item>ru.gazprombank.android.mobilebank.app</item>
+        <item>ru.gazprombank.privatebanking</item>
+        <item>ru.raiffeisennews</item>
+        <item>ru.raiffeisen.r1</item>
+        <item>ru.raiffeisen.business</item>
+        <item>ru.rosbank.android</item>
+        <item>ru.rosbank.business</item>
+        <item>ru.rshb.mbank</item>
+        <item>ru.rshb.business</item>
+        <item>ru.psbank.mobile</item>
+        <item>ru.psbank.business</item>
+        <item>com.openbank</item>
+        <item>ru.openbank.android</item>
+        <item>ru.mkb.mobile</item>
+        <item>ru.mkb.business</item>
+        <item>ru.uralsibbank.mobile.android</item>
+        <item>ru.uralsib.business</item>
+        <item>ru.akbars.mb</item>
+        <item>ru.akbars.business</item>
+        <item>ru.ftc.faktura.expressbank</item>
+        <item>ru.sovcombank.android</item>
+        <item>ru.sovcombank.halva</item>
+        <item>ru.halva.app</item>
+        <item>com.icbcmskmb</item>
+        <item>ru.bspb</item>
+        <item>ru.bspb.business</item>
+        <item>ru.unicreditbank.app</item>
+        <item>ru.unicreditbank.business</item>
+        <item>ru.tatfondbank.android</item>
+        <item>ru.zenit.android</item>
+        <item>ru.tcsbank.android</item>
+        <item>ru.qiwi.client.android</item>
+        <item>ru.qiwi.business</item>
+        <item>ru.bk.mobile</item>
+        <item>ru.investingforfree.android</item>
+        <item>ru.bcs.mobile</item>
+        <item>ru.bcs.broker</item>
+        <item>ru.finam.trader</item>
+        <item>ru.finam.investor</item>
+        <item>com.vbrr.mobile</item>
+        <item>ru.absolutbank.android</item>
+        <item>ru.homecredit.mobile</item>
+        <item>ru.bankhome.android</item>
+        <item>ru.cashberyberyozka.android</item>
+        <item>ru.svyaznoybank.mobile</item>
+        <item>ru.renessans.mobile</item>
+        <item>ru.renaissance.mobile</item>
+        <item>ru.farzoom.lentyaim</item>
+        <!-- SBP / NSPK -->
+        <item>ru.nspk.sbpay</item>
+        <item>com.nspk.sbpay</item>
+        <item>ru.mir.payment</item>
+        <item>ru.mir.app</item>
+        <item>com.rostec.mir</item>
+
+        <!-- ===== Government / Public services ===== -->
+        <item>ru.gosuslugi.app</item>
+        <item>ru.gosuslugi.mp</item>
+        <item>ru.gosuslugi.help</item>
+        <item>ru.gosuslugi.dom</item>
+        <item>ru.gosuslugi.kultura</item>
+        <item>ru.gosuslugi.work</item>
+        <item>ru.gosuslugi.school</item>
+        <item>ru.gosuslugi.passport</item>
+        <item>ru.gosuslugi.gku</item>
+        <item>ru.gosuslugi.taxi</item>
+        <item>ru.gosuslugi.auto</item>
+        <item>ru.fns.lkfl2</item>
+        <item>ru.fns.lkfl</item>
+        <item>ru.fns.npd</item>
+        <item>ru.fns.salyk</item>
+        <item>ru.fts.lkfns</item>
+        <item>ru.fssprus.mobile</item>
+        <item>ru.fssp.app</item>
+        <item>ru.csi.mossport</item>
+        <item>ru.mos.app</item>
+        <item>ru.mos.polis</item>
+        <item>ru.mos.cabinet</item>
+        <item>ru.mos.parkings</item>
+        <item>ru.mos.school</item>
+        <item>ru.mos.transport</item>
+        <item>ru.mos.tickets</item>
+        <item>ru.mos.health</item>
+        <item>ru.mos.lk</item>
+        <item>ru.gibdd.app</item>
+        <item>ru.gibdd.proverkaauto</item>
+        <item>ru.rosreestr.app</item>
+        <item>ru.cbr.cbr</item>
+        <item>ru.cbr.fz</item>
+        <item>ru.pension.app</item>
+        <item>ru.sfr.lk</item>
+        <item>ru.pfr.lk</item>
+        <item>ru.fms.app</item>
+        <item>ru.mvd.app</item>
+        <item>ru.mvd.oferta</item>
+        <item>ru.mzdrav.eokno</item>
+        <item>ru.minsvyaz.app</item>
+        <item>ru.minfin.app</item>
+        <item>ru.rosgvardiya.app</item>
+        <item>ru.rospotrebnadzor.app</item>
+        <item>ru.fas.app</item>
+        <item>ru.minobr.app</item>
+        <item>ru.minkult.app</item>
+        <item>ru.minprirody.app</item>
+        <item>ru.zags.app</item>
+        <item>ru.gosuslugi.gpd</item>
+        <item>ru.kremlin.app</item>
+        <item>ru.duma.app</item>
+        <item>ru.sovbez.app</item>
+        <item>ru.cik.app</item>
+        <item>ru.election.app</item>
+        <item>ru.rabotaru.app</item>
+        <item>ru.fcs.app</item>
+        <item>ru.rostel</item>
+
+        <!-- ===== Russian state messengers / mail ===== -->
+        <item>ru.mts.gosmail</item>
+        <item>ru.gosmail.app</item>
+        <item>ru.mailru.gov</item>
+        <item>ru.kontur.app</item>
+        <item>ru.maxapp.android</item>
+        <item>ru.vk.id</item>
+
+        <!-- ===== Telco ===== -->
+        <item>ru.mts.mymts</item>
+        <item>ru.mts.app</item>
+        <item>ru.mts.money</item>
+        <item>ru.mts.music</item>
+        <item>ru.mts.cashback</item>
+        <item>ru.mts.fitness</item>
+        <item>ru.mts.live</item>
+        <item>ru.mts.protector</item>
+        <item>ru.mts.travel</item>
+        <item>ru.megafon.mlk</item>
+        <item>ru.megafon.tv</item>
+        <item>ru.megafon.tlk</item>
+        <item>com.beeline.android</item>
+        <item>ru.beeline.tarif</item>
+        <item>ru.beeline.tv</item>
+        <item>ru.tele2.mytele2</item>
+        <item>ru.tele2.mtele2</item>
+        <item>ru.yota</item>
+        <item>ru.yota.android</item>
+        <item>ru.rt.video</item>
+        <item>ru.rostelecom.zabota</item>
+        <item>ru.rostelecom.lk</item>
+        <item>ru.rostelecom.cinema</item>
+
+        <!-- ===== Marketplaces / payment ===== -->
+        <item>ru.yoomoney.app</item>
+        <item>ru.yandex.money</item>
+        <item>com.yoo.money</item>
+        <item>com.ozon.app.android</item>
+        <item>ru.ozon.seller</item>
+        <item>com.wildberries.ru</item>
+        <item>com.wildberries.seller</item>
+        <item>ru.beru.android</item>
+        <item>com.yandex.market</item>
+        <item>ru.yandex.market</item>
+        <item>com.aliexpress.aer</item>
+        <item>ru.megamarket.app</item>
+        <item>ru.sbermegamarket</item>
+        <item>com.sbermarket</item>
+        <item>ru.lamoda.app</item>
+        <item>ru.detmir.app</item>
+        <item>ru.detmir.dmbonus</item>
+        <item>ru.kazanexpress.app</item>
+        <item>ru.kuper.app</item>
+
+        <!-- ===== Transport ===== -->
+        <item>ru.aeroflot.app</item>
+        <item>ru.aeroflot.android</item>
+        <item>ru.s7.app</item>
+        <item>com.s7.android</item>
+        <item>ru.utair.app</item>
+        <item>ru.pobeda.app</item>
+        <item>ru.rossiya.app</item>
+        <item>ru.urals.app</item>
+        <item>com.uralairlines</item>
+        <item>ru.rzd.pass</item>
+        <item>ru.rzd.business</item>
+        <item>ru.rzd.cargo</item>
+        <item>ru.tutu.app</item>
+        <item>com.tutu.android</item>
+        <item>ru.yandex.taxi</item>
+        <item>ru.yandex.taxi.driver</item>
+        <item>ru.yandex.uber</item>
+        <item>ru.maxim.taxi</item>
+        <item>com.taxsee.taxsee</item>
+        <item>ru.citymobil.app</item>
+        <item>ru.citydrive.app</item>
+        <item>ru.delimobil.taxi</item>
+        <item>com.belkacar.app</item>
+        <item>ru.belka.car</item>
+        <item>ru.yandex.drive</item>
+        <item>ru.parkapps.parkomatic</item>
+        <item>ru.mosparkings</item>
+
+        <!-- ===== Streaming / media (RU services) ===== -->
+        <item>ru.kinopoisk</item>
+        <item>ru.kinopoisk.app</item>
+        <item>ru.yandex.kinopoisk</item>
+        <item>com.ivi.client</item>
+        <item>ru.ivi.client</item>
+        <item>ru.kion.mobile</item>
+        <item>ru.kion</item>
+        <item>ru.okko.tv</item>
+        <item>ru.wink.mobile</item>
+        <item>ru.rt.video.app.tvclient</item>
+        <item>ru.start.app</item>
+        <item>com.more.tv</item>
+        <item>ru.moretv.android</item>
+        <item>ru.amediateka.android</item>
+        <item>com.zvuk.app</item>
+        <item>com.zvuk.mobile</item>
+        <item>ru.yandex.music</item>
+        <item>ru.yandex.afisha</item>
+        <item>ru.rambler.player</item>
+        <item>ru.smotrim.app</item>
+        <item>ru.tnt.online</item>
+        <item>ru.firstchannel.app</item>
+        <item>ru.ntv.app</item>
+        <item>ru.tvrain.app</item>
+        <item>ru.matchtv.app</item>
+        <item>ru.gpm.android</item>
+
+        <!-- ===== RU social ===== -->
+        <item>ru.ok.android</item>
+        <item>com.vkontakte.android</item>
+        <item>com.vk.id</item>
+        <item>ru.vk.app</item>
+        <item>com.vk.knet</item>
+        <item>ru.dzen.app</item>
+        <item>com.yandex.zen</item>
+        <item>ru.rutube.app</item>
+        <item>com.rutube.app</item>
+        <item>ru.mailru.cloud</item>
+        <item>ru.mail.mailapp</item>
+        <item>ru.mail.cloud</item>
+        <item>ru.yandex.mail</item>
+        <item>ru.yandex.disk</item>
+
+        <!-- ===== Food / delivery / grocery ===== -->
+        <item>ru.deliveryclub</item>
+        <item>ru.yandex.eda</item>
+        <item>ru.foodfox.client</item>
+        <item>ru.foodfox.courier</item>
+        <item>ru.smartfood.app</item>
+        <item>ru.yandex.lavka</item>
+        <item>ru.x5.5ka</item>
+        <item>ru.x5.perekrestok</item>
+        <item>ru.x5.chizhik</item>
+        <item>ru.x5.club</item>
+        <item>ru.lenta.app</item>
+        <item>ru.magnit.app</item>
+        <item>ru.magnit.client</item>
+        <item>com.dixy.dixy</item>
+        <item>ru.dixy.app</item>
+        <item>ru.vkusvill.app</item>
+        <item>ru.vkusvill.client</item>
+        <item>ru.azbukavkusa.android</item>
+        <item>ru.metro.cc</item>
+        <item>ru.auchan.app</item>
+        <item>ru.bringo.client</item>
+        <item>ru.utkonos</item>
+        <item>ru.dodo.app</item>
+        <item>ru.kfc.app</item>
+        <item>ru.burgerking</item>
+        <item>com.tasty.coffee</item>
+
+        <!-- ===== Health / Pharma ===== -->
+        <item>ru.medsi.app</item>
+        <item>ru.invitro.app</item>
+        <item>ru.helix.app</item>
+        <item>ru.gemotest.app</item>
+        <item>ru.docdoc.app</item>
+        <item>com.docdoc.android</item>
+        <item>ru.sberhealth.app</item>
+        <item>ru.bestdoctor.app</item>
+        <item>ru.smartmed.app</item>
+        <item>ru.zdravcity.android</item>
+        <item>ru.apteka.ru</item>
+        <item>ru.36.6.android</item>
+        <item>ru.gorzdrav.spb</item>
+
+        <!-- ===== Insurance ===== -->
+        <item>ru.alfa.osago</item>
+        <item>ru.rosgosstrah.android</item>
+        <item>ru.ingos.app</item>
+        <item>ru.ingosstrah.app</item>
+        <item>ru.sberinsur.android</item>
+        <item>ru.vsk.app</item>
+        <item>ru.reso.android</item>
+        <item>ru.sogaz.app</item>
+        <item>ru.renins.android</item>
+
+        <!-- ===== Education / dnevnik ===== -->
+        <item>ru.electronicbook.android</item>
+        <item>ru.diary.school</item>
+        <item>ru.school.dnevnik</item>
+        <item>ru.dnevnik.client</item>
+        <item>ru.mirobr.app</item>
+        <item>ru.litres.android</item>
+
+        <!-- ===== Utility / housing ===== -->
+        <item>ru.cs.mosenergo.android</item>
+        <item>ru.gku.app</item>
+        <item>ru.mosgaz.app</item>
+        <item>ru.mosvodokanal.app</item>
+        <item>ru.mosgortrans</item>
+        <item>ru.mosenergosbyt</item>
+        <item>ru.energosbyt.android</item>
+        <item>ru.gkh.app</item>
+
+        <!-- ===== Real estate ===== -->
+        <item>ru.cian.client</item>
+        <item>ru.avito.android</item>
+        <item>ru.youla.android</item>
+        <item>ru.domclick.android</item>
+        <item>ru.yandex.realty</item>
+
+        <!-- ===== Crypto / brokers RU ===== -->
+        <item>ru.qiwi.investments</item>
+        <item>ru.modulbank</item>
+        <item>ru.tochka.app</item>
+        <item>ru.bluetrade.app</item>
+        <item>ru.atonline.android</item>
+
+        <!-- ===== Misc Russian utility ===== -->
+        <item>ru.yandex.searchplugin</item>
+        <item>com.yandex.browser</item>
+        <item>com.yandex.alice</item>
+        <item>ru.yandex.yandexnavi</item>
+        <item>ru.yandex.yandexmaps</item>
+        <item>ru.yandex.weatherplugin</item>
+        <item>ru.yandex.translate</item>
+        <item>ru.yandex.metro</item>
+        <item>ru.yandex.go</item>
+        <item>ru.yandex.plus</item>
+        <item>ru.yandex.parking</item>
+        <item>ru.yandex.taxi.eats</item>
+        <item>ru.yandex.scooters</item>
+        <item>ru.yandex.tv</item>
+        <item>ru.kassir.android</item>
+        <item>ru.afisha.app</item>
+        <item>ru.megafon.tv</item>
+        <item>ru.smartway.app</item>
+        <item>ru.tutu.live</item>
+        <item>ru.ntv.live</item>
+    </string-array>
+</resources>

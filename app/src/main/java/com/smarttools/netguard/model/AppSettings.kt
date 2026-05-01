@@ -25,7 +25,19 @@ data class AppSettings(
     val trafficStatsMode: TrafficStatsMode = TrafficStatsMode.SIMPLE,
     val triggerEnabled: Boolean = false,
     val triggerApps: Set<String> = emptySet(),
-    val triggerAutoStop: Boolean = false
+    val triggerAutoStop: Boolean = false,
+    /**
+     * uTLS fingerprint override. When `random`, XrayConfigGenerator picks a
+     * random one from the supported list per connection so that DPI systems
+     * cannot correlate sessions by ClientHello shape.
+     */
+    val tlsFingerprintMode: TlsFingerprintMode = TlsFingerprintMode.CHROME,
+    /**
+     * If true, every PACKAGE_ADDED broadcast for a non-system package whose
+     * packageName starts with "ru." appends it to perAppList automatically,
+     * matching the one-shot "Exclude all Russian apps" button.
+     */
+    val autoBypassRuPackages: Boolean = false
 )
 
 enum class RoutingMode {
@@ -52,4 +64,13 @@ enum class TrafficStatsMode {
     CHART,
     SIMPLE,
     HIDDEN
+}
+
+enum class TlsFingerprintMode {
+    CHROME,
+    FIREFOX,
+    SAFARI,
+    IOS,
+    EDGE,
+    RANDOM
 }

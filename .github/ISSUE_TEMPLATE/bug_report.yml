@@ -1,0 +1,111 @@
+name: 🐞 Bug report / Сообщить об ошибке
+description: Report a reproducible bug. / Сообщите о воспроизводимой ошибке.
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report.
+        Please fill in as much of the form as you can — fields marked with `*` are required.
+
+        Спасибо, что нашли время сообщить об ошибке. Заполните как можно больше полей — обязательные помечены `*`.
+
+  - type: checkboxes
+    id: prereq
+    attributes:
+      label: Before you submit / Перед отправкой
+      options:
+        - label: I searched existing issues and did not find a duplicate. / Я искал в существующих issues и не нашёл дубликата.
+          required: true
+        - label: I am running the latest release from [GitHub Releases](https://github.com/KOKosaaaa/NetGuard/releases). / У меня установлен последний релиз.
+          required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: NetGuard version *
+      description: Found in *Settings → About* (e.g. v1.1.6). / Версия NetGuard.
+      placeholder: v1.1.6
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: Android version & device *
+      description: e.g. "Android 14 / Pixel 7" or "MIUI 14, Android 13 / Xiaomi Redmi Note 12". / Версия Android и модель устройства.
+      placeholder: Android 14 / Pixel 7
+    validations:
+      required: true
+
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol used / Используемый протокол
+      options:
+        - VLESS
+        - VLESS + REALITY
+        - VMess
+        - Trojan
+        - Shadowsocks
+        - Hysteria2
+        - Multiple / mixed
+        - Not relevant
+    validations:
+      required: false
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened? *
+      description: Describe the bug clearly. / Опишите ошибку.
+      placeholder: |
+        - The app crashes when I open Settings → Per-app routing.
+        - Tunnel disconnects every 2 minutes on LTE.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce *
+      description: Numbered steps so we can hit the same code path. / Пошаговая инструкция воспроизведения.
+      placeholder: |
+        1. Open NetGuard
+        2. Tap "Connect"
+        3. Switch from WiFi to LTE
+        4. Observe disconnection within ~5 s
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect? / Что должно было произойти?
+      placeholder: Tunnel stays alive across the network switch.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Логи
+      description: |
+        Open *Settings → Logs*, copy relevant lines and paste below.
+        Sensitive data (UUIDs, passwords, Bearer tokens) is auto-redacted, but please double-check before posting.
+        Откройте *Настройки → Логи*, скопируйте нужные строки.
+      render: shell
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Does this work on a previous version? / Работает ли в предыдущей версии?
+      options:
+        - "Yes — broken in latest, worked in previous"
+        - "No — never worked for me"
+        - "Don't know"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else? / Что-нибудь ещё?
+      description: Screenshots, related issues, hardware details, etc.

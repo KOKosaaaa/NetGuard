@@ -49,7 +49,12 @@ data class ServerProfile(
     // Security
     val security: SecurityType = SecurityType.NONE,
     val sni: String = "",
-    val fingerprint: String = "chrome",
+    // Empty means "follow the global TlsFingerprintMode setting". A non-empty
+    // value (set by ProfileParser when the URL explicitly carries `fp=...`)
+    // is treated as a per-profile override and wins over the global setting.
+    // Previously this defaulted to "chrome", which made global TLS fingerprint
+    // rotation a no-op for any profile that did not explicitly override it.
+    val fingerprint: String = "",
     val alpn: String = "",
     val allowInsecure: Boolean = false,
 

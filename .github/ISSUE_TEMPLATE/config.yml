@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability / Уязвимость безопасности
+    url: https://github.com/KOKosaaaa/NetGuard/security/advisories/new
+    about: |
+      Please do NOT open a public issue for security bugs. Use a private security advisory instead.
+      Не сообщайте об уязвимостях через публичные issues — используйте private security advisory.
+  - name: 📜 Read SECURITY.md
+    url: https://github.com/KOKosaaaa/NetGuard/blob/main/SECURITY.md
+    about: Responsible disclosure policy. / Политика ответственного раскрытия.

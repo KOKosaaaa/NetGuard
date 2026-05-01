@@ -7,7 +7,10 @@ import com.smarttools.netguard.model.*
 import com.smarttools.netguard.repository.ProfileRepository
 import com.smarttools.netguard.repository.StatsRepository
 import com.smarttools.netguard.repository.SubscriptionRepository
+import android.content.Intent
+import android.content.IntentFilter
 import com.smarttools.netguard.service.NotificationHelper
+import com.smarttools.netguard.service.PackageInstallReceiver
 import com.smarttools.netguard.service.WifiAutoConnectManager
 import com.smarttools.netguard.worker.SubscriptionUpdateWorker
 import androidx.work.*
@@ -65,6 +68,23 @@ class App : Application() {
                 com.smarttools.netguard.service.TunnelVpnService.startQuarantine(this)
             }
         }
+
+        // Dynamic PACKAGE_ADDED listener for the "auto-bypass new ru.* apps"
+        // feature. We register unconditionally and let the receiver itself
+        // re-check the setting at delivery time — settings can be toggled
+        // while the process is alive and we want the change to take effect
+        // without a process restart.
+        val pkgFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addDataScheme("package")
+        }
+        val receiver = PackageInstallReceiver()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, pkgFilter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(receiver, pkgFilter)
+        }
     }
 
     fun getPreferences(): SharedPreferences {
@@ -106,7 +126,11 @@ class App : Application() {
             ),
             triggerEnabled = prefs.getBoolean("trigger_enabled", false),
             triggerApps = prefs.getStringSet("trigger_apps", emptySet()) ?: emptySet(),
-            triggerAutoStop = prefs.getBoolean("trigger_auto_stop", false)
+            triggerAutoStop = prefs.getBoolean("trigger_auto_stop", false),
+            tlsFingerprintMode = safeEnum(
+                prefs.getString("tls_fingerprint_mode", null), TlsFingerprintMode.CHROME
+            ),
+            autoBypassRuPackages = prefs.getBoolean("auto_bypass_ru_packages", false)
         )
     }
 
@@ -176,6 +200,8 @@ class App : Application() {
             putBoolean("trigger_enabled", settings.triggerEnabled)
             putStringSet("trigger_apps", settings.triggerApps)
             putBoolean("trigger_auto_stop", settings.triggerAutoStop)
+            putString("tls_fingerprint_mode", settings.tlsFingerprintMode.name)
+            putBoolean("auto_bypass_ru_packages", settings.autoBypassRuPackages)
             apply()
         }
     }
