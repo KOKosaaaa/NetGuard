@@ -57,20 +57,13 @@ class SubscriptionRepository(
     }
 
     /**
-     * Pin the subscription host we control (example.test). Three pins:
-     * leaf (rotates ~90d), Google Trust Services WE1 intermediate, GTS R4 root.
-     * Any of the three matching in the chain validates the connection, so a
-     * routine leaf rotation does not brick the app. If GTS R4 is ever rotated
-     * out, bundle a new pin in a release before the old one expires.
-     *
-     * Pins for user-supplied hosts are NOT added — we do not control those
-     * CAs and the user has opted into that trust model by adding the URL.
+     * Subscription URLs are user-supplied — we don't control their CAs, so
+     * we don't pin them. Validation falls back to the Android system
+     * truststore. If you want to pin a self-hosted endpoint you control,
+     * extend this with `.add("your.host", "sha256/…")` (sha256 of the
+     * Subject Public Key Info in DER, base64-encoded).
      */
-    private val certificatePinner = CertificatePinner.Builder()
-        .add("example.test", "sha256/REDACTED")
-        .add("example.test", "sha256/REDACTED")
-        .add("example.test", "sha256/REDACTED")
-        .build()
+    private val certificatePinner = CertificatePinner.Builder().build()
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
