@@ -619,11 +619,13 @@ class TunnelVpnService : VpnService() {
         xrayProcess = pb.start()
         Log.i(TAG, "Xray process started, pid=${getPid(xrayProcess!!)}")
 
-        // Log xray stdout/stderr in background
+        // Log xray stdout/stderr in background. Redact BEFORE Log.d so server
+        // addresses / UUIDs / passwords don't end up in raw logcat.
         serviceScope?.launch(Dispatchers.IO) {
             try {
                 xrayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                    Log.d("XrayCore", line)
+                    val safe = LogBuffer.redactPublic(line)
+                    Log.d("XrayCore", safe)
                     LogBuffer.add(LogBuffer.parseXrayLevel(line), line)
                 }
             } catch (e: Exception) {
@@ -665,11 +667,12 @@ class TunnelVpnService : VpnService() {
         tun2socksProcess = pb.start()
         Log.i(TAG, "tun2socks started, sock=$sockPath, socks=127.0.0.1:$port, auth=yes")
 
-        // Log output in background
+        // Log output in background. Same redaction story as xray.
         serviceScope?.launch(Dispatchers.IO) {
             try {
                 tun2socksProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                    Log.d("tun2socks", line)
+                    val safe = LogBuffer.redactPublic(line)
+                    Log.d("tun2socks", safe)
                     LogBuffer.add(LogBuffer.LogLevel.INFO, "[tun2socks] $line")
                 }
             } catch (e: Exception) {

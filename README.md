@@ -136,6 +136,34 @@ If we missed your project here, please open an issue — credit is the one thing
 
 ## Release notes
 
+### v1.1.9 (2026-05-02)
+
+Sprint-1 + Sprint-2 of the post-v1.1.8 code-review fix list. Closes 6 P0 (critical) and 9 P1 (high) findings around SSRF guards, network-level fingerprint, log redaction, and confirmation flows.
+
+**P0 — SSRF / leak surface**
+- `parseVmess` now runs the same `AddressValidator.requirePublicAddress` check as the other URI parsers, plus `1..65535` port range. The base64-encoded JSON could previously slip in `127.0.0.1` / private / CGNAT addresses that the rest of the app trusted.
+- `ProfileEditViewModel.isValidAddress` delegates to `AddressValidator.isPrivateOrReserved` and validates IPv6 via `InetAddress.getByName("[…]")`. Manual save of `127.0.0.1`, `192.168.x`, `100.64.x`, hex/octal IPv4 or IPv4-mapped IPv6 is now rejected.
+- `ServerPreflight.check` re-validates the resolved IP after `InetAddress.getByName`. Closes a DNS-rebinding window where a hostname could resolve to a private IP between profile parsing and TCP probe.
+- `MainViewModel.autoSelectAndConnect` no longer fires N parallel TCP SYNs from the user's real IP. Uses cached `lastPingMs` if any profile has a fresh value; otherwise probes only 3 random candidates sequentially with an early stop on `<200ms`. Eliminates the "burst of SYNs to scattered cloud IPs" fingerprint that ISP/corp DPI uses to flag VPN clients in the auto-select phase.
+- xray and tun2socks output is now run through `LogBuffer.redactPublic` *before* `Log.d`, not just inside the in-app Log viewer. ProGuard now strips `Log.d` / `Log.v` from release builds entirely.
+- QR scan no longer imports profiles or subscriptions silently. Mirrors `MainActivity.handleDeepLink`'s confirmation dialog: VPN URIs go through `ProfileParser.parseSingleUri` + a `MaterialAlertDialog`; HTTPS subscriptions show a confirmation with the host preview; HTTP and unrecognised QR content are rejected with a Toast.
+
+**P1 — high-priority hardening**
+- `LogBuffer.redact` rebuilt: covers `password`/`passwd`/`pwd`/`pass`/`secret`/`api_key`/`token`/`bearer`/`authorization` (case-insensitive, both `=` and `:`, optional quotes), JSON form `"key":"value"`, Reality `pbk`/`sid` long base64, Shadowsocks URL base64 between `://` and `@`, hostname/IP in network-error lines (`dial`/`connect to`/`dns`/`resolve`). Quick-check keywords removed (the `-` keyword matched almost every line).
+- `LogBuffer` switched from `ArrayList.removeAt(0)` to `ArrayDeque.removeFirst()` (O(1) vs O(n)). The "throttle" flag was a no-op; replaced with a real CONFLATED `Channel` debounced at 120ms for `StateFlow` updates.
+- `SubscriptionRepository.validateUrl` is now public, called *before* DB insert in `SubscriptionViewModel.addSubscription` and `SettingsViewModel.importConfig`. Junk subscription URLs no longer persist and are not retried by the periodic `SubscriptionUpdateWorker`. Added 256-char limit to subscription names (mirrors `ProfileParser.MAX_NAME_LENGTH`).
+- `ProfileEditViewModel.testConnection` refuses to TCP-ping when the tunnel is down. When connected, performs a SOCKS5 CONNECT through the local authenticated bridge and times the handshake. No more direct probe from the user's real IP.
+- `HomeFragment` skips `GeoLookup.fetchUserLocation()` when the tunnel is down — the `ipwho.is` request previously went out from the user's real IP on every Home open, and once a week even with a warm cache.
+- Subscription list masks the URL: shown as `host/…/abcd` (last 4 chars of path). The full token-bearing URL is no longer rendered into a `RecyclerView` where any screenshot leaks it.
+- `SettingsFragment.isValidDns` now goes through `AddressValidator.isPrivateOrReserved`, covering CGNAT, IPv6, hex/octal IPv4, IPv4-mapped IPv6 — all of which the previous regex missed.
+- `SecuritySelfTest` adds an "Own SOCKS5 auth" check that connects to our own ephemeral SOCKS port and asserts that the no-auth handshake is rejected. Catches future regressions in `XrayConfigGenerator.buildInbounds` automatically.
+- `ServiceTester` returns uniform error results when the tunnel is down instead of testing youtube.com / openai.com / instagram.com / discord.com from the user's real IP. `buildClient()` now returns `null` if credentials aren't ready — there's no direct-connection fallback path left.
+- All interactive elements in the onboarding wizard (Back / Next / Grant VPN / Grant Usage Stats / Paste / Import / Skip) carry `android:filterTouchesWhenObscured="true"`. Onboarding is the highest-stakes UI flow (VPN permission, mode selection, first profile) and was the only place README's tapjacking-protection claim didn't apply.
+
+**Internals**
+- New strings: `import_subscription_confirm` (en + ru). Other locales fall back to English via Android's locale resolution.
+- `versionCode` 33, `versionName` "1.1.9".
+
 ### v1.1.8 (2026-05-02)
 
 **First-launch onboarding wizard** — the app now opens with a 7-step setup flow on first install: language → welcome (with feature cards) → routing-mode picker → VPN permission → Usage Stats permission (only when Trigger mode is picked) → first-server import → done. State is persisted in `SharedPreferences` (`onboarding_done`), so the wizard is shown exactly once. Subsequent launches go straight to the main UI. Profile import accepts `vless://` / `vmess://` / `trojan://` / `ss://` / `hy2://` links via paste-from-clipboard or manual paste, with an explicit "Add later" skip button if the user has no profile yet. The bottom progress bar uses Material 3 `LinearProgressIndicator` with `trackCornerRadius`, animated via `ObjectAnimator` between steps; transitions use a slide+fade choreography (180ms out, 220ms in).

@@ -63,8 +63,12 @@ class HomeFragment : Fragment() {
             binding.connectionMap.visibility = View.VISIBLE
             binding.connectionMap.setMapImage(R.drawable.world_map)
             binding.connectionMap.setLocations(GeoLookup.getUserLocation(), null)
-            // Fetch precise user location via IP in background
+            // Fetch precise user location via IP in background — only when the
+            // tunnel is up. ipwho.is otherwise sees the user's real IP, which
+            // is exactly the leak the rest of the app is trying to prevent.
             viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
+                if (state !is com.smarttools.netguard.model.ConnectionState.Connected) return@launch
                 GeoLookup.fetchUserLocation()?.let { loc ->
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                         if (_binding != null) {

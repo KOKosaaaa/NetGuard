@@ -132,6 +132,15 @@ object ProfileParser {
 
         val host = json.get("add")?.asString ?: ""
         val port = json.get("port")?.asString?.toIntOrNull() ?: 443
+        // Same SSRF guard as parseHostPort: VMess JSON otherwise lets a
+        // malicious subscription provider hand us 127.0.0.1 / private / CGNAT
+        // and have xray probe a local service on connect.
+        if (host.isEmpty()) throw IllegalArgumentException("Empty host in VMess URI")
+        if (port !in 1..65535) throw IllegalArgumentException("Invalid port in VMess URI: $port")
+        if (host.equals("localhost", ignoreCase = true)) {
+            throw IllegalArgumentException("Private/loopback address not allowed: $host")
+        }
+        AddressValidator.requirePublicAddress(host)
         val rawName = json.get("ps")?.asString ?: ""
         val name = safeName(rawName, "$host:$port")
 

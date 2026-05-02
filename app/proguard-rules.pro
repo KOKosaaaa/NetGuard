@@ -31,3 +31,11 @@
 
 # ML Kit
 -keep class com.google.mlkit.** { *; }
+
+# Strip Log.d / Log.v in release. Defence-in-depth: even if a future change
+# logs a server address or UUID directly with Log.d, R8 removes the call so
+# nothing reaches `adb logcat`. Log.i / Log.w / Log.e remain.
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}

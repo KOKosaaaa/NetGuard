@@ -24,18 +24,34 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
 
     fun addSubscription(name: String, url: String, autoUpdateHours: Int = 0) {
         viewModelScope.launch {
-            if (url.isBlank()) {
+            val trimmedUrl = url.trim()
+            if (trimmedUrl.isBlank()) {
                 _message.emit("URL is empty")
                 return@launch
             }
+            // Validate before insert — otherwise a junk subscription persists
+            // and WorkManager keeps retrying it every 24h.
+            try {
+                subRepo.validateUrl(trimmedUrl)
+            } catch (e: Exception) {
+                _message.emit("Invalid URL: ${e.message}")
+                return@launch
+            }
+            val safeName = name.ifBlank { "Subscription" }.take(MAX_SUB_NAME_LENGTH)
             val sub = Subscription(
-                name = name.ifBlank { "Subscription" },
-                url = url.trim(),
+                name = safeName,
+                url = trimmedUrl,
                 autoUpdateHours = autoUpdateHours
             )
             val id = subRepo.insert(sub)
             updateSubscription(sub.copy(id = id))
         }
+    }
+
+    private companion object {
+        // Mirrors ProfileParser.MAX_NAME_LENGTH so a malicious paste with a
+        // multi-megabyte subscription name can't freeze the RecyclerView.
+        const val MAX_SUB_NAME_LENGTH = 256
     }
 
     fun updateSubscription(sub: Subscription) {

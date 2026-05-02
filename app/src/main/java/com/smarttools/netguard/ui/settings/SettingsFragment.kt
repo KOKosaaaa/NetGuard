@@ -266,26 +266,26 @@ class SettingsFragment : Fragment() {
     }
 
     private fun isValidDns(dns: String): Boolean {
-        // IPv4 address
+        if (dns.isBlank() || dns.length > 253) return false
+        if (dns.equals("localhost", ignoreCase = true)) return false
+        // Same SSRF guard as ProfileParser / ProfileEditViewModel — covers
+        // CGNAT, IPv6, hex/octal IPv4 and IPv4-mapped IPv6 which the previous
+        // hand-rolled regex missed.
+        if (com.smarttools.netguard.util.AddressValidator.isPrivateOrReserved(dns)) return false
+
         val ipv4 = Regex("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$")
         if (ipv4.matches(dns)) {
-            val parts = dns.split(".")
-            if (parts.any { (it.toIntOrNull() ?: -1) !in 0..255 }) return false
-            // Block private/loopback ranges
-            if (dns.startsWith("127.") || dns.startsWith("10.") ||
-                dns.startsWith("192.168.") || dns.startsWith("169.254.") ||
-                dns.startsWith("0.") || dns == "255.255.255.255"
-            ) return false
-            if (dns.startsWith("172.")) {
-                val second = parts[1].toIntOrNull() ?: return false
-                if (second in 16..31) return false
-            }
-            return true
+            return dns.split(".").all { (it.toIntOrNull() ?: -1) in 0..255 }
         }
-        if (dns == "localhost") return false
-        // Domain name (for DoH like 1dot1dot1dot1.cloudflare-dns.com)
+        if (dns.contains(":")) {
+            return try {
+                java.net.InetAddress.getByName("[$dns]")
+                true
+            } catch (_: Exception) { false }
+        }
+        // Domain (for DoH like 1dot1dot1dot1.cloudflare-dns.com)
         val domain = Regex("^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$")
-        return domain.matches(dns) && dns.length <= 253
+        return domain.matches(dns)
     }
 
     private fun setupLanguage() {

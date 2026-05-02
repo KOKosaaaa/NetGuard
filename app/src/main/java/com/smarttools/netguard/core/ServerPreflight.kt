@@ -2,6 +2,7 @@ package com.smarttools.netguard.core
 
 import android.util.Log
 import com.smarttools.netguard.model.ServerProfile
+import com.smarttools.netguard.util.AddressValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.InetAddress
@@ -48,6 +49,15 @@ object ServerPreflight {
                 InetAddress.getByName(address)
             } catch (e: Exception) {
                 return@withContext Result.Dead("DNS: ${e.message ?: "unresolvable"}")
+            }
+
+            // DNS-rebinding guard: ProfileParser only validates the textual
+            // literal, so a hostname that resolves to a private/loopback
+            // address slips through. Re-check the resolved IP before we touch
+            // the wire — preflight is the last gate before TCP-SYN goes out
+            // with the user's real IP, untunneled.
+            if (AddressValidator.isPrivateOrReserved(resolved)) {
+                return@withContext Result.Dead("Resolved to private/reserved address")
             }
 
             if (isUdpOnly(profile)) {

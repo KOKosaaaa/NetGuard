@@ -60,6 +60,7 @@ object SecuritySelfTest {
         val results = listOf(
             async { testSocksPortExposed() },
             async { testHttpPortExposed() },
+            async { testOwnSocksRequiresAuth() },
             async { testXrayApiExposed() },
             async { testClashApiExposed() },
             async { testKnownPortsScan() },
@@ -70,6 +71,65 @@ object SecuritySelfTest {
             async { testNeighboringVpn(context) },
         )
         results.awaitAll()
+    }
+
+    /**
+     * Verify our own ephemeral SOCKS5 inbound rejects no-auth handshakes.
+     * If a future regression in [com.smarttools.netguard.core.XrayConfigGenerator.buildInbounds]
+     * accidentally drops the userpass requirement, the rest of the security
+     * surface (no-leak SOCKS5 claim) silently breaks. Catch it here.
+     */
+    private suspend fun testOwnSocksRequiresAuth(): TestResult = withContext(Dispatchers.IO) {
+        val ourPort = com.smarttools.netguard.core.CredentialManager.getPort()
+            ?: return@withContext TestResult(
+                "Own SOCKS5 auth", true, warning = true,
+                details = "Tunnel not active, cannot test"
+            )
+        try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress("127.0.0.1", ourPort), 500)
+                // greeting with only NO_AUTH (0x00)
+                socket.getOutputStream().apply {
+                    write(byteArrayOf(0x05, 0x01, 0x00))
+                    flush()
+                }
+                val response = ByteArray(2)
+                val read = socket.getInputStream().read(response)
+                if (read != 2) {
+                    return@withContext TestResult(
+                        "Own SOCKS5 auth", true,
+                        details = "Server closed connection on no-auth — good"
+                    )
+                }
+                when {
+                    response[0] != 0x05.toByte() -> TestResult(
+                        "Own SOCKS5 auth", true, warning = true,
+                        details = "Unexpected SOCKS version: ${response[0]}"
+                    )
+                    response[1] == 0x00.toByte() -> TestResult(
+                        "Own SOCKS5 auth", false,
+                        details = "CRITICAL: own SOCKS5 accepts NO AUTH — auth chain is broken!"
+                    )
+                    response[1] == 0x02.toByte() -> TestResult(
+                        "Own SOCKS5 auth", true,
+                        details = "Own SOCKS5 correctly requires user/pass auth"
+                    )
+                    response[1] == 0xff.toByte() -> TestResult(
+                        "Own SOCKS5 auth", true,
+                        details = "Own SOCKS5 rejects no-auth (NO ACCEPTABLE METHODS)"
+                    )
+                    else -> TestResult(
+                        "Own SOCKS5 auth", true, warning = true,
+                        details = "Own SOCKS5 returned unexpected method: 0x${"%02x".format(response[1])}"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            TestResult(
+                "Own SOCKS5 auth", true, warning = true,
+                details = "Could not test own SOCKS: ${e.message}"
+            )
+        }
     }
 
     // 10. Neighboring VPN clients that may be vulnerable to the April 2026

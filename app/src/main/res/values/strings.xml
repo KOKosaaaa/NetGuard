@@ -205,6 +205,7 @@
     <!-- Deep link confirmation -->
     <string name="import_profile_question">Import profile?</string>
     <string name="import_profile_confirm">Add server profile from external source?\n\n%1$s</string>
+    <string name="import_subscription_confirm">Add this subscription?\n\n%1$s</string>
 
     <!-- Export warning -->
     <string name="export_warning">Config contains server credentials. Clipboard is accessible to other apps.</string>

@@ -19,10 +19,12 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.smarttools.netguard.R
+import com.smarttools.netguard.core.ProfileParser
 import com.smarttools.netguard.databinding.FragmentQrScanBinding
 import com.smarttools.netguard.util.QRScanner
 import com.smarttools.netguard.viewmodel.ProfileListViewModel
@@ -166,23 +168,86 @@ class QrScanFragment : Fragment() {
 
     private fun handleScannedValue(value: String) {
         activity?.runOnUiThread {
+            // Same confirmation gate as MainActivity.handleDeepLink — a QR
+            // poster in a public space is a textbook social-engineering vector
+            // for adding a malicious profile / subscription. Never import
+            // silently.
             when {
-                isVpnUri(value) -> {
-                    profileViewModel.importFromText(value)
-                    Toast.makeText(requireContext(), R.string.qr_imported, Toast.LENGTH_SHORT).show()
-                }
-                value.startsWith("http://") || value.startsWith("https://") -> {
-                    subscriptionViewModel.addSubscription("QR Subscription", value, 0)
-                    Toast.makeText(requireContext(), R.string.subscription_added_qr, Toast.LENGTH_SHORT).show()
+                isVpnUri(value) -> showProfileConfirmation(value)
+                value.startsWith("https://", ignoreCase = true) ->
+                    showSubscriptionConfirmation(value)
+                value.startsWith("http://", ignoreCase = true) -> {
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.subscription_https_only,
+                        Toast.LENGTH_LONG
+                    ).show()
+                    findNavController().popBackStack()
                 }
                 else -> {
-                    // Try as multi-line VPN URIs (some QR codes have multiple lines)
-                    profileViewModel.importFromText(value)
-                    Toast.makeText(requireContext(), R.string.qr_imported, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.qr_no_valid_data,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    findNavController().popBackStack()
                 }
             }
-            findNavController().popBackStack()
         }
+    }
+
+    private fun showProfileConfirmation(uri: String) {
+        val profile = try {
+            ProfileParser.parseSingleUri(uri)
+        } catch (e: Exception) {
+            Toast.makeText(
+                requireContext(),
+                "Invalid profile: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+            findNavController().popBackStack()
+            return
+        }
+        if (profile == null) {
+            Toast.makeText(requireContext(), R.string.qr_no_valid_data, Toast.LENGTH_SHORT).show()
+            findNavController().popBackStack()
+            return
+        }
+        val info = "${profile.protocol.value}://${profile.address}:${profile.port}"
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.import_profile_question)
+            .setMessage(getString(R.string.import_profile_confirm, info))
+            .setPositiveButton(R.string.import_btn) { _, _ ->
+                profileViewModel.importFromText(uri)
+                Toast.makeText(requireContext(), R.string.qr_imported, Toast.LENGTH_SHORT).show()
+                findNavController().popBackStack()
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                findNavController().popBackStack()
+            }
+            .setOnCancelListener { findNavController().popBackStack() }
+            .show()
+    }
+
+    private fun showSubscriptionConfirmation(url: String) {
+        val preview = if (url.length > 120) url.take(120) + "…" else url
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.add_subscription)
+            .setMessage(getString(R.string.import_subscription_confirm, preview))
+            .setPositiveButton(R.string.add) { _, _ ->
+                subscriptionViewModel.addSubscription("QR Subscription", url, 0)
+                Toast.makeText(
+                    requireContext(),
+                    R.string.subscription_added_qr,
+                    Toast.LENGTH_SHORT
+                ).show()
+                findNavController().popBackStack()
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                findNavController().popBackStack()
+            }
+            .setOnCancelListener { findNavController().popBackStack() }
+            .show()
     }
 
     override fun onDestroyView() {

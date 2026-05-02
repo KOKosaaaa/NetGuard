@@ -98,8 +98,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         val name = subObj.get("name")?.asString ?: continue
                         val url = subObj.get("url")?.asString ?: continue
                         if (url.isNotBlank()) {
+                            try {
+                                app.subscriptionRepository.validateUrl(url)
+                            } catch (e: Exception) {
+                                android.util.Log.w(
+                                    "ImportConfig",
+                                    "Skipping subscription with invalid URL: ${e.message}"
+                                )
+                                continue
+                            }
+                            val safeName = name.take(256).ifBlank { "Subscription" }
                             val id = app.subscriptionRepository.insert(
-                                com.smarttools.netguard.model.Subscription(name = name, url = url)
+                                com.smarttools.netguard.model.Subscription(name = safeName, url = url)
                             )
                             subNameToId[name] = id
                         }

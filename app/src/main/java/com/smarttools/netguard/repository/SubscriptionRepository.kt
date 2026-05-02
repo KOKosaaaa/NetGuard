@@ -114,8 +114,11 @@ class SubscriptionRepository(
     /**
      * Validate subscription URL to prevent SSRF attacks.
      * Only HTTPS allowed, no private/internal IPs.
+     * Public so callers (ViewModel, config import) can run the same check
+     * BEFORE inserting into the DB — otherwise a junk URL leaves a permanent
+     * row that the periodic update worker keeps trying to fetch.
      */
-    private fun validateUrl(url: String) {
+    fun validateUrl(url: String) {
         val parsed = try {
             URL(url)
         } catch (e: Exception) {

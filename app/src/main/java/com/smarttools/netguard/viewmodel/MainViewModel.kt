@@ -11,8 +11,6 @@ import com.smarttools.netguard.service.TunnelVpnService
 import com.smarttools.netguard.util.GeoLookup
 import com.smarttools.netguard.util.PingHelper
 import com.smarttools.netguard.util.SpeedTester
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -124,6 +122,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         /** Countries excluded from auto-select (user can still pick them manually) */
         private val EXCLUDED_COUNTRIES = setOf("RU")
+        private const val AUTO_SELECT_PROBE_LIMIT = 3
+        private const val AUTO_SELECT_GOOD_ENOUGH_MS = 200
     }
 
     fun autoSelectAndConnect() {
@@ -147,15 +147,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val results = eligible.map { profile ->
-                    async {
-                        val ms = PingHelper.tcpPing(profile.address, profile.port)
-                        profileRepo.updatePing(profile.id, ms)
-                        profile.copy(lastPingMs = ms)
+                // Burst-SYN to N servers from the user's real IP is a uniquely
+                // identifying VPN-client fingerprint at the ISP / corp DPI
+                // layer. Prefer cached `lastPingMs` from the previous session
+                // (subscription update or last connect) and fall back to a
+                // sequential probe of only Top-3 random candidates with an
+                // early-stop on a "good enough" result (<200ms).
+                val cached = eligible.filter { it.lastPingMs in 1..1000 }
+                    .sortedBy { it.lastPingMs }
+                val best = if (cached.isNotEmpty()) {
+                    cached.first()
+                } else {
+                    val sample = eligible.shuffled().take(AUTO_SELECT_PROBE_LIMIT)
+                    var winner: ServerProfile? = null
+                    var winnerMs = Int.MAX_VALUE
+                    for (p in sample) {
+                        val ms = PingHelper.tcpPing(p.address, p.port)
+                        if (ms >= 0) profileRepo.updatePing(p.id, ms)
+                        if (ms in 0..winnerMs) {
+                            winner = p.copy(lastPingMs = ms)
+                            winnerMs = ms
+                        }
+                        if (ms in 0..AUTO_SELECT_GOOD_ENOUGH_MS) break
                     }
-                }.awaitAll()
+                    winner
+                }
 
-                val best = results.filter { it.lastPingMs >= 0 }.minByOrNull { it.lastPingMs }
                 if (best == null) {
                     _autoSelectMessage.emit("No servers reachable")
                     return@launch
@@ -168,4 +185,5 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
 }

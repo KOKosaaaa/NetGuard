@@ -43,43 +43,53 @@ object ServiceTester {
     )
 
     suspend fun testAll(): List<TestResult> = withContext(Dispatchers.IO) {
-        val client = buildClient()
+        // Refuse to run without an active tunnel — otherwise the tests go
+        // direct from the user's real IP to youtube.com / openai.com /
+        // instagram.com / discord.com, leaking VPN-active intent and visited
+        // services to the ISP. Surface that as a uniform error result so the
+        // UI can show "Connect VPN first" instead of confusingly green checks.
+        if (!isTunnelReady()) return@withContext SERVICES.map { TestResult(it, false, -1) }
+        val client = buildClient() ?: return@withContext SERVICES.map { TestResult(it, false, -1) }
         SERVICES.map { service ->
             async { testService(service, client) }
         }.awaitAll()
     }
 
     suspend fun testSingle(index: Int): TestResult = withContext(Dispatchers.IO) {
-        val client = buildClient()
+        if (!isTunnelReady()) return@withContext TestResult(SERVICES[index], false, -1)
+        val client = buildClient() ?: return@withContext TestResult(SERVICES[index], false, -1)
         testService(SERVICES[index], client)
     }
 
-    private fun buildClient(): OkHttpClient {
-        val builder = OkHttpClient.Builder()
+    private fun isTunnelReady(): Boolean {
+        val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
+        return state is com.smarttools.netguard.model.ConnectionState.Connected
+    }
+
+    /**
+     * Build an OkHttp client routed through our authenticated HTTP-in bridge.
+     * Returns null when credentials aren't ready — the caller MUST treat that
+     * as an error and not fall back to a direct OkHttpClient (which would
+     * leak the test traffic to the ISP).
+     */
+    private fun buildClient(): OkHttpClient? {
+        val httpPort = CredentialManager.getHttpPort() ?: return null
+        val user = CredentialManager.getUser() ?: return null
+        val pass = CredentialManager.getPass() ?: return null
+        Log.d(TAG, "Testing through HTTP proxy 127.0.0.1:$httpPort")
+        val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
+        return OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .followRedirects(true)
-
-        // Use authenticated HTTP proxy (http-in). No-auth SOCKS5 removed for security
-        // (2026-04 VLESS vuln — any local app could hit an unauth SOCKS5 and leak server IP).
-        val httpPort = CredentialManager.getHttpPort()
-        val user = CredentialManager.getUser()
-        val pass = CredentialManager.getPass()
-        if (httpPort != null && user != null && pass != null) {
-            Log.d(TAG, "Testing through HTTP proxy 127.0.0.1:$httpPort")
-            val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", httpPort))
-            builder.proxy(proxy)
-            builder.proxyAuthenticator { _: Route?, response: Response ->
+            .proxy(proxy)
+            .proxyAuthenticator { _: Route?, response: Response ->
                 val credential = Credentials.basic(user, pass)
                 response.request.newBuilder()
                     .header("Proxy-Authorization", credential)
                     .build()
             }
-        } else {
-            Log.d(TAG, "No proxy available, testing direct connection")
-        }
-
-        return builder.build()
+            .build()
     }
 
     private fun testService(service: Service, client: OkHttpClient): TestResult {

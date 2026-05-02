@@ -216,7 +216,11 @@ class SubAdapter(
         val sub = getItem(position)
         val ctx = holder.binding.root.context
         holder.binding.tvSubName.text = sub.name
-        holder.binding.tvSubUrl.text = sub.url
+        // Subscription URLs typically embed a per-user token in the path
+        // (e.g. provider.com/api/<token>). Rendering the full URL in a
+        // RecyclerView leaks the token to anyone who screenshots / records the
+        // screen. Show host + a 4-char tail as a hint instead.
+        holder.binding.tvSubUrl.text = maskSubscriptionUrl(sub.url)
         holder.binding.tvSubCount.text = "${sub.profileCount} profiles"
         holder.binding.tvSubUpdated.text = if (sub.lastUpdatedMs > 0) {
             java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
@@ -235,5 +239,21 @@ class SubAdapter(
         holder.binding.btnShare.setOnClickListener { onShare(sub) }
         holder.binding.btnUpdate.setOnClickListener { onUpdate(sub) }
         holder.binding.btnDelete.setOnClickListener { onDelete(sub) }
+    }
+
+    private fun maskSubscriptionUrl(url: String): String {
+        return try {
+            val parsed = java.net.URL(url)
+            val host = parsed.host
+            val path = parsed.path
+            if (path.isBlank() || path == "/") {
+                host
+            } else {
+                val suffix = path.takeLast(4)
+                "$host/…/$suffix"
+            }
+        } catch (_: Exception) {
+            if (url.length > 30) url.take(30) + "…" else url
+        }
     }
 }

@@ -518,6 +518,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="22dp"
                     android:minHeight="52dp"
+                    android:filterTouchesWhenObscured="true"
                     android:text="@string/onb_vpn_grant" />
 
                 <TextView
@@ -570,6 +571,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="22dp"
                     android:minHeight="52dp"
+                    android:filterTouchesWhenObscured="true"
                     android:text="@string/onb_usage_grant" />
 
                 <TextView
@@ -644,6 +646,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
+                        android:filterTouchesWhenObscured="true"
                         android:text="@string/onb_profile_paste"
                         style="@style/Widget.Material3.Button.OutlinedButton" />
 
@@ -653,6 +656,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
+                        android:filterTouchesWhenObscured="true"
                         android:text="@string/onb_profile_import" />
                 </LinearLayout>
 
@@ -661,6 +665,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
+                    android:filterTouchesWhenObscured="true"
                     android:text="@string/onb_profile_skip"
                     style="@style/Widget.Material3.Button.TextButton" />
 
@@ -728,6 +733,7 @@
         android:layout_marginStart="20dp"
         android:layout_marginBottom="20dp"
         android:minWidth="100dp"
+        android:filterTouchesWhenObscured="true"
         android:text="@string/onb_back"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -740,6 +746,7 @@
         android:layout_marginEnd="20dp"
         android:layout_marginBottom="20dp"
         android:minWidth="120dp"
+        android:filterTouchesWhenObscured="true"
         android:text="@string/onb_next"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
