@@ -318,6 +318,20 @@ class OnboardingActivity : AppCompatActivity() {
             showProfileStatus(getString(R.string.onb_profile_empty), error = true)
             return
         }
+        // Subscription URLs are http(s)://… links the user copies from their
+        // provider. They aren't valid for ProfileParser (which expects
+        // vless://, vmess://, …). Detect them up-front and run the
+        // subscription import path instead, otherwise the wizard reports
+        // "Couldn't parse" for what is really a valid input.
+        val lower = text.lowercase()
+        if (lower.startsWith("http://") || lower.startsWith("https://")) {
+            importSubscription(text)
+            return
+        }
+        importVpnProfiles(text)
+    }
+
+    private fun importVpnProfiles(text: String) {
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { ProfileParser.parseMultiline(text) }
             if (result.profiles.isEmpty()) {
@@ -334,6 +348,86 @@ class OnboardingActivity : AppCompatActivity() {
             profileImportedCount += result.profiles.size
             showProfileStatus(getString(R.string.onb_profile_added, result.profiles.size), error = false)
             binding.etProfileUri.setText("")
+        }
+    }
+
+    private fun importSubscription(url: String) {
+        val app = application as App
+        val repo = app.subscriptionRepository
+        showProfileStatus(getString(R.string.onb_profile_subscription_fetching), error = false)
+        lifecycleScope.launch {
+            // Same SSRF / HTTPS-only guard as the regular Add Subscription flow.
+            try {
+                withContext(Dispatchers.IO) { repo.validateUrl(url) }
+            } catch (e: Exception) {
+                showProfileStatus(
+                    getString(R.string.onb_profile_error, e.message ?: "invalid URL"),
+                    error = true,
+                )
+                return@launch
+            }
+            // Persist a stub subscription, then trigger an update so the real
+            // profile list is fetched and inserted right inside the wizard.
+            val sub = withContext(Dispatchers.IO) {
+                val s = com.smarttools.netguard.model.Subscription(
+                    name = subscriptionNameFromUrl(url),
+                    url = url,
+                )
+                val id = repo.insert(s)
+                s.copy(id = id)
+            }
+            val result = withContext(Dispatchers.IO) { repo.updateSubscription(sub) }
+            result.fold(
+                onSuccess = { count ->
+                    profileImportedCount += count
+                    showProfileStatus(
+                        getString(R.string.onb_profile_added, count),
+                        error = false,
+                    )
+                    binding.etProfileUri.setText("")
+                },
+                onFailure = { err ->
+                    showProfileStatus(
+                        getString(R.string.onb_profile_error, friendlyTlsError(err)),
+                        error = true,
+                    )
+                },
+            )
+        }
+    }
+
+    /**
+     * Translate the most common TLS / SSL failures into something a user can
+     * act on. The default message ("chain validation failed", "trust anchor
+     * for certification path not found") is meaningless to non-developers
+     * and the most common root cause is a misconfigured device clock — the
+     * cert appears not-yet-valid or already-expired.
+     */
+    private fun friendlyTlsError(err: Throwable): String {
+        val raw = err.message.orEmpty()
+        val lower = raw.lowercase()
+        return when {
+            "chain validation" in lower ||
+                "trust anchor" in lower ||
+                "certpathvalidator" in lower ||
+                "notbefore" in lower ||
+                "notafter" in lower ||
+                "expired" in lower ||
+                "not yet valid" in lower ->
+                "TLS error — check your device date/time. ($raw)"
+            "certificate pinning failure" in lower ->
+                "TLS pin mismatch (cert rotated since this NetGuard release). $raw"
+            "unable to find acceptable" in lower ->
+                "Server's TLS chain is incomplete (server config issue). $raw"
+            else -> raw.ifBlank { "fetch failed" }
+        }
+    }
+
+    private fun subscriptionNameFromUrl(url: String): String {
+        return try {
+            java.net.URL(url).host.takeIf { it.isNotBlank() } ?: "Subscription"
+        } catch (_: Exception) {
+            "Subscription"
         }
     }
 

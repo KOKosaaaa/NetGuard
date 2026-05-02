@@ -49,6 +49,10 @@
 
     <!-- Subscriptions -->
     <string name="add_subscription">Add Subscription</string>
+    <string name="add_subscription_name_optional_hint">Name (optional)</string>
+    <string name="add_subscription_name_optional_help">Leave blank to use the name your provider returns. You can rename later by long-pressing the subscription.</string>
+    <string name="subscription_rename_title">Rename subscription</string>
+    <string name="subscription_name_hint">Subscription name</string>
     <string name="no_subscriptions">No subscriptions</string>
     <string name="update_all">Update All</string>
     <string name="auto_update">Auto-update</string>
@@ -127,6 +131,11 @@
     <string name="trigger_open_vpn_settings">Open Android VPN settings</string>
     <string name="trigger_collapse">Hide info</string>
     <string name="trigger_expand">Show info &amp; switches</string>
+    <string name="trigger_options_card_title">Trigger options</string>
+    <string name="trigger_options_summary_off">Disabled · tap to set up</string>
+    <string name="trigger_options_summary_on">Enabled · %1$s · %2$d apps</string>
+    <string name="trigger_mode_strict">strict</string>
+    <string name="trigger_mode_flexible">flexible</string>
     <string name="trigger_perapp_conflict">Per-App routing was enabled — Trigger mode handles routing by itself. Per-App switched to DISABLED.</string>
     <string name="trigger_strict_mode">Strict allow-list mode</string>
     <string name="trigger_strict_mode_desc">ON: only trigger apps go through VPN, with no fallback path. OFF: trigger apps just decide WHEN the tunnel comes up — routing then follows your normal Per-App / Global setting (whitelist / blacklist / all-apps).</string>
@@ -175,7 +184,7 @@
 
     <!-- Profile import step -->
     <string name="onb_profile_title">Add your first server</string>
-    <string name="onb_profile_body">Paste a vless://, vmess://, trojan://, ss:// or hy2:// link below. You can also skip this and add servers later from the Servers tab.</string>
+    <string name="onb_profile_body">Paste a single server link (vless://, vmess://, trojan://, ss://, hy2://) OR an https:// subscription URL — both work. You can also skip this and add servers later from the Servers tab.</string>
     <string name="onb_profile_paste">Paste from clipboard</string>
     <string name="onb_profile_hint">Paste a connection link…</string>
     <string name="onb_profile_import">Import</string>
@@ -183,6 +192,7 @@
     <string name="onb_profile_error">Couldn\'t parse: %s</string>
     <string name="onb_profile_empty">Clipboard is empty</string>
     <string name="onb_profile_skip">I\'ll add a server later</string>
+    <string name="onb_profile_subscription_fetching">Fetching subscription…</string>
 
     <!-- Clipboard -->
     <string name="paste_from_clipboard">Paste</string>

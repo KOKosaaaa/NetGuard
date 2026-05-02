@@ -36,13 +36,28 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val app = application as App
         // Redirect to onboarding on first launch — done before setContentView
-        // so we never flash the main UI behind the wizard.
+        // so we never flash the main UI behind the wizard. We treat an
+        // *upgrade* from a pre-onboarding NetGuard (any version <1.1.8) as a
+        // user who has already configured the app: if SharedPreferences
+        // contains any saved key besides `onboarding_done` itself, the user
+        // was here before — skip the wizard and mark it done so we don't
+        // re-check this on every launch.
         val prefs = app.getPreferences()
-        if (!prefs.getBoolean(OnboardingActivity.PREF_ONBOARDING_DONE, false)) {
-            super.onCreate(savedInstanceState)
-            startActivity(Intent(this, OnboardingActivity::class.java))
-            finish()
-            return
+        val onboardingDone = prefs.getBoolean(OnboardingActivity.PREF_ONBOARDING_DONE, false)
+        if (!onboardingDone) {
+            val hasPriorInstall = prefs.all.keys.any {
+                it != OnboardingActivity.PREF_ONBOARDING_DONE
+            }
+            if (hasPriorInstall) {
+                prefs.edit()
+                    .putBoolean(OnboardingActivity.PREF_ONBOARDING_DONE, true)
+                    .apply()
+            } else {
+                super.onCreate(savedInstanceState)
+                startActivity(Intent(this, OnboardingActivity::class.java))
+                finish()
+                return
+            }
         }
 
         val theme = app.loadSettings().themeMode

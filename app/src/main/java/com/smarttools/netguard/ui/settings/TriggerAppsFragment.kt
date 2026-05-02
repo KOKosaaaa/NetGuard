@@ -71,6 +71,7 @@ class TriggerAppsFragment : Fragment() {
             if (item.isChecked) selectedPackages.add(item.packageName)
             else selectedPackages.remove(item.packageName)
             updateCount()
+            updateOptionsSummary()
         }
 
         binding.rvApps.layoutManager = LinearLayoutManager(requireContext())
@@ -137,13 +138,15 @@ class TriggerAppsFragment : Fragment() {
                 .show()
         }
 
-        binding.btnToggleHeader.setOnClickListener {
+        binding.cardOptionsToggle.setOnClickListener {
             val collapsed = binding.headerSection.visibility == View.GONE
             binding.headerSection.visibility = if (collapsed) View.VISIBLE else View.GONE
-            binding.btnToggleHeader.setText(
-                if (collapsed) R.string.trigger_collapse else R.string.trigger_expand
-            )
+            binding.ivOptionsChevron.animate()
+                .rotation(if (collapsed) 180f else 0f)
+                .setDuration(200)
+                .start()
         }
+        updateOptionsSummary()
 
         binding.progressLoading.visibility = View.VISIBLE
         viewLifecycleOwner.lifecycleScope.launch {
@@ -184,6 +187,21 @@ class TriggerAppsFragment : Fragment() {
             // for VPN permission here — that still happens via the Save flow,
             // which also commits the apps-list selection.
             app.updateTriggerWatcher(enabled && selectedPackages.isNotEmpty())
+        }
+        updateOptionsSummary()
+    }
+
+    private fun updateOptionsSummary() {
+        val enabled = binding.swTriggerEnable.isChecked
+        val strict = binding.swTriggerStrict.isChecked
+        binding.tvOptionsSummary.text = if (enabled) {
+            val mode = getString(
+                if (strict) R.string.trigger_mode_strict
+                else R.string.trigger_mode_flexible
+            )
+            getString(R.string.trigger_options_summary_on, mode, selectedPackages.size)
+        } else {
+            getString(R.string.trigger_options_summary_off)
         }
     }
 

@@ -142,11 +142,21 @@ class SubscriptionRepository(
             val response = httpClient.newCall(request).execute()
             @Suppress("RedundantExplicitType")
             var expireMs: Long = 0L
+            var serverTitle: String? = null
             val body = response.use { resp ->
                 if (!resp.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${resp.code}"))
                 }
                 expireMs = parseExpireFromHeaders(resp.header("subscription-userinfo"))
+                val rawTitleHeader = resp.header("profile-title")
+                serverTitle = decodeProfileTitle(rawTitleHeader)
+                android.util.Log.i(
+                    "SubscriptionRepository",
+                    "fetch ok host=${java.net.URL(sub.url).host} " +
+                        "raw-profile-title=${rawTitleHeader ?: "<missing>"} " +
+                        "decoded=${serverTitle ?: "<null>"} " +
+                        "userRenamed=${sub.userRenamed}"
+                )
                 val respBody = resp.body ?: return@withContext Result.failure(Exception("Empty response"))
                 // Limit response to 2MB to prevent OOM from malicious servers
                 val maxBytes = 2L * 1024 * 1024
@@ -173,9 +183,31 @@ class SubscriptionRepository(
             }
             profileDao.replaceSubscriptionProfiles(sub.id, profiles)
 
-            // Update subscription metadata
+            // Update subscription metadata. Auto-fill the name from the
+            // server-supplied `profile-title` header (the standard subscription
+            // protocol exposes a display name there) — but only if the user
+            // hasn't manually renamed this subscription. Once the user renames
+            // via long-press, [Subscription.userRenamed] is true and we keep
+            // their choice across refreshes.
+            val titleSnapshot = serverTitle
+            // Resolution chain (only when the user hasn't manually renamed):
+            //   1. server's profile-title header
+            //   2. URL fragment (subscription URLs often look like
+            //      https://provider/key/...#MyTitle — same convention as
+            //      vless:// fragment-as-display-name).
+            //   3. keep whatever name was previously stored (host fallback).
+            val resolvedName = when {
+                sub.userRenamed -> sub.name
+                !titleSnapshot.isNullOrBlank() -> titleSnapshot.take(SUB_NAME_LIMIT)
+                else -> fragmentFromUrl(sub.url)?.take(SUB_NAME_LIMIT) ?: sub.name
+            }
+            android.util.Log.i(
+                "SubscriptionRepository",
+                "resolved name='$resolvedName' (was='${sub.name}')"
+            )
             subDao.update(
                 sub.copy(
+                    name = resolvedName,
                     profileCount = profiles.size,
                     lastUpdatedMs = System.currentTimeMillis(),
                     expireMs = expireMs
@@ -185,6 +217,46 @@ class SubscriptionRepository(
             Result.success(profiles.size)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Extract the fragment (the `#tag` portion) from a URL and percent-decode
+     * it. Returns null when there's no fragment or the URL is malformed. The
+     * standard subscription convention is `https://provider/...#DisplayName`.
+     */
+    private fun fragmentFromUrl(url: String): String? = try {
+        val ref = java.net.URL(url).ref
+        if (ref.isNullOrBlank()) null
+        else java.net.URLDecoder.decode(ref, "UTF-8").trim().takeIf { it.isNotBlank() }
+    } catch (_: Exception) { null }
+
+    /**
+     * Decode the standard `profile-title` header. Two common encodings:
+     *  - plain UTF-8 string
+     *  - `base64:<urlsafe-or-standard-base64>` — the most popular form among
+     *    subscription providers, lets them put non-ASCII names without HTTP
+     *    header encoding pitfalls.
+     * Returns null on any decode error so the caller falls back to whatever
+     * name they have.
+     */
+    private fun decodeProfileTitle(header: String?): String? {
+        if (header.isNullOrBlank()) return null
+        val raw = header.trim()
+        val payload = when {
+            raw.startsWith("base64:", ignoreCase = true) -> raw.substring("base64:".length).trim()
+            else -> return raw.take(SUB_NAME_LIMIT)
+        }
+        return try {
+            // Accept both standard and URL-safe base64 alphabets, ignore
+            // missing padding (some providers strip it).
+            val flags = android.util.Base64.NO_WRAP or
+                android.util.Base64.URL_SAFE or
+                android.util.Base64.NO_PADDING
+            val bytes = android.util.Base64.decode(payload, flags)
+            String(bytes, Charsets.UTF_8).take(SUB_NAME_LIMIT)
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -217,5 +289,11 @@ class SubscriptionRepository(
             }
         }
         return results
+    }
+
+    private companion object {
+        // Cap subscription names to avoid a malicious server returning a
+        // multi-megabyte profile-title header that freezes the RecyclerView.
+        const val SUB_NAME_LIMIT = 128
     }
 }

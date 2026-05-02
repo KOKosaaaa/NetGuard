@@ -39,6 +39,10 @@
     <string name="clear">Очистить</string>
     <string name="copy_all">Копировать всё</string>
     <string name="add_subscription">Добавить подписку</string>
+    <string name="add_subscription_name_optional_hint">Имя (необязательно)</string>
+    <string name="add_subscription_name_optional_help">Оставь пустым — имя подтянется от твоего провайдера. Переименовать можно потом долгим тапом по подписке.</string>
+    <string name="subscription_rename_title">Переименовать подписку</string>
+    <string name="subscription_name_hint">Имя подписки</string>
     <string name="no_subscriptions">Нет подписок</string>
     <string name="update_all">Обновить все</string>
     <string name="auto_update">Автообновление</string>
@@ -109,6 +113,11 @@
     <string name="trigger_open_vpn_settings">Открыть настройки VPN Android</string>
     <string name="trigger_collapse">Скрыть описание</string>
     <string name="trigger_expand">Показать описание и переключатели</string>
+    <string name="trigger_options_card_title">Настройки триггера</string>
+    <string name="trigger_options_summary_off">Выключено · тапни чтобы настроить</string>
+    <string name="trigger_options_summary_on">Включено · %1$s · %2$d приложений</string>
+    <string name="trigger_mode_strict">строгий</string>
+    <string name="trigger_mode_flexible">гибкий</string>
     <string name="trigger_perapp_conflict">Per-App маршрутизация была включена — триггер-режим сам управляет маршрутизацией. Per-App переключён в ВЫКЛЮЧЕНО.</string>
     <string name="trigger_strict_mode">Строгий allow-list</string>
     <string name="trigger_strict_mode_desc">ВКЛ: только триггер-приложения идут через VPN, без обходных путей. ВЫКЛ: триггер-приложения только решают КОГДА поднимать туннель — маршрутизация дальше идёт по твоим обычным Per-App / Global настройкам (whitelist / blacklist / все приложения).</string>
@@ -158,7 +167,7 @@
     <string name="onb_done_body">Всё настроено. На главном экране нажми большой переключатель чтобы подключиться, или открой «Серверы» → ＋ чтобы добавить ещё профилей. Подписки будут автоматически обновляться по расписанию.</string>
 
     <string name="onb_profile_title">Добавь первый сервер</string>
-    <string name="onb_profile_body">Вставь ссылку vless://, vmess://, trojan://, ss:// или hy2://. Можно пропустить и добавить серверы позже на вкладке «Серверы».</string>
+    <string name="onb_profile_body">Вставь ссылку на сервер (vless://, vmess://, trojan://, ss://, hy2://) ИЛИ https:// ссылку на подписку — работает и то, и другое. Можно пропустить и добавить серверы позже на вкладке «Серверы».</string>
     <string name="onb_profile_paste">Вставить из буфера</string>
     <string name="onb_profile_hint">Вставь ссылку на сервер…</string>
     <string name="onb_profile_import">Импортировать</string>
@@ -166,6 +175,7 @@
     <string name="onb_profile_error">Не удалось распарсить: %s</string>
     <string name="onb_profile_empty">Буфер обмена пуст</string>
     <string name="onb_profile_skip">Добавлю сервер позже</string>
+    <string name="onb_profile_subscription_fetching">Загрузка подписки…</string>
 
     <string name="paste_from_clipboard">Вставить</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>

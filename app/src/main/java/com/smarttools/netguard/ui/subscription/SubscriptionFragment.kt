@@ -45,7 +45,8 @@ class SubscriptionFragment : Fragment() {
         val adapter = SubAdapter(
             onUpdate = { viewModel.updateSubscription(it) },
             onDelete = { viewModel.deleteSubscription(it) },
-            onShare = { sub -> shareSubscription(sub) }
+            onShare = { sub -> shareSubscription(sub) },
+            onRename = { sub -> showRenameDialog(sub) }
         )
 
         binding.rvSubs.layoutManager = LinearLayoutManager(requireContext())
@@ -151,7 +152,22 @@ class SubscriptionFragment : Fragment() {
             setPadding(48, 32, 48, 0)
         }
         val etName = EditText(requireContext()).apply {
-            hint = "Name"
+            hint = getString(R.string.add_subscription_name_optional_hint)
+            layout.addView(this)
+        }
+        // Small explainer below the name field — most providers expose a
+        // human-readable display name in the `profile-title` response header,
+        // so leaving this blank is the right default.
+        val tvHelp = android.widget.TextView(requireContext()).apply {
+            text = getString(R.string.add_subscription_name_optional_help)
+            textSize = 12f
+            setTextColor(
+                com.google.android.material.color.MaterialColors.getColor(
+                    this,
+                    com.google.android.material.R.attr.colorOnSurfaceVariant,
+                )
+            )
+            setPadding(0, 4, 0, 12)
             layout.addView(this)
         }
         val etUrl = EditText(requireContext()).apply {
@@ -185,6 +201,30 @@ class SubscriptionFragment : Fragment() {
             .show()
     }
 
+    private fun showRenameDialog(sub: Subscription) {
+        val et = EditText(requireContext()).apply {
+            setText(sub.name)
+            setSelection(sub.name.length)
+            hint = getString(R.string.subscription_name_hint)
+            // Keep the row sane — same 256-char cap as ViewModel.addSubscription.
+            filters = arrayOf(android.text.InputFilter.LengthFilter(128))
+        }
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 32, 48, 0)
+            addView(et)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.subscription_rename_title)
+            .setView(container)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val newName = et.text.toString().trim().ifBlank { sub.name }
+                viewModel.renameSubscription(sub, newName)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     override fun onDestroyView() {
         _binding = null
         super.onDestroyView()
@@ -195,7 +235,8 @@ class SubscriptionFragment : Fragment() {
 class SubAdapter(
     private val onUpdate: (Subscription) -> Unit,
     private val onDelete: (Subscription) -> Unit,
-    private val onShare: (Subscription) -> Unit
+    private val onShare: (Subscription) -> Unit,
+    private val onRename: (Subscription) -> Unit
 ) : androidx.recyclerview.widget.ListAdapter<Subscription, SubAdapter.VH>(
     object : androidx.recyclerview.widget.DiffUtil.ItemCallback<Subscription>() {
         override fun areItemsTheSame(a: Subscription, b: Subscription) = a.id == b.id
@@ -239,6 +280,13 @@ class SubAdapter(
         holder.binding.btnShare.setOnClickListener { onShare(sub) }
         holder.binding.btnUpdate.setOnClickListener { onUpdate(sub) }
         holder.binding.btnDelete.setOnClickListener { onDelete(sub) }
+        // Long-press anywhere on the subscription row → rename. Marks the
+        // subscription as user-renamed so the next refresh keeps the chosen
+        // name instead of overwriting it from the server's profile-title.
+        holder.binding.root.setOnLongClickListener {
+            onRename(sub)
+            true
+        }
     }
 
     private fun maskSubscriptionUrl(url: String): String {

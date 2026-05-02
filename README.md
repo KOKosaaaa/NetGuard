@@ -136,6 +136,21 @@ If we missed your project here, please open an issue — credit is the one thing
 
 ## Release notes
 
+### v1.1.91 (2026-05-03)
+
+UX + plumbing follow-up to v1.1.9. No new security claims — every change here either widens what the app accepts as input, makes existing state visible, or hides a confusing error behind a clearer one.
+
+- **Onboarding accepts subscription URLs.** Previously the first-server step only parsed `vless:` / `vmess:` / `trojan:` / `ss:` / `hy2:` URIs and rejected `https://` subscription links with a `Couldn't parse` error. The wizard now detects an `http(s)://` input, validates it through the same `SubscriptionRepository.validateUrl` guard, inserts it as a subscription, and triggers a real `updateSubscription` so the profile list is fetched in-place.
+- **TLS errors translated.** `chain validation failed` / `trust anchor for certification path not found` / `certPathValidator` / `notBefore` / `notAfter` / `expired` / `not yet valid` are mapped to a one-liner about device date/time, which is the actual cause 90% of the time. `Certificate pinning failure` is rephrased as a cert-rotation hint, `unable to find acceptable trust anchor` as a server chain config issue.
+- **Trigger menu redesign.** Header section with switches, explainer and dual-app warning is now collapsed by default behind a Material 3 card that shows the current state at a glance: `Disabled · tap to set up` or `Enabled · strict · 5 apps`. The card has a chevron icon that rotates 180° on expand. Replaces the easy-to-miss `Hide info` / `Show info & switches` text button — the apps list now occupies most of the screen.
+- **Onboarding wizard skipped on upgrade.** First launch of a fresh install still shows the wizard. An *upgrade* from any pre-1.1.8 version is detected by checking SharedPreferences for any non-`onboarding_done` key — a returning user has saved settings, so we set `onboarding_done=true` and go straight to the main UI.
+- **Subscription name auto-fills from server.** `updateSubscription` now parses the `profile-title` response header (plain UTF-8 or `base64:…` prefixed, URL-safe + standard alphabets, missing padding allowed). When the server doesn't expose that header, the URL fragment (`#MyName`) is used — same convention as `vless://…#NodeName` URIs. Hostname is the final fallback. The previous behaviour of stamping every subscription with the literal string "Subscription" is gone.
+- **Long-press to rename.** Long-press a subscription row in the list to rename it. Sets `Subscription.userRenamed=true`, which protects the user-chosen name from being overwritten on the next refresh. Manual entry in the Add Subscription dialog also flips the flag.
+- **Add Subscription dialog clearer.** Name field hint now reads `Name (optional)` with a small subtext explaining that the provider's `profile-title` will fill it in. Empty input falls back to the URL host instead of the literal "Subscription".
+- **Trigger settings switches auto-save.** v1.1.8 patch — Enable / Strict / AutoStop now persist immediately on toggle via `viewModel.updateSettings`, no longer requiring the user to scroll past the apps list to find the Save button (the button still applies the apps-list selection + VPN permission flow).
+- **DB migration 4 → 5.** `subscriptions.userRenamed INTEGER NOT NULL DEFAULT 0`. Existing rows pick up the auto-fill behaviour on next refresh.
+- **Internals.** New string keys: `onb_profile_subscription_fetching`, `import_subscription_confirm`, `add_subscription_name_optional_hint`, `add_subscription_name_optional_help`, `subscription_rename_title`, `subscription_name_hint`, `trigger_options_card_title`, `trigger_options_summary_off/on`, `trigger_mode_strict/flexible`. EN + RU translated; other locales fall through to English. New drawable `ic_chevron_down`. `versionCode` 34, `versionName` "1.1.91".
+
 ### v1.1.9 (2026-05-02)
 
 Sprint-1 + Sprint-2 of the post-v1.1.8 code-review fix list. Closes 6 P0 (critical) and 9 P1 (high) findings around SSRF guards, network-level fingerprint, log redaction, and confirmation flows.
