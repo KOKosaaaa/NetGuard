@@ -36,6 +36,8 @@ class TriggerAppsFragment : Fragment() {
     private val selectedPackages = mutableSetOf<String>()
     private var showSystemApps = false
     private var searchQuery = ""
+    /** Suppresses auto-save when we set switch state programmatically from settings. */
+    private var initializingUi = false
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -57,9 +59,11 @@ class TriggerAppsFragment : Fragment() {
 
         val settings = viewModel.settings.value
         selectedPackages.addAll(settings.triggerApps)
+        initializingUi = true
         binding.swTriggerEnable.isChecked = settings.triggerEnabled
         binding.swTriggerAutoStop.isChecked = settings.triggerAutoStop
         binding.swTriggerStrict.isChecked = settings.triggerStrictMode
+        initializingUi = false
 
         refreshPermissionUi()
 
@@ -82,9 +86,21 @@ class TriggerAppsFragment : Fragment() {
             adapter.submitList(filterApps())
         }
 
-        binding.swTriggerEnable.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
-        binding.swTriggerAutoStop.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
-        binding.swTriggerStrict.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
+        // Switches auto-save on toggle. The Save button below remains for the
+        // app-list selection (where order/check state is buffered until apply),
+        // but toggling the master switches no longer requires hunting for it.
+        binding.swTriggerEnable.setOnCheckedChangeListener { _, checked ->
+            if (initializingUi) return@setOnCheckedChangeListener
+            persistSwitches(applyImmediately = true, enabledOverride = checked)
+        }
+        binding.swTriggerAutoStop.setOnCheckedChangeListener { _, _ ->
+            if (initializingUi) return@setOnCheckedChangeListener
+            persistSwitches(applyImmediately = false)
+        }
+        binding.swTriggerStrict.setOnCheckedChangeListener { _, _ ->
+            if (initializingUi) return@setOnCheckedChangeListener
+            persistSwitches(applyImmediately = false)
+        }
 
         binding.btnOpenVpnSettings.setOnClickListener {
             try {
@@ -142,6 +158,33 @@ class TriggerAppsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         refreshPermissionUi()
+    }
+
+    /**
+     * Saves the three switch states immediately (without touching the apps
+     * list, which the user explicitly applies via the Save button along with
+     * the VPN-permission flow). When [applyImmediately] is true the trigger
+     * watcher is also reconfigured so that toggling the master switch off
+     * really stops the watcher and quarantine TUN.
+     */
+    private fun persistSwitches(applyImmediately: Boolean, enabledOverride: Boolean? = null) {
+        val enabled = enabledOverride ?: binding.swTriggerEnable.isChecked
+        val strict = binding.swTriggerStrict.isChecked
+        val autoStop = binding.swTriggerAutoStop.isChecked
+        viewModel.updateSettings { s ->
+            s.copy(
+                triggerEnabled = enabled,
+                triggerAutoStop = autoStop,
+                triggerStrictMode = strict,
+            )
+        }
+        if (applyImmediately) {
+            val app = requireContext().applicationContext as App
+            // Stop / restart watcher to mirror the new state. We do NOT prompt
+            // for VPN permission here — that still happens via the Save flow,
+            // which also commits the apps-list selection.
+            app.updateTriggerWatcher(enabled && selectedPackages.isNotEmpty())
+        }
     }
 
     private fun refreshPermissionUi() {
