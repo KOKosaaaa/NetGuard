@@ -136,6 +136,30 @@ If we missed your project here, please open an issue — credit is the one thing
 
 ## Release notes
 
+### v1.1.8 (2026-05-02)
+
+**First-launch onboarding wizard** — the app now opens with a 7-step setup flow on first install: language → welcome (with feature cards) → routing-mode picker → VPN permission → Usage Stats permission (only when Trigger mode is picked) → first-server import → done. State is persisted in `SharedPreferences` (`onboarding_done`), so the wizard is shown exactly once. Subsequent launches go straight to the main UI. Profile import accepts `vless://` / `vmess://` / `trojan://` / `ss://` / `hy2://` links via paste-from-clipboard or manual paste, with an explicit "Add later" skip button if the user has no profile yet. The bottom progress bar uses Material 3 `LinearProgressIndicator` with `trackCornerRadius`, animated via `ObjectAnimator` between steps; transitions use a slide+fade choreography (180ms out, 220ms in).
+
+- **Live language switching, no flicker.** `OnboardingActivity` declares `configChanges="locale|layoutDirection|uiMode|fontScale"` and overrides `onConfigurationChanged` so a locale switch via `AppCompatDelegate.setApplicationLocales` does NOT recreate the activity. Instead, a `refreshMap` of `(TextView, R.string.X)` pairs is walked and every translated string is re-set in place — including the `TextInputLayout` hint and the bottom Back/Next button labels. Result: pick a language, the entire wizard updates instantly without a single frame of black.
+- **Selection cards rebuilt without `isCheckable`.** `MaterialCardView` with `isCheckable=true` + `checkedIcon=null` crashes on Android 14 with NPE in `c5.b.onAnimationUpdate` (Material's checked-icon animator tries to set alpha on a null `Drawable`). The language cards are now plain `MaterialCardView` with manual stroke-color toggling (`colorOutlineVariant` ↔ `colorPrimary`); selection is conveyed by the `RadioButton` plus the colored outline. No checkmark icon, no crash.
+- **Translations.** All onboarding + trigger-mode strings have been added to **all 16 supported locales**: `ar`, `de`, `en`, `es`, `fr`, `hi`, `in`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`, `vi`, `zh-rCN`. Around 50 new strings × 14 non-base translations = ~700 new translations.
+
+**Flexible trigger routing mode** — new `triggerStrictMode` setting (default `true` to preserve v1.1.7 behavior). When `false`, the trigger watcher acts as a launcher only: opening a trigger app brings up the regular global tunnel governed by the user's normal `perAppMode` (`DISABLED` = global, `WHITELIST`, `BLACKLIST`); closing it (with `triggerAutoStop`) calls `TunnelVpnService.stop()`. Strict mode keeps the v1.1.7 allow-list semantics (only trigger apps route through the VPN, blackholed when down). The new switch is in *Settings → Trigger apps* with an inline explainer.
+
+- `App.onCreate`: skips `startQuarantine` when flexible mode is enabled.
+- `App.updateTriggerWatcher`: only pre-warms when strict.
+- `ForegroundAppWatcher.onForegroundChanged`: branches between `activateTrigger`/`deactivateTrigger` (strict) and `start(profileId)`/`stop()` (flexible).
+- `TriggerAppsFragment.save`: stops force-disabling per-app routing and stops the BLACKLIST overlap auto-cleanup when flexible mode is on — composing trigger detection with per-app rules is the whole point.
+- Always-on auto-start path in `TunnelVpnService.onStartCommand` also respects the flag.
+
+**Dual-app warning surface.** Cloned variants of an app (Telegram via MIUI Dual Apps, Samsung Dual Messenger, Parallel Space) cannot be added to the VPN allow list — Android's public `addAllowedApplication(packageName)` only resolves the calling user's UID, while the clone runs in a separate user space (UID ≥ 999000 on MIUI). The Trigger Apps screen now shows a red Material 3 card explaining this, with a "Why?" dialog detailing the limitation and three workarounds (use original Telegram, disable "Block connections without VPN" in system settings, or add the cloned package separately if the OEM exposes it).
+
+**Internals**
+- `OnboardingActivity` lives in `ui/onboarding/`; registered in the manifest with `singleTask` launch mode and the configChanges flags above.
+- `MainActivity.onCreate` short-circuits to `OnboardingActivity` on first launch (`onboarding_done` pref absent), and respects an `EXTRA_OPEN_TRIGGER` extra to navigate directly to the trigger picker after onboarding when the user picked Trigger mode.
+- Wizard state (current step, picked routing mode, picked language, profile-import counter) survives configuration-change events via `onSaveInstanceState`.
+- `versionCode` 32, `versionName` "1.1.8".
+
 ### v1.1.7 (2026-05-02)
 
 **App-launch trigger mode** — the headline feature. Pick which apps go through the VPN; everything else (banking, maps, your usual browser) keeps using the regular connection. The selected apps have no fallback path: if the tunnel is down, their packets are black-holed in the TUN — they never see your real IP, not even for a moment.

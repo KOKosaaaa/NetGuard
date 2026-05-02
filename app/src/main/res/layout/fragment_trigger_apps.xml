@@ -23,6 +23,45 @@
             android:textSize="13sp"
             android:textColor="?attr/colorOnSurfaceVariant" />
 
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_dualapp_warning"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="6dp"
+            app:cardBackgroundColor="?attr/colorErrorContainer"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/tv_dualapp_warning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/trigger_dualapp_warning"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnErrorContainer" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_dualapp_more"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:minHeight="0dp"
+                    android:paddingVertical="4dp"
+                    android:text="@string/trigger_dualapp_more"
+                    android:textColor="?attr/colorOnErrorContainer"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.TextButton" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_trigger_enable"
             android:layout_width="match_parent"
@@ -47,6 +86,29 @@
             app:thumbTint="@color/trigger_switch_thumb"
             app:trackTint="@color/trigger_switch_track"
             app:trackDecorationTint="@color/trigger_switch_track_decoration" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_trigger_strict"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:minHeight="48dp"
+            android:text="@string/trigger_strict_mode"
+            android:textSize="15sp"
+            app:thumbTint="@color/trigger_switch_thumb"
+            app:trackTint="@color/trigger_switch_track"
+            app:trackDecorationTint="@color/trigger_switch_track_decoration" />
+
+        <TextView
+            android:id="@+id/tv_strict_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/trigger_strict_mode_desc"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_grant_permission"

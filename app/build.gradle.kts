@@ -21,8 +21,8 @@ android {
         applicationId = "com.smarttools.netguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 31
-        versionName = "1.1.7"
+        versionCode = 32
+        versionName = "1.1.8"
 
         buildConfigField("String", "VERSION_NAME", "\"$versionName\"")
 

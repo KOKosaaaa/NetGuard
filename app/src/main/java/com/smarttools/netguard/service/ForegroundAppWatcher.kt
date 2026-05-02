@@ -228,17 +228,39 @@ class TriggerWatcherService : Service() {
         if (isTrigger) {
             val state = TunnelVpnService.connectionState.value
             if (state is ConnectionState.Connected || state is ConnectionState.Connecting) {
-                // Already up (pre-warm/active) — nothing to do.
                 lastTriggeredPkg = current
                 return
             }
             lastTriggeredPkg = current
             lastTriggeredAt = System.currentTimeMillis()
-            Log.i(TAG, "Trigger '$current' → activate")
-            TunnelVpnService.activateTrigger(app)
+            if (settings.triggerStrictMode) {
+                Log.i(TAG, "Trigger '$current' → activate (strict)")
+                TunnelVpnService.activateTrigger(app)
+            } else {
+                // Flexible mode: bring up the regular tunnel respecting
+                // perAppMode/perAppList. The trigger list only chooses WHEN
+                // the tunnel comes up, not WHO routes through it.
+                kotlinx.coroutines.CoroutineScope(
+                    kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+                ).launch {
+                    val profileId = app.database.profileDao().getSelected()?.id
+                        ?: app.getPreferences().getLong("last_profile_id", -1)
+                    if (profileId != -1L) {
+                        Log.i(TAG, "Trigger '$current' → start global VPN (flexible)")
+                        TunnelVpnService.start(app, profileId)
+                    } else {
+                        Log.w(TAG, "Flexible trigger fired but no profile selected")
+                    }
+                }
+            }
         } else if (wasTrigger && settings.triggerAutoStop) {
-            Log.i(TAG, "Trigger '$previous' left fg → deactivate")
-            TunnelVpnService.deactivateTrigger(app)
+            if (settings.triggerStrictMode) {
+                Log.i(TAG, "Trigger '$previous' left fg → deactivate (strict)")
+                TunnelVpnService.deactivateTrigger(app)
+            } else {
+                Log.i(TAG, "Trigger '$previous' left fg → stop tunnel (flexible)")
+                TunnelVpnService.stop(app)
+            }
             lastTriggeredPkg = null
         }
     }

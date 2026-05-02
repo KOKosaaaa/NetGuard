@@ -14,6 +14,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.color.DynamicColors
 import com.smarttools.netguard.core.ProfileParser
 import com.smarttools.netguard.model.ThemeMode
+import com.smarttools.netguard.ui.onboarding.OnboardingActivity
 import com.smarttools.netguard.viewmodel.MainViewModel
 import com.smarttools.netguard.viewmodel.ProfileListViewModel
 
@@ -33,7 +34,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val theme = (application as App).loadSettings().themeMode
+        val app = application as App
+        // Redirect to onboarding on first launch — done before setContentView
+        // so we never flash the main UI behind the wizard.
+        val prefs = app.getPreferences()
+        if (!prefs.getBoolean(OnboardingActivity.PREF_ONBOARDING_DONE, false)) {
+            super.onCreate(savedInstanceState)
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
+
+        val theme = app.loadSettings().themeMode
         setTheme(when (theme) {
             ThemeMode.DARK -> R.style.Theme_NetGuard
             ThemeMode.LIGHT -> R.style.Theme_NetGuard_Light
@@ -96,6 +108,12 @@ class MainActivity : AppCompatActivity() {
         handleDeepLink(intent)
         if (intent?.getBooleanExtra("auto_connect", false) == true) {
             requestVpnPermissionAndConnect()
+        }
+        if (intent?.getBooleanExtra(OnboardingActivity.EXTRA_OPEN_TRIGGER, false) == true) {
+            try {
+                navController.navigate(R.id.nav_settings)
+                navController.navigate(R.id.action_settings_to_trigger)
+            } catch (_: Exception) { /* graph mismatch — ignore */ }
         }
     }
 

@@ -47,6 +47,12 @@
         tools:targetApi="34">
 
         <activity
+            android:name=".ui.onboarding.OnboardingActivity"
+            android:exported="false"
+            android:configChanges="locale|layoutDirection|uiMode|fontScale|smallestScreenSize|screenSize|screenLayout|orientation"
+            android:launchMode="singleTask" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask">

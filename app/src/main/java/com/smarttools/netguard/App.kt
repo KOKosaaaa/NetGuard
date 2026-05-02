@@ -61,11 +61,14 @@ class App : Application() {
 
         if (settings.triggerEnabled && settings.triggerApps.isNotEmpty()) {
             triggerWatcher = com.smarttools.netguard.service.ForegroundAppWatcher(this).also { it.start() }
-            // Bring up quarantine TUN immediately — trigger apps must never
-            // hit the network without VPN, even before they're opened.
-            val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
-            if (state is com.smarttools.netguard.model.ConnectionState.Disconnected) {
-                com.smarttools.netguard.service.TunnelVpnService.startQuarantine(this)
+            // Strict mode: bring up quarantine TUN so trigger apps can never
+            // hit the network without VPN. Flexible mode: no quarantine —
+            // VPN simply turns on when a trigger app is opened.
+            if (settings.triggerStrictMode) {
+                val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
+                if (state is com.smarttools.netguard.model.ConnectionState.Disconnected) {
+                    com.smarttools.netguard.service.TunnelVpnService.startQuarantine(this)
+                }
             }
         }
 
@@ -127,6 +130,7 @@ class App : Application() {
             triggerEnabled = prefs.getBoolean("trigger_enabled", false),
             triggerApps = prefs.getStringSet("trigger_apps", emptySet()) ?: emptySet(),
             triggerAutoStop = prefs.getBoolean("trigger_auto_stop", false),
+            triggerStrictMode = prefs.getBoolean("trigger_strict_mode", true),
             tlsFingerprintMode = safeEnum(
                 prefs.getString("tls_fingerprint_mode", null), TlsFingerprintMode.CHROME
             ),
@@ -200,6 +204,7 @@ class App : Application() {
             putBoolean("trigger_enabled", settings.triggerEnabled)
             putStringSet("trigger_apps", settings.triggerApps)
             putBoolean("trigger_auto_stop", settings.triggerAutoStop)
+            putBoolean("trigger_strict_mode", settings.triggerStrictMode)
             putString("tls_fingerprint_mode", settings.tlsFingerprintMode.name)
             putBoolean("auto_bypass_ru_packages", settings.autoBypassRuPackages)
             apply()
@@ -211,11 +216,11 @@ class App : Application() {
 
     fun updateTriggerWatcher(enabled: Boolean) {
         if (enabled) {
-            // Pre-warm: bring up a FULL trigger tunnel (TUN + xray + tun2socks)
-            // for the trigger apps. xray sits ready, so opening a trigger app
-            // is instant — no 1-2s "Connecting…" delay.
             val s = loadSettings()
-            if (s.triggerApps.isNotEmpty()) {
+            if (s.triggerApps.isNotEmpty() && s.triggerStrictMode) {
+                // Strict mode: pre-warm a FULL trigger tunnel (TUN + xray + tun2socks)
+                // for the trigger apps. xray sits ready, so opening a trigger app
+                // is instant — no 1-2s "Connecting…" delay.
                 kotlinx.coroutines.CoroutineScope(
                     kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
                 ).launch {
@@ -231,7 +236,8 @@ class App : Application() {
                     }
                 }
             }
-            // Watcher only needed for autoStop bookkeeping; otherwise harmless.
+            // Watcher always runs — it fires the tunnel start (strict or flexible)
+            // when a trigger app opens.
             if (triggerWatcher == null) {
                 triggerWatcher = com.smarttools.netguard.service.ForegroundAppWatcher(this).also { it.start() }
             }

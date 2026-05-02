@@ -27,6 +27,15 @@ data class AppSettings(
     val triggerApps: Set<String> = emptySet(),
     val triggerAutoStop: Boolean = false,
     /**
+     * When true (default) trigger mode behaves as strict allow-list: ONLY the
+     * apps in triggerApps route through the tunnel; they are blackholed when
+     * the tunnel is down (no real-IP leak). When false, trigger apps merely
+     * act as launch triggers — opening any of them brings the tunnel up with
+     * the user's normal perAppMode/perAppList rules; routing is then governed
+     * by per-app/global settings, not by triggerApps.
+     */
+    val triggerStrictMode: Boolean = true,
+    /**
      * uTLS fingerprint override. When `random`, XrayConfigGenerator picks a
      * random one from the supported list per connection so that DPI systems
      * cannot correlate sessions by ClientHello shape.

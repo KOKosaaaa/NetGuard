@@ -327,7 +327,8 @@ class TunnelVpnService : VpnService() {
                 // cut off from the network.
                 val app = application as App
                 val settings = app.loadSettings()
-                if (settings.triggerEnabled && settings.triggerApps.isNotEmpty()) {
+                if (settings.triggerEnabled && settings.triggerApps.isNotEmpty() &&
+                    settings.triggerStrictMode) {
                     val lastProfileId = app.getPreferences().getLong("last_profile_id", -1)
                     val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
                     startForeground(NotificationHelper.NOTIFICATION_ID, notification)
@@ -348,6 +349,19 @@ class TunnelVpnService : VpnService() {
                         startQuarantineTun()
                     }
                     TriggerWatcherService.start(this)
+                } else if (settings.triggerEnabled && settings.triggerApps.isNotEmpty()) {
+                    // Flexible mode: keep the watcher running so triggers still
+                    // fire, but don't bring up any tunnel until they do.
+                    TriggerWatcherService.start(this)
+                    val lastProfileId = app.getPreferences().getLong("last_profile_id", -1)
+                    if (lastProfileId != -1L) {
+                        val notification = NotificationHelper.createConnectingNotification(this@TunnelVpnService)
+                        startForeground(NotificationHelper.NOTIFICATION_ID, notification)
+                        startTunnel(lastProfileId)
+                    } else {
+                        stopSelf()
+                        return START_NOT_STICKY
+                    }
                 } else {
                     val lastProfileId = app.getPreferences()
                         .getLong("last_profile_id", -1)

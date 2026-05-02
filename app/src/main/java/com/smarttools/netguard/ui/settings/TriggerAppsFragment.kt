@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.smarttools.netguard.App
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentTriggerAppsBinding
@@ -58,6 +59,7 @@ class TriggerAppsFragment : Fragment() {
         selectedPackages.addAll(settings.triggerApps)
         binding.swTriggerEnable.isChecked = settings.triggerEnabled
         binding.swTriggerAutoStop.isChecked = settings.triggerAutoStop
+        binding.swTriggerStrict.isChecked = settings.triggerStrictMode
 
         refreshPermissionUi()
 
@@ -82,6 +84,7 @@ class TriggerAppsFragment : Fragment() {
 
         binding.swTriggerEnable.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
         binding.swTriggerAutoStop.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
+        binding.swTriggerStrict.setOnCheckedChangeListener { _, _ -> /* applied on save */ }
 
         binding.btnOpenVpnSettings.setOnClickListener {
             try {
@@ -109,6 +112,14 @@ class TriggerAppsFragment : Fragment() {
         }
 
         binding.btnSave.setOnClickListener { save() }
+
+        binding.btnDualappMore.setOnClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.trigger_dualapp_explain_title)
+                .setMessage(R.string.trigger_dualapp_explain_body)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
 
         binding.btnToggleHeader.setOnClickListener {
             val collapsed = binding.headerSection.visibility == View.GONE
@@ -147,11 +158,12 @@ class TriggerAppsFragment : Fragment() {
         val enabled = binding.swTriggerEnable.isChecked
         val activeApps = selectedPackages.toSet()
 
-        // Conflict check: if user has BLACKLIST per-app routing with overlap,
-        // those packages would bypass the trigger tunnel — defeating the point.
-        // Auto-remove the overlap from blacklist (safer default).
+        val strictMode = binding.swTriggerStrict.isChecked
+        // Conflict check only matters in strict mode (where Trigger handles
+        // routing exclusively). Flexible mode is INTENDED to compose with
+        // perAppMode, so we leave the lists alone there.
         val current = viewModel.settings.value
-        val overlap = if (enabled &&
+        val overlap = if (enabled && strictMode &&
             current.perAppMode == com.smarttools.netguard.model.PerAppMode.BLACKLIST) {
             current.perAppList.intersect(activeApps)
         } else emptySet()
@@ -163,20 +175,27 @@ class TriggerAppsFragment : Fragment() {
             ).show()
         }
 
-        // Disable any active per-app routing — Trigger mode handles routing
-        // on its own; running both at once causes confusion.
-        val perAppWasOn = enabled && current.perAppMode != com.smarttools.netguard.model.PerAppMode.DISABLED
+        val perAppWasOn = enabled && strictMode &&
+            current.perAppMode != com.smarttools.netguard.model.PerAppMode.DISABLED
         if (perAppWasOn) {
             Toast.makeText(requireContext(), R.string.trigger_perapp_conflict, Toast.LENGTH_LONG).show()
         }
         viewModel.updateSettings { s ->
             val newPerAppList = if (overlap.isNotEmpty()) s.perAppList - overlap else s.perAppList
+            // Flexible trigger mode coexists with Per-App routing — that's the
+            // whole point of it. Only strict mode forces perAppMode=DISABLED.
+            val newPerAppMode = if (enabled && strictMode) {
+                com.smarttools.netguard.model.PerAppMode.DISABLED
+            } else {
+                s.perAppMode
+            }
             s.copy(
                 triggerEnabled = enabled,
                 triggerApps = activeApps,
                 triggerAutoStop = binding.swTriggerAutoStop.isChecked,
+                triggerStrictMode = strictMode,
                 perAppList = newPerAppList,
-                perAppMode = if (enabled) com.smarttools.netguard.model.PerAppMode.DISABLED else s.perAppMode
+                perAppMode = newPerAppMode
             )
         }
 

@@ -128,6 +128,61 @@
     <string name="trigger_collapse">Hide info</string>
     <string name="trigger_expand">Show info &amp; switches</string>
     <string name="trigger_perapp_conflict">Per-App routing was enabled — Trigger mode handles routing by itself. Per-App switched to DISABLED.</string>
+    <string name="trigger_strict_mode">Strict allow-list mode</string>
+    <string name="trigger_strict_mode_desc">ON: only trigger apps go through VPN, with no fallback path. OFF: trigger apps just decide WHEN the tunnel comes up — routing then follows your normal Per-App / Global setting (whitelist / blacklist / all-apps).</string>
+    <string name="trigger_dualapp_warning">⚠ Cloned apps (MIUI Dual Apps / Samsung Dual Messenger / Parallel Space) are not supported by Android\'s VPN API. Use the original Telegram or disable trigger mode for it.</string>
+    <string name="trigger_dualapp_more">Why?</string>
+    <string name="trigger_dualapp_explain_title">Cloned apps and the VPN API</string>
+    <string name="trigger_dualapp_explain_body">Android limitation: a system VPN running in the primary user can only allow-list apps installed for that user. A cloned/dual-app variant runs as a separate user (often UID 999000+ on MIUI) — its UID isn\'t in the allow list, so traffic is dropped and the app shows \"Waiting for network\".\n\nWorkarounds:\n• Use the original (non-cloned) Telegram inside trigger mode.\n• Disable \"Block connections without VPN\" in Android system settings — the cloned variant will then bypass the VPN and use the normal connection.\n• Add the cloned package separately if your system exposes it (rare).</string>
+
+    <!-- Onboarding -->
+    <string name="onb_lang_title">Choose your language</string>
+    <string name="onb_lang_subtitle">You can change this later in Settings</string>
+    <string name="onb_skip">Skip</string>
+    <string name="onb_next">Next</string>
+    <string name="onb_back">Back</string>
+    <string name="onb_finish">Finish</string>
+    <string name="onb_welcome_title">Welcome to NetGuard</string>
+    <string name="onb_welcome_subtitle">Fast encrypted access on your terms</string>
+    <string name="onb_welcome_body">NetGuard is a modern xray-core client with selective routing, real-time speed test, kill switch, evil-twin Wi-Fi protection and traffic statistics. The setup wizard takes about a minute — you can change everything later from Settings.</string>
+    <string name="onb_feature_trigger_title">⚡ Trigger mode</string>
+    <string name="onb_feature_trigger">VPN comes up only when one of your chosen apps opens, then quietly drops when you close it. Banking, maps, delivery — everything else stays on your normal connection. The trigger apps have no other way to reach the network, so they never see your real IP.</string>
+    <string name="onb_feature_perapp_title">🎯 Per-App VPN</string>
+    <string name="onb_feature_perapp">Classic whitelist/blacklist of apps that go through the tunnel. Useful when you want most of the device on VPN but a few apps direct.</string>
+    <string name="onb_feature_protocols_title">🔐 Protocols &amp; safety</string>
+    <string name="onb_feature_protocols">VLESS, VMess, Trojan, Shadowsocks, Hysteria2. Reality, XTLS-Vision, TLS-Fragment, custom DNS over HTTPS, kill switch, on-boot auto-connect — all supported.</string>
+    <string name="onb_mode_title">How should NetGuard route traffic?</string>
+    <string name="onb_mode_subtitle">You can change this later in Settings</string>
+    <string name="onb_mode_global">Global VPN</string>
+    <string name="onb_mode_global_desc">All apps go through VPN. Standard mode.</string>
+    <string name="onb_mode_trigger">Trigger mode (recommended)</string>
+    <string name="onb_mode_trigger_desc">⚠ ONLY the apps in your trigger list go through VPN — the tunnel auto-activates when you open one and drops when you close it. Everything else (banking, maps, browser) stays on your normal connection and never uses VPN.</string>
+    <string name="onb_mode_perapp">Per-App VPN</string>
+    <string name="onb_mode_perapp_desc">Manually whitelist or blacklist apps for the VPN.</string>
+    <string name="onb_mode_skip">Decide later</string>
+    <string name="onb_mode_skip_desc">Skip — I\'ll configure it from Settings.</string>
+    <string name="onb_vpn_title">Allow VPN connection</string>
+    <string name="onb_vpn_body">Android requires explicit permission to create a VPN tunnel. NetGuard will not collect or transmit any traffic you do not configure.</string>
+    <string name="onb_vpn_grant">Grant VPN permission</string>
+    <string name="onb_vpn_granted">VPN permission granted ✓</string>
+    <string name="onb_vpn_denied">Permission required to use the tunnel — you can grant it later from Settings</string>
+    <string name="onb_usage_title">Usage access for trigger mode</string>
+    <string name="onb_usage_body">Trigger mode needs to detect when a chosen app comes to the foreground. Android exposes this via the Usage Access setting — NetGuard reads only the package name of the foreground app and stores nothing.</string>
+    <string name="onb_usage_grant">Open Usage Access settings</string>
+    <string name="onb_usage_granted">Usage access granted ✓</string>
+    <string name="onb_done_title">All set</string>
+    <string name="onb_done_body">You\'re ready. From the Home screen tap the big toggle to connect, or open Servers → ＋ to add more profiles. Subscriptions update on a schedule once you add one.</string>
+
+    <!-- Profile import step -->
+    <string name="onb_profile_title">Add your first server</string>
+    <string name="onb_profile_body">Paste a vless://, vmess://, trojan://, ss:// or hy2:// link below. You can also skip this and add servers later from the Servers tab.</string>
+    <string name="onb_profile_paste">Paste from clipboard</string>
+    <string name="onb_profile_hint">Paste a connection link…</string>
+    <string name="onb_profile_import">Import</string>
+    <string name="onb_profile_added">Imported %d server(s) ✓</string>
+    <string name="onb_profile_error">Couldn\'t parse: %s</string>
+    <string name="onb_profile_empty">Clipboard is empty</string>
+    <string name="onb_profile_skip">I\'ll add a server later</string>
 
     <!-- Clipboard -->
     <string name="paste_from_clipboard">Paste</string>
