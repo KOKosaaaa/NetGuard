@@ -33,24 +33,20 @@
         app:layout_constraintHorizontal_bias="0"
         app:layout_constrainedWidth="true" />
 
-    <!-- Capsule — fixed size by content; bias=0.5 in the chain centers it in
-         the free gap between name and icons. If name + capsule + icons don't
-         fit, the chain ellipsizes the name (constrainedWidth above), capsule
-         stays its natural width. Single-line baseline-aligned text — no
-         relative-size span so glyphs don't drift off-baseline. -->
+    <!-- Capsule. Single TextView whose background is a LayerDrawable with two
+         layers (track + clipped fill); the fill layer's level (0..10000) is
+         set programmatically to used/total fraction. Both layers are tinted
+         via DrawableCompat.setTint at bind time using theme attrs. -->
     <TextView
         android:id="@+id/tv_sub_traffic"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="11sp"
         android:fontFamily="monospace"
-        android:background="@drawable/bg_traffic_capsule"
-        android:backgroundTint="?attr/capsuleTrackColor"
+        android:background="@drawable/bg_traffic_capsule_layered"
         android:textColor="?attr/colorOnSurface"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:paddingTop="0dp"
-        android:paddingBottom="3dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="2dp"
         android:gravity="center"
         android:includeFontPadding="false"
         android:layout_marginStart="8dp"

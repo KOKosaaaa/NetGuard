@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solid rounded "fill" — color comes from backgroundTint at runtime
+     (?attr/capsuleProgressColor). Width is set programmatically as
+     capsule_width × (used / total). Container clipsToOutline so this
+     view is clipped to the rounded capsule shape regardless of width. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="100dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>

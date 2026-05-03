@@ -11,6 +11,7 @@ import com.smarttools.netguard.util.PingHelper
 import com.smarttools.netguard.util.ServiceTester
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -33,14 +34,18 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
         .map { subs -> subs.associateBy { it.id } }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
-    private val _importResult = MutableSharedFlow<ImportResult>(replay = 1)
-    val importResult: SharedFlow<ImportResult> = _importResult.asSharedFlow()
+    // One-shot UI events: Channel.receiveAsFlow() delivers each event to the
+    // current collector exactly once. Switching tabs (which re-subscribes the
+    // fragment) no longer re-shows the dialog/Toast — that was the bug with
+    // MutableSharedFlow(replay=1) which cached the last value indefinitely.
+    private val _importResult = Channel<ImportResult>(Channel.BUFFERED)
+    val importResult: Flow<ImportResult> = _importResult.receiveAsFlow()
 
     private val _pinging = MutableStateFlow(false)
     val pinging: StateFlow<Boolean> = _pinging.asStateFlow()
 
-    private val _serviceTestResults = MutableSharedFlow<List<ServiceTester.TestResult>>(replay = 1)
-    val serviceTestResults: SharedFlow<List<ServiceTester.TestResult>> = _serviceTestResults.asSharedFlow()
+    private val _serviceTestResults = Channel<List<ServiceTester.TestResult>>(Channel.BUFFERED)
+    val serviceTestResults: Flow<List<ServiceTester.TestResult>> = _serviceTestResults.receiveAsFlow()
 
     fun testServices() {
         if (_pinging.value) return
@@ -48,7 +53,7 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
             _pinging.value = true
             try {
                 val results = ServiceTester.testAll()
-                _serviceTestResults.emit(results)
+                _serviceTestResults.send(results)
             } finally {
                 _pinging.value = false
             }
@@ -67,7 +72,7 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
                 }
                 profileRepo.insertAll(toInsert)
             }
-            _importResult.emit(ImportResult(result.profiles.size, result.errors))
+            _importResult.send(ImportResult(result.profiles.size, result.errors))
         }
     }
 

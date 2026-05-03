@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two-layer rounded capsule:
+       1) "track"  — the empty background, full width
+       2) "fill"   — clipped horizontally so its visible portion = level/10000
+                     (set programmatically). Both colors are applied via
+                     DrawableCompat.setTint at runtime so the same drawable
+                     works in every theme. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/capsule_track">
+        <shape android:shape="rectangle">
+            <corners android:radius="100dp" />
+            <solid android:color="#FFFFFFFF" />
+        </shape>
+    </item>
+    <item android:id="@+id/capsule_fill">
+        <clip android:clipOrientation="horizontal" android:gravity="left">
+            <shape android:shape="rectangle">
+                <corners android:radius="100dp" />
+                <solid android:color="#FFFFFFFF" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

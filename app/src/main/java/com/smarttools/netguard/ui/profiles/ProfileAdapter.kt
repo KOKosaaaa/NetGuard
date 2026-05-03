@@ -151,6 +151,10 @@ class ProfileAdapter(
             val color = SubscriptionGroupDecoration.GROUP_COLORS[colorIdx]
             b.tvSubName.setTextColor(color)
 
+            // Progress: layered drawable (track + clipped fill). Tint both
+            // layers via theme attrs, set fill level (0..10000) by fraction.
+            tintAndFillCapsule(sub.usedBytes, sub.totalBytes)
+
             b.ivSubWeb.visibility = if (sub.webPageUrl.isNotBlank()) View.VISIBLE else View.GONE
             b.ivSubWeb.setOnClickListener { openUrl(sub.webPageUrl) }
 
@@ -163,6 +167,28 @@ class ProfileAdapter(
             } else {
                 b.tvSubAnnounce.visibility = View.GONE
             }
+        }
+
+        private fun tintAndFillCapsule(usedBytes: Long, totalBytes: Long) {
+            val ctx = b.root.context
+            val tv = android.util.TypedValue()
+            ctx.theme.resolveAttribute(R.attr.capsuleTrackColor, tv, true)
+            val trackColor = tv.data
+            ctx.theme.resolveAttribute(R.attr.capsuleProgressColor, tv, true)
+            val fillColor = tv.data
+
+            // mutate() so tint applied here doesn't bleed to other ViewHolders
+            // sharing the same drawable instance.
+            val ld = b.tvSubTraffic.background.mutate() as android.graphics.drawable.LayerDrawable
+            ld.findDrawableByLayerId(R.id.capsule_track)?.setTint(trackColor)
+            val fillLayer = ld.findDrawableByLayerId(R.id.capsule_fill)
+            fillLayer?.setTint(fillColor)
+            b.tvSubTraffic.background = ld
+
+            val fraction = if (totalBytes > 0)
+                (usedBytes.toDouble() / totalBytes).coerceIn(0.0, 1.0)
+            else 0.0
+            fillLayer?.level = (fraction * 10000).toInt().coerceIn(0, 10000)
         }
 
         private fun openUrl(url: String) {
