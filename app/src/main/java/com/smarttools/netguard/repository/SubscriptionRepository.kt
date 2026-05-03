@@ -1,6 +1,7 @@
 package com.smarttools.netguard.repository
 
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
 import com.smarttools.netguard.BuildConfig
 import com.smarttools.netguard.core.ProfileParser
@@ -147,10 +148,17 @@ class SubscriptionRepository(
         try {
             validateUrl(sub.url)
 
+            // Remnawave / XTLS Subscription Standard headers — same set
+            // that Happ and v2RayTun send. Lets the server show real device
+            // info ('Samsung SM-A056E · Android 14') instead of guessing.
             val request = Request.Builder()
                 .url(sub.url)
                 .header("User-Agent", "NetGuard/${BuildConfig.VERSION_NAME}")
                 .header("x-hwid", hwid)
+                .header("x-device-os", "Android")
+                .header("x-ver-os", Build.VERSION.RELEASE ?: "")
+                .header("x-device-model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+                .header("x-app-version", BuildConfig.VERSION_NAME)
                 .get()
                 .build()
 
