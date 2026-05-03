@@ -7,13 +7,13 @@
         VpnTransportInfo, dumpsys vpn_management, GeoIP/ASN, etc.
 
         Adding these to PerAppMode.BLACKLIST means the listed apps see the
-        real underlying network instead of the tunnel — their IP/GeoIP
+        real underlying network instead of the tunnel - their IP/GeoIP
         stays consistent with the SIM/Wi-Fi region and they do not see a
         VPN flag on the active network. This is the only client-side
         mitigation available without root: the OS-level VPN flag itself
         cannot be hidden by an app from another app.
 
-        Wrong package names are silently skipped at runtime — the UI
+        Wrong package names are silently skipped at runtime - the UI
         button calls getPackageInfo() per entry, so the toast count
         reflects only apps actually installed on this device.
     -->

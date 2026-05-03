@@ -45,7 +45,7 @@
              otherwise white icons disappear on the light translucent bar. -->
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
-        <!-- Card colors are theme-tied — dark-theme defaults are unreadable on
+        <!-- Card colors are theme-tied - dark-theme defaults are unreadable on
              white. Override here. -->
         <item name="cardNormalBackground">#FFFFFFFF</item>
         <item name="cardSelectedBackground">#FFE8DEF8</item>
@@ -55,7 +55,7 @@
         <item name="capsuleProgressColor">#FF6200EE</item>
     </style>
 
-    <!-- OLED Black — pure black for AMOLED displays -->
+    <!-- OLED Black - pure black for AMOLED displays -->
     <style name="Theme.NetGuard.OLED" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">#BB86FC</item>
         <item name="colorPrimaryContainer">#3700B3</item>
@@ -76,7 +76,7 @@
         <item name="capsuleProgressColor">#FFBB86FC</item>
     </style>
 
-    <!-- Dynamic — Material You (Android 12+), DynamicColors overlays this -->
+    <!-- Dynamic - Material You (Android 12+), DynamicColors overlays this -->
     <style name="Theme.NetGuard.Dynamic" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
@@ -86,7 +86,7 @@
         <item name="capsuleProgressColor">?attr/colorPrimary</item>
     </style>
 
-    <!-- Ocean — deep blue & cyan -->
+    <!-- Ocean - deep blue & cyan -->
     <style name="Theme.NetGuard.Ocean" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">#00BCD4</item>
         <item name="colorPrimaryContainer">#006874</item>

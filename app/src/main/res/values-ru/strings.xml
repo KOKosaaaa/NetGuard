@@ -40,7 +40,7 @@
     <string name="copy_all">Копировать всё</string>
     <string name="add_subscription">Добавить подписку</string>
     <string name="add_subscription_name_optional_hint">Имя (необязательно)</string>
-    <string name="add_subscription_name_optional_help">Оставь пустым — имя подтянется от твоего провайдера. Переименовать можно потом долгим тапом по подписке.</string>
+    <string name="add_subscription_name_optional_help">Оставь пустым - имя подтянется от твоего провайдера. Переименовать можно потом долгим тапом по подписке.</string>
     <string name="subscription_rename_title">Переименовать подписку</string>
     <string name="subscription_name_hint">Имя подписки</string>
     <string name="no_subscriptions">Нет подписок</string>
@@ -102,14 +102,14 @@
     <string name="trigger_title">Триггер по запуску</string>
     <string name="trigger_subtitle">VPN включается автоматически только для выбранных приложений</string>
     <string name="trigger_enable">Включить триггер-режим</string>
-    <string name="trigger_explainer">Только выбранные приложения идут через VPN — все остальные приложения (Яндекс, банки, Кинопоиск и т.д.) работают через обычный интернет, как будто VPN нет. Выбранные приложения не имеют другого пути в сеть кроме VPN: твой реальный IP они не увидят даже на долю секунды.</string>
+    <string name="trigger_explainer">Только выбранные приложения идут через VPN - все остальные приложения (Яндекс, банки, Кинопоиск и т.д.) работают через обычный интернет, как будто VPN нет. Выбранные приложения не имеют другого пути в сеть кроме VPN: твой реальный IP они не увидят даже на долю секунды.</string>
     <string name="trigger_pick_apps">Выбрать приложения для VPN</string>
     <string name="trigger_no_permission">Нужно разрешение «Доступ к статистике использования»</string>
     <string name="trigger_grant_permission">Выдать разрешение</string>
     <string name="trigger_auto_stop">Отключать туннель когда приложение свёрнуто (экономия батареи)</string>
     <string name="trigger_no_profile">Сервер не выбран. Сначала выбери сервер.</string>
     <string name="trigger_always_on_title">Защита от выключения NetGuard</string>
-    <string name="trigger_always_on_desc">Для надёжности: в системных настройках включи только Always-on VPN. НЕ включай «Блокировать соединения без VPN» — иначе все обычные приложения (Яндекс и т.д.) тоже потеряют интернет. Триггер-режим сам по себе блокирует выбранные приложения когда туннель не активен.</string>
+    <string name="trigger_always_on_desc">Для надёжности: в системных настройках включи только Always-on VPN. НЕ включай «Блокировать соединения без VPN» - иначе все обычные приложения (Яндекс и т.д.) тоже потеряют интернет. Триггер-режим сам по себе блокирует выбранные приложения когда туннель не активен.</string>
     <string name="trigger_open_vpn_settings">Открыть настройки VPN Android</string>
     <string name="trigger_collapse">Скрыть описание</string>
     <string name="trigger_expand">Показать описание и переключатели</string>
@@ -118,13 +118,13 @@
     <string name="trigger_options_summary_on">Включено · %1$s · %2$d приложений</string>
     <string name="trigger_mode_strict">строгий</string>
     <string name="trigger_mode_flexible">гибкий</string>
-    <string name="trigger_perapp_conflict">Per-App маршрутизация была включена — триггер-режим сам управляет маршрутизацией. Per-App переключён в ВЫКЛЮЧЕНО.</string>
+    <string name="trigger_perapp_conflict">Per-App маршрутизация была включена - триггер-режим сам управляет маршрутизацией. Per-App переключён в ВЫКЛЮЧЕНО.</string>
     <string name="trigger_strict_mode">Строгий allow-list</string>
-    <string name="trigger_strict_mode_desc">ВКЛ: только триггер-приложения идут через VPN, без обходных путей. ВЫКЛ: триггер-приложения только решают КОГДА поднимать туннель — маршрутизация дальше идёт по твоим обычным Per-App / Global настройкам (whitelist / blacklist / все приложения).</string>
+    <string name="trigger_strict_mode_desc">ВКЛ: только триггер-приложения идут через VPN, без обходных путей. ВЫКЛ: триггер-приложения только решают КОГДА поднимать туннель - маршрутизация дальше идёт по твоим обычным Per-App / Global настройкам (whitelist / blacklist / все приложения).</string>
     <string name="trigger_dualapp_warning">⚠ Дубликаты приложений (MIUI Dual Apps / Samsung Dual Messenger / Parallel Space) не поддерживаются Android VPN API. Используй оригинальный Telegram, либо отключи для него триггер-режим.</string>
     <string name="trigger_dualapp_more">Почему?</string>
     <string name="trigger_dualapp_explain_title">Дубликаты приложений и VPN</string>
-    <string name="trigger_dualapp_explain_body">Ограничение Android: системный VPN, запущенный в основном пользователе, может добавить в allow-list только приложения этого пользователя. Клон/Dual App работает как отдельный пользователь (UID часто ≥ 999000 на MIUI) — его UID не попадает в allow-list, поэтому пакеты дропаются и приложение пишет «Ожидание сети…».\n\nЧто делать:\n• Используй оригинальный (не клонированный) Telegram в триггер-режиме.\n• В системных настройках отключи «Блокировать соединения без VPN» — тогда клон будет ходить через обычный интернет в обход VPN.\n• Если система видит клон как отдельный пакет — добавь его отдельно (редко возможно).</string>
+    <string name="trigger_dualapp_explain_body">Ограничение Android: системный VPN, запущенный в основном пользователе, может добавить в allow-list только приложения этого пользователя. Клон/Dual App работает как отдельный пользователь (UID часто ≥ 999000 на MIUI) - его UID не попадает в allow-list, поэтому пакеты дропаются и приложение пишет «Ожидание сети…».\n\nЧто делать:\n• Используй оригинальный (не клонированный) Telegram в триггер-режиме.\n• В системных настройках отключи «Блокировать соединения без VPN» - тогда клон будет ходить через обычный интернет в обход VPN.\n• Если система видит клон как отдельный пакет - добавь его отдельно (редко возможно).</string>
 
     <string name="import_subscription_confirm">Добавить эту подписку?\n\n%1$s</string>
 
@@ -136,29 +136,29 @@
     <string name="onb_back">Назад</string>
     <string name="onb_finish">Готово</string>
     <string name="onb_welcome_title">Добро пожаловать в NetGuard</string>
-    <string name="onb_welcome_subtitle">Быстрый зашифрованный доступ — на твоих условиях</string>
-    <string name="onb_welcome_body">NetGuard — современный клиент на xray-core: выборочная маршрутизация, тест скорости, kill switch, защита от Evil Twin Wi-Fi и статистика трафика. Мастер настройки займёт около минуты — всё можно поменять позже в настройках.</string>
+    <string name="onb_welcome_subtitle">Быстрый зашифрованный доступ - на твоих условиях</string>
+    <string name="onb_welcome_body">NetGuard - современный клиент на xray-core: выборочная маршрутизация, тест скорости, kill switch, защита от Evil Twin Wi-Fi и статистика трафика. Мастер настройки займёт около минуты - всё можно поменять позже в настройках.</string>
     <string name="onb_feature_trigger_title">⚡ Триггер-режим</string>
-    <string name="onb_feature_trigger">VPN включается только когда открываешь выбранное приложение, и тихо выключается когда закрываешь. Банки, карты, доставка — всё остальное идёт через обычный интернет. У триггер-приложений нет другого пути в сеть, так что твой реальный IP они не увидят.</string>
+    <string name="onb_feature_trigger">VPN включается только когда открываешь выбранное приложение, и тихо выключается когда закрываешь. Банки, карты, доставка - всё остальное идёт через обычный интернет. У триггер-приложений нет другого пути в сеть, так что твой реальный IP они не увидят.</string>
     <string name="onb_feature_perapp_title">🎯 Per-App VPN</string>
-    <string name="onb_feature_perapp">Классический whitelist/blacklist приложений через туннель. Удобно когда большая часть устройства должна быть на VPN, а пара приложений — напрямую.</string>
+    <string name="onb_feature_perapp">Классический whitelist/blacklist приложений через туннель. Удобно когда большая часть устройства должна быть на VPN, а пара приложений - напрямую.</string>
     <string name="onb_feature_protocols_title">🔐 Протоколы и безопасность</string>
-    <string name="onb_feature_protocols">VLESS, VMess, Trojan, Shadowsocks, Hysteria2. Reality, XTLS-Vision, TLS-Fragment, DNS over HTTPS, kill switch, авто-подключение при загрузке — всё поддерживается.</string>
+    <string name="onb_feature_protocols">VLESS, VMess, Trojan, Shadowsocks, Hysteria2. Reality, XTLS-Vision, TLS-Fragment, DNS over HTTPS, kill switch, авто-подключение при загрузке - всё поддерживается.</string>
     <string name="onb_mode_title">Как маршрутизировать трафик?</string>
     <string name="onb_mode_subtitle">Можно поменять позже в настройках</string>
     <string name="onb_mode_global">Глобальный VPN</string>
     <string name="onb_mode_global_desc">Все приложения идут через VPN. Стандартный режим.</string>
     <string name="onb_mode_trigger">Триггер-режим (рекомендуется)</string>
-    <string name="onb_mode_trigger_desc">⚠ Через VPN идут ТОЛЬКО приложения из списка триггеров — для них туннель сам включается при открытии и выключается когда закрываешь. Все остальные (банки, карты, Яндекс, браузер) идут напрямую и НЕ используют VPN никогда.</string>
+    <string name="onb_mode_trigger_desc">⚠ Через VPN идут ТОЛЬКО приложения из списка триггеров - для них туннель сам включается при открытии и выключается когда закрываешь. Все остальные (банки, карты, Яндекс, браузер) идут напрямую и НЕ используют VPN никогда.</string>
     <string name="onb_mode_perapp">Per-App VPN</string>
     <string name="onb_mode_perapp_desc">Вручную выбрать какие приложения идут через VPN, а какие в обход.</string>
     <string name="onb_mode_skip">Решить позже</string>
-    <string name="onb_mode_skip_desc">Пропустить — настрою из меню настроек.</string>
+    <string name="onb_mode_skip_desc">Пропустить - настрою из меню настроек.</string>
     <string name="onb_vpn_title">Разрешить VPN-соединение</string>
     <string name="onb_vpn_body">Android требует явное разрешение на создание VPN-туннеля. NetGuard не собирает и не передаёт трафик который ты не настроил.</string>
     <string name="onb_vpn_grant">Выдать разрешение VPN</string>
     <string name="onb_vpn_granted">Разрешение VPN выдано ✓</string>
-    <string name="onb_vpn_denied">Без разрешения туннель не запустится — выдашь позже в настройках</string>
+    <string name="onb_vpn_denied">Без разрешения туннель не запустится - выдашь позже в настройках</string>
     <string name="onb_usage_title">Доступ к статистике для триггер-режима</string>
     <string name="onb_usage_body">Триггер-режиму нужно знать когда выбранное приложение выходит на передний план. Android отдаёт это через «Доступ к статистике использования». NetGuard читает только имя пакета и ничего не сохраняет.</string>
     <string name="onb_usage_grant">Открыть настройки доступа</string>
@@ -167,7 +167,7 @@
     <string name="onb_done_body">Всё настроено. На главном экране нажми большой переключатель чтобы подключиться, или открой «Серверы» → ＋ чтобы добавить ещё профилей. Подписки будут автоматически обновляться по расписанию.</string>
 
     <string name="onb_profile_title">Добавь первый сервер</string>
-    <string name="onb_profile_body">Вставь ссылку на сервер (vless://, vmess://, trojan://, ss://, hy2://) ИЛИ https:// ссылку на подписку — работает и то, и другое. Можно пропустить и добавить серверы позже на вкладке «Серверы».</string>
+    <string name="onb_profile_body">Вставь ссылку на сервер (vless://, vmess://, trojan://, ss://, hy2://) ИЛИ https:// ссылку на подписку - работает и то, и другое. Можно пропустить и добавить серверы позже на вкладке «Серверы».</string>
     <string name="onb_profile_paste">Вставить из буфера</string>
     <string name="onb_profile_hint">Вставь ссылку на сервер…</string>
     <string name="onb_profile_import">Импортировать</string>
@@ -228,7 +228,7 @@
     <string name="speed_notif_desc">Показывать скорость в строке состояния</string>
     <string name="security_test_desc">Проверить целостность и безопасность VPN-туннеля</string>
     <string name="kill_switch_full_desc">Блокирует весь интернет при отключении VPN. Включите «Постоянный VPN» в настройках Android.</string>
-    <string name="per_app_desc">Только для глобального VPN. Если используешь триггер-режим — оставь ВЫКЛЮЧЕНО, триггер сам управляет маршрутизацией.</string>
+    <string name="per_app_desc">Только для глобального VPN. Если используешь триггер-режим - оставь ВЫКЛЮЧЕНО, триггер сам управляет маршрутизацией.</string>
     <string name="export_import_desc">Копировать конфигурацию в буфер обмена для передачи</string>
     <string name="backup_restore_desc">Сохранить профили в файл или восстановить из резервной копии</string>
     <!-- Server switching -->
@@ -278,6 +278,6 @@
     <string name="bypass_list_desc">Домены и IP, которые идут напрямую (минуя VPN)</string>
     <string name="bypass_domains_hint">Домены (по одному на строку)</string>
     <string name="bypass_ips_hint">IP / CIDR (по одному на строку)</string>
-    <string name="bypass_too_broad_warning">Паттерн \"%1$s\" слишком широкий — почти весь трафик пойдёт мимо VPN</string>
+    <string name="bypass_too_broad_warning">Паттерн \"%1$s\" слишком широкий - почти весь трафик пойдёт мимо VPN</string>
     <string name="bypass_too_broad_toast">Некоторые правила обхода слишком широкие и фактически отключают VPN</string>
 </resources>
