@@ -48,7 +48,8 @@ class App : Application() {
         profileRepository = ProfileRepository(database.profileDao())
         subscriptionRepository = SubscriptionRepository(
             database.subscriptionDao(),
-            database.profileDao()
+            database.profileDao(),
+            this,
         )
         statsRepository = StatsRepository(this)
         com.smarttools.netguard.util.GeoLookup.init(this)

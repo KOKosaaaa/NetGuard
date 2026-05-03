@@ -20,7 +20,7 @@ class SubscriptionUpdateWorker(
     override suspend fun doWork(): Result {
         return try {
             val db = AppDatabase.getInstance(applicationContext)
-            val repo = SubscriptionRepository(db.subscriptionDao(), db.profileDao())
+            val repo = SubscriptionRepository(db.subscriptionDao(), db.profileDao(), applicationContext)
             val subs = repo.getAll()
             var successCount = 0
             var errorCount = 0

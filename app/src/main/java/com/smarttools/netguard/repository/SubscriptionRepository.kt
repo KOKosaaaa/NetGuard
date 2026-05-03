@@ -1,5 +1,7 @@
 package com.smarttools.netguard.repository
 
+import android.content.Context
+import android.provider.Settings
 import com.smarttools.netguard.BuildConfig
 import com.smarttools.netguard.core.ProfileParser
 import com.smarttools.netguard.database.ProfileDao
@@ -16,12 +18,31 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.net.URL
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 class SubscriptionRepository(
     private val subDao: SubscriptionDao,
-    private val profileDao: ProfileDao
+    private val profileDao: ProfileDao,
+    private val context: Context,
 ) {
+    /**
+     * Stable per-install hardware id sent to the subscription server so it
+     * can bind a slot to THIS device regardless of UA / language / IP changes.
+     * Derived from Settings.Secure.ANDROID_ID hashed with SHA-256 so the raw
+     * id never leaves the device. ANDROID_ID is stable across app updates,
+     * reinstalls and reboots; it changes only on factory reset, which is the
+     * correct semantics for "this is a new device".
+     */
+    private val hwid: String by lazy {
+        val raw = Settings.Secure.getString(
+            context.contentResolver, Settings.Secure.ANDROID_ID
+        ) ?: ""
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(raw.toByteArray(Charsets.UTF_8))
+        // hex, lowercase, 64 chars
+        digest.joinToString("") { "%02x".format(it) }
+    }
     /**
      * Network interceptor validates every request (including redirects)
      * to prevent SSRF via redirect chain: HTTPS → HTTP or → private IP.
@@ -129,6 +150,7 @@ class SubscriptionRepository(
             val request = Request.Builder()
                 .url(sub.url)
                 .header("User-Agent", "NetGuard/${BuildConfig.VERSION_NAME}")
+                .header("x-hwid", hwid)
                 .get()
                 .build()
 
