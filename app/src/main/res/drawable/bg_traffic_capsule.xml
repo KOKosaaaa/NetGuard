@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solid rounded capsule. Color is applied via backgroundTint in the layout
+     so it's theme-aware. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="100dp" />
+    <solid android:color="#FFFFFFFF" />
+</shape>

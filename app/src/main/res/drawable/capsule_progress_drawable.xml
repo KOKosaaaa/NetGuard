@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two-layer drawable for the traffic capsule: a rounded "track" filled with
+     a translucent theme color, plus a clipped "progress" layer that fills from
+     the left as used/total grows. Both layers get tinted at runtime via theme
+     attrs (capsuleTrackColor / capsuleProgressColor). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="100dp" />
+            <solid android:color="#FFFFFFFF" />
+            <stroke android:width="1dp" android:color="#80808080" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="100dp" />
+                <solid android:color="#FFFFFFFF" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

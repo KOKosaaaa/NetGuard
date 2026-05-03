@@ -162,7 +162,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     var winner: ServerProfile? = null
                     var winnerMs = Int.MAX_VALUE
                     for (p in sample) {
-                        val ms = PingHelper.tcpPing(p.address, p.port)
+                        val ms = PingHelper.pingForProfile(p.address, p.port, p.protocol)
                         if (ms >= 0) profileRepo.updatePing(p.id, ms)
                         if (ms in 0..winnerMs) {
                             winner = p.copy(lastPingMs = ms)

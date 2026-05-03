@@ -201,6 +201,7 @@
     <string name="no_servers_reachable">Серверы недоступны</string>
     <string name="no_servers">Серверы не добавлены</string>
     <string name="sort_by_ping">Сортировать по пингу</string>
+    <string name="sort_by_subscription">Сортировать по подписке</string>
     <string name="log_all">Все</string>
     <string name="log_info">Инфо</string>
     <string name="log_warn">Пред.</string>

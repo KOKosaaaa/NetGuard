@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.smarttools.netguard.App
 import com.smarttools.netguard.core.ProfileParser
 import com.smarttools.netguard.model.ServerProfile
+import com.smarttools.netguard.model.Subscription
 import com.smarttools.netguard.util.PingHelper
 import com.smarttools.netguard.util.ServiceTester
 import kotlinx.coroutines.async
@@ -24,6 +25,12 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
 
     val subscriptionNames: StateFlow<Map<Long, String>> = subscriptionRepo.getAllFlow()
         .map { subs -> subs.associate { it.id to it.name } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    /** Full subscription metadata indexed by id, used for header rows in the
+     *  Servers list (traffic counter, support/web icons, announce text). */
+    val subscriptionsById: StateFlow<Map<Long, Subscription>> = subscriptionRepo.getAllFlow()
+        .map { subs -> subs.associateBy { it.id } }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
     private val _importResult = MutableSharedFlow<ImportResult>(replay = 1)
@@ -102,7 +109,7 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
                 val currentProfiles = profiles.value
                 val jobs = currentProfiles.map { profile ->
                     async {
-                        val ms = PingHelper.tcpPing(profile.address, profile.port)
+                        val ms = PingHelper.pingForProfile(profile.address, profile.port, profile.protocol)
                         profileRepo.updatePing(profile.id, ms)
                     }
                 }
@@ -113,16 +120,41 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /** True when last applied sort was "by ping" — toggles each click. */
+    private val _sortByPingActive = MutableStateFlow(false)
+    val sortByPingActive: StateFlow<Boolean> = _sortByPingActive.asStateFlow()
+
+    /** Click on the menu item: toggle between "by ping" and "by subscription". */
+    fun toggleSort() {
+        if (_sortByPingActive.value) {
+            sortBySubscription()
+        } else {
+            sortByPing()
+        }
+    }
+
     fun sortByPing() {
         val sorted = profiles.value.sortedWith(compareBy {
             if (it.lastPingMs < 0) Int.MAX_VALUE else it.lastPingMs
         })
         updateSortOrder(sorted)
+        _sortByPingActive.value = true
+    }
+
+    /** Restore the default order: grouped by subscription, profiles within a
+     *  subscription back in their insertion order (which matches the order the
+     *  server's subscription returned them). */
+    fun sortBySubscription() {
+        val sorted = profiles.value.sortedWith(
+            compareBy({ it.subscriptionId }, { it.id })
+        )
+        updateSortOrder(sorted)
+        _sortByPingActive.value = false
     }
 
     fun pingProfile(profile: ServerProfile) {
         viewModelScope.launch {
-            val ms = PingHelper.tcpPing(profile.address, profile.port)
+            val ms = PingHelper.pingForProfile(profile.address, profile.port, profile.protocol)
             profileRepo.updatePing(profile.id, ms)
         }
     }

@@ -1,6 +1,9 @@
 package com.smarttools.netguard.ui.profiles
 
+import android.content.Intent
+import android.net.Uri
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
@@ -8,99 +11,239 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.ItemProfileBinding
+import com.smarttools.netguard.databinding.ItemSubscriptionHeaderBinding
 import com.smarttools.netguard.model.ServerProfile
+import com.smarttools.netguard.model.Subscription
+import com.smarttools.netguard.util.TrafficFormatter
 import java.util.Collections
 
+/**
+ * Adapter for the Servers list. Shows two row types:
+ *  - HEADER: subscription metadata (name + traffic + clickable web/support icons + announce)
+ *  - PROFILE: a single server profile (existing item_profile.xml)
+ *
+ * Headers are inserted before the first profile of each subscription. Profiles
+ * with subscriptionId=0 (manually-added) are shown without a header.
+ *
+ * Caller passes a flat profile list AND a Map<subId, Subscription>; the adapter
+ * builds the mixed list internally.
+ */
 class ProfileAdapter(
     private val onItemClick: (ServerProfile) -> Unit,
     private val onItemLongClick: (ServerProfile) -> Unit,
     private val onPingClick: (ServerProfile) -> Unit,
     private val onFavoriteClick: (ServerProfile) -> Unit
-) : ListAdapter<ServerProfile, ProfileAdapter.ViewHolder>(DIFF) {
+) : ListAdapter<ProfileAdapter.Item, RecyclerView.ViewHolder>(DIFF) {
 
-    companion object {
-        private val DIFF = object : DiffUtil.ItemCallback<ServerProfile>() {
-            override fun areItemsTheSame(a: ServerProfile, b: ServerProfile) = a.id == b.id
-            override fun areContentsTheSame(a: ServerProfile, b: ServerProfile) = a == b
+    /**
+     * Like RelativeSizeSpan but also lifts the glyph's baseline so the larger
+     * character stays vertically centered with the surrounding (smaller) text.
+     * Plain RelativeSizeSpan keeps the baseline → enlarged glyph drops below.
+     */
+    class CenteredSizeSpan(private val scale: Float) :
+        android.text.style.MetricAffectingSpan() {
+        override fun updateMeasureState(p: android.text.TextPaint) = updateDrawState(p)
+        override fun updateDrawState(p: android.text.TextPaint) {
+            val origMetrics = p.fontMetrics
+            val origCenter = (origMetrics.ascent + origMetrics.descent) / 2f
+            p.textSize = p.textSize * scale
+            val newMetrics = p.fontMetrics
+            val newCenter = (newMetrics.ascent + newMetrics.descent) / 2f
+            p.baselineShift += (origCenter - newCenter).toInt()
         }
     }
 
-    private val mutableList = mutableListOf<ServerProfile>()
+    sealed class Item {
+        abstract val stableId: String
+        data class Header(val sub: Subscription) : Item() {
+            override val stableId = "h-${sub.id}"
+        }
+        data class Profile(val profile: ServerProfile) : Item() {
+            override val stableId = "p-${profile.id}"
+        }
+    }
+
+    companion object {
+        private const val TYPE_HEADER = 0
+        private const val TYPE_PROFILE = 1
+
+        private val DIFF = object : DiffUtil.ItemCallback<Item>() {
+            override fun areItemsTheSame(a: Item, b: Item) = a.stableId == b.stableId
+            override fun areContentsTheSame(a: Item, b: Item) = a == b
+        }
+    }
+
+    /** Mutable list for drag-reorder; mirror of ListAdapter's currentList. */
+    private val mutableList = mutableListOf<Item>()
     private val listLock = Any()
 
-    override fun submitList(list: List<ServerProfile>?) {
+    fun setData(profiles: List<ServerProfile>, subsById: Map<Long, Subscription>) {
+        val items = mutableListOf<Item>()
+        var prevSubId: Long = -1L
+        for (p in profiles) {
+            if (p.subscriptionId > 0 && p.subscriptionId != prevSubId) {
+                subsById[p.subscriptionId]?.let { items.add(Item.Header(it)) }
+            }
+            items.add(Item.Profile(p))
+            prevSubId = p.subscriptionId
+        }
         synchronized(listLock) {
             mutableList.clear()
-            mutableList.addAll(list ?: emptyList())
+            mutableList.addAll(items)
             super.submitList(mutableList.toList())
         }
     }
 
-    fun moveItem(from: Int, to: Int) {
+    fun moveItem(from: Int, to: Int): Boolean {
         synchronized(listLock) {
-            if (from < 0 || to < 0 || from >= mutableList.size || to >= mutableList.size) return
+            if (from < 0 || to < 0 || from >= mutableList.size || to >= mutableList.size) return false
+            // Disallow moving headers and disallow moving across subscription boundaries.
+            val src = mutableList[from] as? Item.Profile ?: return false
+            val dst = mutableList[to]
+            if (dst is Item.Header) return false
+            if (dst is Item.Profile && dst.profile.subscriptionId != src.profile.subscriptionId) return false
             Collections.swap(mutableList, from, to)
             notifyItemMoved(from, to)
+            return true
         }
     }
 
-    fun getReorderedList(): List<ServerProfile> = synchronized(listLock) { mutableList.toList() }
-
-    inner class ViewHolder(val binding: ItemProfileBinding) : RecyclerView.ViewHolder(binding.root)
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemProfileBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return ViewHolder(binding)
+    /** For drag-to-reorder save: returns profiles in current visual order. */
+    fun getReorderedList(): List<ServerProfile> = synchronized(listLock) {
+        mutableList.mapNotNull { (it as? Item.Profile)?.profile }
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val profile = getItem(position)
-        val b = holder.binding
-        val ctx = b.root.context
+    fun itemAt(position: Int): Item? = synchronized(listLock) {
+        mutableList.getOrNull(position)
+    }
 
-        b.tvName.text = profile.name.ifEmpty { "${profile.address}:${profile.port}" }
-        b.tvAddress.text = "${profile.address}:${profile.port}"
-        b.tvProtocol.text = profile.protocol.value.uppercase()
+    override fun getItemViewType(position: Int): Int = when (getItem(position)) {
+        is Item.Header -> TYPE_HEADER
+        is Item.Profile -> TYPE_PROFILE
+    }
 
-        // Ping
-        when {
-            profile.lastPingMs < 0 -> {
-                b.tvPing.text = "-"
-                b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
-            }
-            profile.lastPingMs < 200 -> {
-                b.tvPing.text = "${profile.lastPingMs}ms"
-                b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.ping_good))
-            }
-            profile.lastPingMs < 500 -> {
-                b.tvPing.text = "${profile.lastPingMs}ms"
-                b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.ping_medium))
-            }
-            else -> {
-                b.tvPing.text = "${profile.lastPingMs}ms"
-                b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.ping_bad))
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            TYPE_HEADER -> HeaderVH(ItemSubscriptionHeaderBinding.inflate(inflater, parent, false))
+            else -> ProfileVH(ItemProfileBinding.inflate(inflater, parent, false))
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val item = getItem(position)) {
+            is Item.Header -> (holder as HeaderVH).bind(item.sub)
+            is Item.Profile -> (holder as ProfileVH).bind(item.profile)
+        }
+    }
+
+    // ---------- ViewHolders ----------
+
+    inner class HeaderVH(private val b: ItemSubscriptionHeaderBinding) :
+        RecyclerView.ViewHolder(b.root) {
+
+        fun bind(sub: Subscription) {
+            b.tvSubName.text = sub.name
+            b.tvSubTraffic.text = formatTraffic(sub.usedBytes, sub.totalBytes)
+
+            // Pick a stable color from group palette by subscription id
+            val colorIdx = (sub.id % SubscriptionGroupDecoration.GROUP_COLORS.size).toInt()
+            val color = SubscriptionGroupDecoration.GROUP_COLORS[colorIdx]
+            b.tvSubName.setTextColor(color)
+
+            b.ivSubWeb.visibility = if (sub.webPageUrl.isNotBlank()) View.VISIBLE else View.GONE
+            b.ivSubWeb.setOnClickListener { openUrl(sub.webPageUrl) }
+
+            b.ivSubSupport.visibility = if (sub.supportUrl.isNotBlank()) View.VISIBLE else View.GONE
+            b.ivSubSupport.setOnClickListener { openUrl(sub.supportUrl) }
+
+            if (sub.announce.isNotBlank()) {
+                b.tvSubAnnounce.visibility = View.VISIBLE
+                b.tvSubAnnounce.text = sub.announce
+            } else {
+                b.tvSubAnnounce.visibility = View.GONE
             }
         }
 
-        // Selection indicator
-        if (profile.isSelected) {
-            b.root.setCardBackgroundColor(ContextCompat.getColor(ctx, R.color.card_selected))
-        } else {
-            b.root.setCardBackgroundColor(ContextCompat.getColor(ctx, R.color.card_normal))
+        private fun openUrl(url: String) {
+            if (url.isBlank()) return
+            try {
+                val ctx = b.root.context
+                val i = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(i)
+            } catch (_: Exception) { /* no browser / malformed URL — silent */ }
         }
 
-        // Favorite star
-        b.ivFavorite.setImageResource(
-            if (profile.isFavorite) R.drawable.ic_star_filled
-            else R.drawable.ic_star_outline
-        )
-        b.ivFavorite.setOnClickListener { onFavoriteClick(profile) }
-
-        b.root.setOnClickListener { onItemClick(profile) }
-        b.root.setOnLongClickListener {
-            onItemLongClick(profile)
-            true
+        private fun formatTraffic(used: Long, total: Long): CharSequence {
+            val usedStr = TrafficFormatter.formatBytes(used)
+            if (total > 0) return "$usedStr / ${TrafficFormatter.formatBytes(total)}"
+            // For "X / ∞" enlarge the infinity glyph slightly AND shift its
+            // baseline so it stays vertically centered with the digits next to
+            // it (RelativeSizeSpan alone would drop the larger glyph below the
+            // baseline of the smaller text).
+            val full = "$usedStr / \u221E"
+            val span = android.text.SpannableString(full)
+            val infIdx = full.length - 1
+            span.setSpan(
+                CenteredSizeSpan(1.4f),
+                infIdx, full.length,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            return span
         }
-        b.tvPing.setOnClickListener { onPingClick(profile) }
+    }
+
+    inner class ProfileVH(val binding: ItemProfileBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(profile: ServerProfile) {
+            val b = binding
+            val ctx = b.root.context
+
+            b.tvName.text = profile.name.ifEmpty { "${profile.address}:${profile.port}" }
+            b.tvAddress.text = "${profile.address}:${profile.port}"
+            b.tvProtocol.text = profile.protocol.value.uppercase()
+
+            when {
+                profile.lastPingMs < 0 -> {
+                    b.tvPing.text = "-"
+                    b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
+                }
+                profile.lastPingMs < 200 -> {
+                    b.tvPing.text = "${profile.lastPingMs}ms"
+                    b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.ping_good))
+                }
+                profile.lastPingMs < 500 -> {
+                    b.tvPing.text = "${profile.lastPingMs}ms"
+                    b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.ping_medium))
+                }
+                else -> {
+                    b.tvPing.text = "${profile.lastPingMs}ms"
+                    b.tvPing.setTextColor(ContextCompat.getColor(ctx, R.color.ping_bad))
+                }
+            }
+
+            // Theme-tied attrs (defined in themes.xml) — keep cards readable on
+            // both light and dark themes, plus distinct selection highlight.
+            val attr = if (profile.isSelected) R.attr.cardSelectedBackground
+                       else R.attr.cardNormalBackground
+            val tv = android.util.TypedValue()
+            ctx.theme.resolveAttribute(attr, tv, true)
+            b.root.setCardBackgroundColor(tv.data)
+
+            b.ivFavorite.setImageResource(
+                if (profile.isFavorite) R.drawable.ic_star_filled
+                else R.drawable.ic_star_outline
+            )
+            b.ivFavorite.setOnClickListener { onFavoriteClick(profile) }
+
+            b.root.setOnClickListener { onItemClick(profile) }
+            b.root.setOnLongClickListener {
+                onItemLongClick(profile)
+                true
+            }
+            b.tvPing.setOnClickListener { onPingClick(profile) }
+        }
     }
 }

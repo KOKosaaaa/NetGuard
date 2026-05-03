@@ -13,7 +13,7 @@ import java.io.File
 
 @Database(
     entities = [ServerProfile::class, Subscription::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -49,6 +49,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE subscriptions ADD COLUMN usedBytes INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE subscriptions ADD COLUMN totalBytes INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE subscriptions ADD COLUMN supportUrl TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE subscriptions ADD COLUMN webPageUrl TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE subscriptions ADD COLUMN announce TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -63,7 +73,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         DB_NAME
                     )
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                         .fallbackToDestructiveMigration()
                         .build()
                         .also { INSTANCE = it }

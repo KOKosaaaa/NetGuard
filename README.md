@@ -136,6 +136,79 @@ If we missed your project here, please open an issue — credit is the one thing
 
 ## Release notes
 
+### v1.2.0 (2026-05-03)
+
+Big UI + plumbing release. The `Servers` tab now shows subscription metadata
+(traffic, support / website icons, announcement) and a real subscription
+header per group. Several long-standing bugs around selection state, ping,
+and frame stability fixed.
+
+**Subscription headers + metadata**
+- New `Subscription` fields: `usedBytes`, `totalBytes`, `supportUrl`,
+  `webPageUrl`, `announce`. Parsed from the standard subscription response
+  headers — `subscription-userinfo` (upload/download/total), `support-url`,
+  `profile-web-page-url`, `announce` (plain UTF-8 or `base64:...` prefixed).
+- DB migration `5 → 6`: `ALTER TABLE subscriptions` adds the five columns.
+- `ProfileAdapter` rebuilt as a multi-viewType list: each subscription gets a
+  row of its own (`item_subscription_header.xml`) before its profile rows. The
+  header shows the subscription name (left, ellipsizes if too long), a traffic
+  capsule centered in the gap (used / total or used / ∞ for unlimited
+  quotas), and clickable globe / paper-plane icons on the right that open the
+  provider's website / support chat. Icons hide automatically when the
+  matching URL is empty.
+- `SubscriptionGroupDecoration` simplified: text and icons live in the header
+  row now; the decoration only paints the colored frame around each group.
+  Frame is stable during scroll — `top` / `bottom` extrapolate past the
+  viewport when one end of the group is offscreen, so it no longer collapses
+  onto the visible subset.
+- Item-change animations disabled on the servers list — selecting a profile
+  or refreshing pings no longer makes the group frame "jump".
+
+**Bug fixes**
+- "Server not selected" while VPN is running. `replaceSubscriptionProfiles`
+  now preserves `isSelected` and `isFavorite` across a subscription refresh
+  by matching old → new profiles on the stable identity tuple
+  (`protocol + address + port + uuid + password`). Previously the auto-update
+  worker wiped the selected server and the home screen showed "no profile
+  selected" while the tunnel kept running on the now-orphaned config.
+- Hysteria2 / UDP ping. `PingHelper.pingForProfile` dispatches by protocol:
+  TCP-handshake for VLESS / VMess / Trojan / Shadowsocks, ICMP echo (via
+  Android's setuid `/system/bin/ping`) for Hysteria2 (QUIC over UDP).
+  Hy2 servers no longer always show `-` in the ping column.
+- Subscription title decoder. `decodeProfileTitle` now tries the standard
+  base64 alphabet before URL-safe; some providers (GruVPN among them) send
+  `base64:` payloads containing `/`, which the URL-safe decoder rejected and
+  the subscription name silently fell back to the host.
+
+**Servers tab UX**
+- Sort menu item is a toggle. First tap sorts by ping; while sorted by ping
+  the menu item reads *Sort by Subscription* and a second tap restores the
+  default order (grouped by subscription, profiles in the original order the
+  server returned them).
+- Friendly profile names. The labels we generate for our own subscriptions
+  are now user-readable ("🚀 Основной — быстрый", "🇷🇺 Если в РФ не работает",
+  "🛡 Резерв 1 (Reality)", "☁ Через Cloudflare 1", "⚡ Быстрый UDP",
+  "🔒 Trojan / Shadowsocks (резерв)") instead of the previous "DE Reality" /
+  "CDN WS WARP" abbreviations.
+
+**Theming + status bar**
+- Light theme now sets `windowLightStatusBar=true` and (API 27+)
+  `windowLightNavigationBar=true`, so the system clock / battery icons
+  switch to dark on the white status bar instead of disappearing.
+- Card backgrounds for selected / unselected profiles are theme-tied via two
+  new attrs (`cardNormalBackground`, `cardSelectedBackground`); each theme
+  (Default Dark / Light / OLED Black / Ocean / Dynamic) supplies values that
+  stay readable on its own surface palette. Previously the dark-theme defaults
+  rendered as semi-transparent slivers on the light theme.
+
+**Internals**
+- New string keys: `sort_by_subscription` (en + ru). Other locales fall
+  through to English.
+- New drawables: `ic_globe.xml`, `ic_paper_plane.xml`,
+  `bg_traffic_capsule.xml`, `capsule_progress_drawable.xml`. Tints follow
+  `?android:attr/textColorPrimary` so a single asset works on every theme.
+- `versionCode` 40, `versionName` "1.2.0".
+
 ### v1.1.91 (2026-05-03)
 
 UX + plumbing follow-up to v1.1.9. No new security claims — every change here either widens what the app accepts as input, makes existing state visible, or hides a confusing error behind a clearer one.

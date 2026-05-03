@@ -135,12 +135,24 @@ class SubscriptionRepository(
             val response = httpClient.newCall(request).execute()
             @Suppress("RedundantExplicitType")
             var expireMs: Long = 0L
+            var usedBytes: Long = 0L
+            var totalBytes: Long = 0L
+            var supportUrl = ""
+            var webPageUrl = ""
+            var announce = ""
             var serverTitle: String? = null
             val body = response.use { resp ->
                 if (!resp.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${resp.code}"))
                 }
-                expireMs = parseExpireFromHeaders(resp.header("subscription-userinfo"))
+                val userinfo = resp.header("subscription-userinfo")
+                expireMs = parseExpireFromHeaders(userinfo)
+                val (used, total) = parseTrafficFromHeaders(userinfo)
+                usedBytes = used
+                totalBytes = total
+                supportUrl = (resp.header("support-url") ?: "").trim().take(URL_LIMIT)
+                webPageUrl = (resp.header("profile-web-page-url") ?: "").trim().take(URL_LIMIT)
+                announce = (decodeProfileTitle(resp.header("announce")) ?: "").take(ANNOUNCE_LIMIT)
                 val rawTitleHeader = resp.header("profile-title")
                 serverTitle = decodeProfileTitle(rawTitleHeader)
                 android.util.Log.i(
@@ -148,7 +160,9 @@ class SubscriptionRepository(
                     "fetch ok host=${java.net.URL(sub.url).host} " +
                         "raw-profile-title=${rawTitleHeader ?: "<missing>"} " +
                         "decoded=${serverTitle ?: "<null>"} " +
-                        "userRenamed=${sub.userRenamed}"
+                        "userRenamed=${sub.userRenamed} " +
+                        "used=$usedBytes total=$totalBytes " +
+                        "support='${supportUrl}' web='${webPageUrl}' announce-len=${announce.length}"
                 )
                 val respBody = resp.body ?: return@withContext Result.failure(Exception("Empty response"))
                 // Limit response to 2MB to prevent OOM from malicious servers
@@ -203,7 +217,12 @@ class SubscriptionRepository(
                     name = resolvedName,
                     profileCount = profiles.size,
                     lastUpdatedMs = System.currentTimeMillis(),
-                    expireMs = expireMs
+                    expireMs = expireMs,
+                    usedBytes = usedBytes,
+                    totalBytes = totalBytes,
+                    supportUrl = supportUrl,
+                    webPageUrl = webPageUrl,
+                    announce = announce
                 )
             )
 
@@ -240,16 +259,21 @@ class SubscriptionRepository(
             raw.startsWith("base64:", ignoreCase = true) -> raw.substring("base64:".length).trim()
             else -> return raw.take(SUB_NAME_LIMIT)
         }
+        // Android's Base64 decoder treats URL_SAFE as exclusive: passing
+        // URL_SAFE rejects `+` and `/`, plain DEFAULT rejects `-` and `_`.
+        // Real-world providers use either, so try standard first and fall
+        // back to URL-safe on failure.
+        val baseFlags = android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
         return try {
-            // Accept both standard and URL-safe base64 alphabets, ignore
-            // missing padding (some providers strip it).
-            val flags = android.util.Base64.NO_WRAP or
-                android.util.Base64.URL_SAFE or
-                android.util.Base64.NO_PADDING
-            val bytes = android.util.Base64.decode(payload, flags)
+            val bytes = android.util.Base64.decode(payload, baseFlags)
             String(bytes, Charsets.UTF_8).take(SUB_NAME_LIMIT)
         } catch (_: Exception) {
-            null
+            try {
+                val bytes = android.util.Base64.decode(payload, baseFlags or android.util.Base64.URL_SAFE)
+                String(bytes, Charsets.UTF_8).take(SUB_NAME_LIMIT)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
@@ -260,6 +284,28 @@ class SubscriptionRepository(
      *   upload=...; download=...; total=...; expire=<unix-seconds>
      * Returns 0 if header is null/empty/malformed/expire missing/zero.
      */
+    /**
+     * Parse used (upload+download) and total bytes from `subscription-userinfo`.
+     * Returns Pair(used=upload+download, total). 0/0 if header missing/malformed.
+     * Convention: total=0 means unlimited quota (we display ∞ in UI).
+     */
+    private fun parseTrafficFromHeaders(header: String?): Pair<Long, Long> {
+        if (header.isNullOrBlank()) return 0L to 0L
+        var up = 0L; var down = 0L; var total = 0L
+        for (part in header.split(';')) {
+            val kv = part.trim().split('=', limit = 2)
+            if (kv.size != 2) continue
+            val key = kv[0].lowercase()
+            val v = kv[1].trim().toLongOrNull() ?: continue
+            when (key) {
+                "upload" -> up = v
+                "download" -> down = v
+                "total" -> total = v
+            }
+        }
+        return (up + down) to total
+    }
+
     private fun parseExpireFromHeaders(header: String?): Long {
         if (header.isNullOrBlank()) return 0L
         for (part in header.split(';')) {
@@ -288,5 +334,8 @@ class SubscriptionRepository(
         // Cap subscription names to avoid a malicious server returning a
         // multi-megabyte profile-title header that freezes the RecyclerView.
         const val SUB_NAME_LIMIT = 128
+        // Cap support/web URLs and announce text — never trust remote length.
+        const val URL_LIMIT = 512
+        const val ANNOUNCE_LIMIT = 1024
     }
 }

@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Theme-tied card colors. Each theme below MUST set these. -->
+    <attr name="cardNormalBackground" format="color" />
+    <attr name="cardSelectedBackground" format="color" />
+    <!-- Traffic capsule progress-bar colors. Track = empty background;
+         progress = filled portion (used / total fraction). -->
+    <attr name="capsuleTrackColor" format="color" />
+    <attr name="capsuleProgressColor" format="color" />
 
     <!-- Default Dark -->
     <style name="Theme.NetGuard" parent="Theme.Material3.Dark.NoActionBar">
@@ -14,6 +22,10 @@
         <item name="colorOutline">#49454F</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="cardNormalBackground">@color/card_normal</item>
+        <item name="cardSelectedBackground">@color/card_selected</item>
+        <item name="capsuleTrackColor">#66FFFFFF</item>
+        <item name="capsuleProgressColor">#FF7C4DFF</item>
     </style>
 
     <!-- Light -->
@@ -29,6 +41,18 @@
         <item name="colorOutline">#CAC4D0</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Tell Android to draw status/nav-bar icons in DARK on light theme,
+             otherwise white icons disappear on the light translucent bar. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <!-- Card colors are theme-tied — dark-theme defaults are unreadable on
+             white. Override here. -->
+        <item name="cardNormalBackground">#FFFFFFFF</item>
+        <item name="cardSelectedBackground">#FFE8DEF8</item>
+        <!-- Light theme: dark translucent track + bold primary fill = high
+             contrast on white background. -->
+        <item name="capsuleTrackColor">#FFD0D0D0</item>
+        <item name="capsuleProgressColor">#FF6200EE</item>
     </style>
 
     <!-- OLED Black — pure black for AMOLED displays -->
@@ -46,12 +70,20 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">#000000</item>
+        <item name="cardNormalBackground">@color/card_normal</item>
+        <item name="cardSelectedBackground">@color/card_selected</item>
+        <item name="capsuleTrackColor">#66FFFFFF</item>
+        <item name="capsuleProgressColor">#FFBB86FC</item>
     </style>
 
     <!-- Dynamic — Material You (Android 12+), DynamicColors overlays this -->
     <style name="Theme.NetGuard.Dynamic" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="cardNormalBackground">?attr/colorSurfaceVariant</item>
+        <item name="cardSelectedBackground">?attr/colorSecondaryContainer</item>
+        <item name="capsuleTrackColor">?android:attr/colorControlHighlight</item>
+        <item name="capsuleProgressColor">?attr/colorPrimary</item>
     </style>
 
     <!-- Ocean — deep blue & cyan -->
@@ -69,6 +101,10 @@
         <item name="android:windowBackground">#060E18</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">#060E18</item>
+        <item name="cardNormalBackground">#FF132F4C</item>
+        <item name="cardSelectedBackground">#FF1A5C68</item>
+        <item name="capsuleTrackColor">#66FFFFFF</item>
+        <item name="capsuleProgressColor">#FF00BCD4</item>
     </style>
 
 </resources>

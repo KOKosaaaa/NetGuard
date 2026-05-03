@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="2dp">
+
+    <!-- Subscription name pinned to left wall, never moves. wrap_content +
+         constrainedWidth so it ellipsizes at the capsule's left edge if too
+         long; capsule and icons hold their own positions on the right. -->
+    <!-- Name takes priority: stays wrap_content while there is room. Only when
+         the trio (name + capsule + icons) wouldn't fit does it ellipsize via
+         constrainedWidth + end_to_start of capsule. -->
+    <TextView
+        android:id="@+id/tv_sub_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        tools:text="KOKOS' VPN"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/tv_sub_traffic"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/tv_sub_traffic"
+        app:layout_constraintHorizontal_chainStyle="packed"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constrainedWidth="true" />
+
+    <!-- Capsule — fixed size by content; bias=0.5 in the chain centers it in
+         the free gap between name and icons. If name + capsule + icons don't
+         fit, the chain ellipsizes the name (constrainedWidth above), capsule
+         stays its natural width. Single-line baseline-aligned text — no
+         relative-size span so glyphs don't drift off-baseline. -->
+    <TextView
+        android:id="@+id/tv_sub_traffic"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:fontFamily="monospace"
+        android:background="@drawable/bg_traffic_capsule"
+        android:backgroundTint="?attr/capsuleTrackColor"
+        android:textColor="?attr/colorOnSurface"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="0dp"
+        android:paddingBottom="3dp"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        tools:text="1.5 GB / ∞"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toEndOf="@id/tv_sub_name"
+        app:layout_constraintEnd_toStartOf="@id/iv_sub_web"
+        app:layout_constraintHorizontal_bias="0.5" />
+
+    <ImageView
+        android:id="@+id/iv_sub_web"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:padding="2dp"
+        android:src="@drawable/ic_globe"
+        android:contentDescription="Website"
+        android:visibility="gone"
+        android:layout_marginEnd="6dp"
+        app:layout_constraintTop_toTopOf="@id/tv_sub_traffic"
+        app:layout_constraintBottom_toBottomOf="@id/tv_sub_traffic"
+        app:layout_constraintEnd_toStartOf="@id/iv_sub_support" />
+
+    <ImageView
+        android:id="@+id/iv_sub_support"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:padding="2dp"
+        android:src="@drawable/ic_paper_plane"
+        android:contentDescription="Support"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/tv_sub_traffic"
+        app:layout_constraintBottom_toBottomOf="@id/tv_sub_traffic"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/tv_sub_announce"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:visibility="gone"
+        android:layout_marginTop="2dp"
+        tools:text="Welcome message"
+        app:layout_constraintTop_toBottomOf="@id/tv_sub_traffic"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

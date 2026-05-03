@@ -64,19 +64,31 @@ class ProfileListFragment : Fragment() {
         binding.rvProfiles.layoutManager = LinearLayoutManager(requireContext())
         binding.rvProfiles.adapter = adapter
         binding.rvProfiles.addItemDecoration(groupDecoration)
+        // Change-animations cause the group frame decoration to "jump" while the
+        // RecyclerView momentarily holds two copies of the same item (old fading
+        // out + new fading in). Disable them — selection / ping updates redraw
+        // immediately, frame stays still.
+        (binding.rvProfiles.itemAnimator as? androidx.recyclerview.widget.DefaultItemAnimator)
+            ?.supportsChangeAnimations = false
 
-        // Swipe to delete
+        // Swipe to delete + drag to reorder. Headers are immovable / non-swipeable;
+        // getMovementFlags returns 0 for header view holders.
         val swipeCallback = object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN,
             ItemTouchHelper.LEFT
         ) {
+            override fun getMovementFlags(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int {
+                val pos = vh.adapterPosition
+                if (pos == RecyclerView.NO_POSITION) return 0
+                return if (adapter.itemAt(pos) is ProfileAdapter.Item.Header) 0
+                       else super.getMovementFlags(rv, vh)
+            }
+
             override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
                 val from = vh.adapterPosition
                 val to = target.adapterPosition
                 if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
-                if (from >= adapter.currentList.size || to >= adapter.currentList.size) return false
-                adapter.moveItem(from, to)
-                return true
+                return adapter.moveItem(from, to)
             }
 
             override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
@@ -86,8 +98,9 @@ class ProfileListFragment : Fragment() {
 
             override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {
                 val pos = vh.adapterPosition
-                if (pos == RecyclerView.NO_POSITION || pos >= adapter.currentList.size) return
-                val profile = adapter.currentList[pos]
+                if (pos == RecyclerView.NO_POSITION) return
+                val item = adapter.itemAt(pos) as? ProfileAdapter.Item.Profile ?: return
+                val profile = item.profile
                 viewModel.deleteProfile(profile)
                 Snackbar.make(binding.root, R.string.profile_deleted, Snackbar.LENGTH_LONG)
                     .setAction(R.string.undo) {
@@ -102,7 +115,7 @@ class ProfileListFragment : Fragment() {
             when (item.itemId) {
                 R.id.action_ping_all -> { viewModel.pingAll(); true }
                 R.id.action_test_services -> { viewModel.testServices(); true }
-                R.id.action_sort_ping -> { viewModel.sortByPing(); true }
+                R.id.action_sort_ping -> { viewModel.toggleSort(); true }
                 else -> false
             }
         }
@@ -110,17 +123,16 @@ class ProfileListFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    viewModel.profiles.collect { profiles ->
-                        groupDecoration.setData(profiles, viewModel.subscriptionNames.value)
-                        adapter.submitList(profiles)
-                        binding.tvEmpty.visibility = if (profiles.isEmpty()) View.VISIBLE else View.GONE
-                    }
-                }
-                launch {
-                    viewModel.subscriptionNames.collect { names ->
-                        groupDecoration.setData(viewModel.profiles.value, names)
-                        binding.rvProfiles.invalidateItemDecorations()
-                    }
+                    // Combine profiles + subscriptions so adapter and the
+                    // (now text-less) decoration stay in sync.
+                    kotlinx.coroutines.flow.combine(
+                        viewModel.profiles,
+                        viewModel.subscriptionsById
+                    ) { profiles, subs -> profiles to subs }
+                        .collect { (profiles, subs) ->
+                            adapter.setData(profiles, subs)
+                            binding.tvEmpty.visibility = if (profiles.isEmpty()) View.VISIBLE else View.GONE
+                        }
                 }
                 launch {
                     viewModel.importResult.collect { result ->
@@ -140,6 +152,15 @@ class ProfileListFragment : Fragment() {
                 launch {
                     viewModel.serviceTestResults.collect { results ->
                         showServiceTestResults(results)
+                    }
+                }
+                launch {
+                    // Toggle sort menu item title between "by ping" / "by sub"
+                    viewModel.sortByPingActive.collect { byPing ->
+                        binding.toolbar.menu.findItem(R.id.action_sort_ping)?.setTitle(
+                            if (byPing) R.string.sort_by_subscription
+                            else R.string.sort_by_ping
+                        )
                     }
                 }
             }

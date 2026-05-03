@@ -240,6 +240,7 @@
 
     <!-- Sort -->
     <string name="sort_by_ping">Sort by Ping</string>
+    <string name="sort_by_subscription">Sort by Subscription</string>
 
     <!-- Logs -->
     <string name="log_all">All</string>

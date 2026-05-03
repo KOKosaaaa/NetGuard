@@ -56,8 +56,24 @@ interface ProfileDao {
 
     @Transaction
     suspend fun replaceSubscriptionProfiles(subId: Long, profiles: List<ServerProfile>) {
+        // Preserve user state (selection, favorite) across a refresh by
+        // matching old → new profiles on the stable identity tuple
+        // (protocol + address + port + uuid + password). Without this the
+        // selected server gets wiped on every auto-update, the home screen
+        // shows "Сервер не выбран" while xray keeps running on a stale
+        // profile, and favorites silently vanish.
+        val old = getBySubscription(subId)
+        fun key(p: ServerProfile) = "${p.protocol}|${p.address}|${p.port}|${p.uuid}|${p.password}|${p.hysteriaAuth}"
+        val oldByKey = old.associateBy { key(it) }
+        val carried = profiles.map { p ->
+            val prev = oldByKey[key(p)] ?: return@map p
+            p.copy(
+                isSelected = prev.isSelected,
+                isFavorite = prev.isFavorite
+            )
+        }
         deleteBySubscription(subId)
-        insertAll(profiles)
+        insertAll(carried)
     }
 
     @Query("UPDATE profiles SET lastPingMs = :ms WHERE id = :id")
