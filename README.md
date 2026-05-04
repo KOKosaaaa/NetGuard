@@ -142,6 +142,29 @@ If we missed your project here, please open an issue - credit is the one thing w
 
 ## Release notes
 
+### v1.2.15 (2026-05-05) — БС-mode (Russian whitelist) hardening
+
+Russia turned on "white-list mode" for mobile data on May 5 (until May 9). Under that
+regime the operator's edge router drops every TCP SYN that targets a non-whitelisted
+IP **before** ТСПУ DPI looks at SNI — so a plain TCP preflight to a foreign VPS gets
+RST-injected even though the actual VLESS+Reality TLS handshake (with `SNI=max.ru`
+or another whitelisted domain) would pass through.
+
+- **`failoverMaxAttempts` 3 → 14.** Try the entire 16-profile subscription before
+  surfacing an error. Previously the budget exhausted before reaching CF tunnel
+  IPs that sometimes overlap with whitelisted ranges.
+- **`ServerPreflight` is now non-fatal.** Log a warning instead of throwing
+  `IllegalStateException`. xray attempts the real Reality handshake; the protocol
+  passes the operator's L7 check even when L4 SYN gets RST-ed by ТСПУ. v2rayTUN
+  doesn't preflight and works in this scenario — match its behavior.
+- **Whitelist hint in error message.** Detect ECONNREFUSED + timeout pattern
+  across multiple failovers, surface human-readable
+  *"БС-режим? VPN не пройдёт пока оператор не снимет белые списки. Попробуй Wi-Fi."*
+  instead of the abstract `TCP: ECONNREFUSED`.
+- DNS rebinding guard (private/reserved address rejection) inside preflight
+  retained — security boundary unchanged.
+- `versionCode` 46, `versionName` "1.2.15".
+
 ### v1.2.0 (2026-05-03)
 
 Big UI + plumbing release. The `Servers` tab now shows subscription metadata
