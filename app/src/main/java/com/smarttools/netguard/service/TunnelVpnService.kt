@@ -186,7 +186,11 @@ class TunnelVpnService : VpnService() {
     private val failoverTried = java.util.concurrent.CopyOnWriteArraySet<Long>()
     @Volatile
     private var failoverInProgress = false
-    private val failoverMaxAttempts = 3
+    // Bumped from 3 → 14: under whitelist-mode some profiles (CF tunnel IPs that
+    // happen to overlap with whitelisted vk.com / yandex.ru ranges) may pass
+    // even when most fail with ECONNREFUSED. Try the entire subscription before
+    // surfacing an error.
+    private val failoverMaxAttempts = 14
     @Volatile
     private var showSpeedNotification = false
     @Volatile
@@ -421,13 +425,18 @@ class TunnelVpnService : VpnService() {
 
                     val settings = app.loadSettings()
 
-                    // 0. Pre-flight reachability check. Cheap (DNS + 2s TCP)
-                    // and short-circuits a hard-down server before we burn the
-                    // 30s tunnel-establishment budget on it.
+                    // 0. Pre-flight reachability check. Informational only — under
+                    // RU whitelist mode (БС) plain TCP SYN to foreign IP gets
+                    // RST-injected by ТСПУ even when the actual VLESS+Reality
+                    // TLS handshake with SNI=max.ru would pass through. v2rayTUN
+                    // doesn't preflight and connects fine in that scenario, so
+                    // we no longer fail the tunnel on Dead — let xray attempt
+                    // the real protocol; it handles its own retries / errors.
+                    // DNS rebinding guard inside preflight still runs.
                     when (val pf = ServerPreflight.check(profile)) {
                         is ServerPreflight.Result.Dead -> {
-                            LogBuffer.add(LogBuffer.LogLevel.WARN, "Preflight dead: ${pf.reason}")
-                            throw IllegalStateException("Server unreachable: ${pf.reason}")
+                            LogBuffer.add(LogBuffer.LogLevel.WARN,
+                                "Preflight: ${pf.reason} (non-fatal — let xray try)")
                         }
                         is ServerPreflight.Result.Slow -> {
                             LogBuffer.add(LogBuffer.LogLevel.WARN, "Preflight slow: ${pf.rttMs} ms")
@@ -540,11 +549,31 @@ class TunnelVpnService : VpnService() {
      * back to any other untried profile in the database. After
      * [failoverMaxAttempts] tries we give up and surface the original error.
      */
+    /**
+     * Translate the raw transport-layer error into a user-readable hint when
+     * the pattern strongly suggests a Russian whitelist (БС) mode being active:
+     * mass ECONNREFUSED on every server in a row means the operator is RST-ing
+     * SYN packets at L3 before they reach our infrastructure, so no profile we
+     * try will work — surfacing "Server unreachable" repeatedly is misleading.
+     */
+    private fun maybeWhitelistHint(reason: String): String {
+        val lower = reason.lowercase()
+        val refused = lower.contains("econnrefused") || lower.contains("connection refused")
+        val timeout = lower.contains("timed out") || lower.contains("etimedout")
+        val burned = failoverTried.size >= 3
+        return if (burned && (refused || timeout)) {
+            "БС-режим? Все серверы недоступны на L3 (RST/timeout). " +
+                "VPN не пройдёт пока оператор не снимет белые списки. " +
+                "Попробуй Wi-Fi. ($reason)"
+        } else reason
+    }
+
     private fun handleConnectFailure(reason: String, failedProfileId: Long) {
         VpnWidget.updateAllWidgets(applicationContext)
         if (failoverTried.size >= failoverMaxAttempts) {
-            Log.w(TAG, "Failover budget exhausted (${failoverTried.size}/$failoverMaxAttempts); giving up: $reason")
-            _connectionState.value = ConnectionState.Error(reason)
+            val finalMsg = maybeWhitelistHint(reason)
+            Log.w(TAG, "Failover budget exhausted (${failoverTried.size}/$failoverMaxAttempts); giving up: $finalMsg")
+            _connectionState.value = ConnectionState.Error(finalMsg)
             failoverInProgress = false
             failoverTried.clear()
             stopTunnel()
@@ -562,8 +591,9 @@ class TunnelVpnService : VpnService() {
                 val next = candidates.firstOrNull { it.id !in failoverTried }
                     ?: app.database.profileDao().getAll().firstOrNull { it.id !in failoverTried }
                 if (next == null) {
-                    Log.w(TAG, "No failover candidates left; surfacing error: $reason")
-                    _connectionState.value = ConnectionState.Error(reason)
+                    val finalMsg = maybeWhitelistHint(reason)
+                    Log.w(TAG, "No failover candidates left; surfacing error: $finalMsg")
+                    _connectionState.value = ConnectionState.Error(finalMsg)
                     failoverInProgress = false
                     failoverTried.clear()
                     stopTunnel()
