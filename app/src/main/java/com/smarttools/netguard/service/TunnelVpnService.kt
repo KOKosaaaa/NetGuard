@@ -6,7 +6,6 @@ import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -164,6 +163,8 @@ class TunnelVpnService : VpnService() {
     private var tun2socksProcess: Process? = null
     @Volatile
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    @Volatile
+    private var reconnectJob: Job? = null
     @Volatile
     private var currentProfileId: Long = -1
     @Volatile
@@ -1013,83 +1014,204 @@ class TunnelVpnService : VpnService() {
 
         val fd = builder.establish() ?: return null
 
-        // Tell Android about ALL underlying non-VPN networks so blacklisted
-        // apps can use any of them (cellular AND wifi if both available).
-        // Picking just one would force their bypass traffic to that one only.
+        publishUnderlyingNetworks()
+        return fd
+    }
+
+    /**
+     * Publish the underlying network that actually carries VPN traffic.
+     *
+     * We intentionally pass ONLY ONE network (the one xray's protected socket
+     * is using) — not all non-VPN networks. The reason: Android merges the
+     * NetworkCapabilities of every underlying network into the VPN's own
+     * capabilities. If we publish [WiFi, cellular], the VPN inherits
+     * CELLULAR|WIFI transports AND becomes METERED (because cellular is
+     * metered and METERED is the conservative merge). Apps then think
+     * "you're on mobile data" and refuse to stream / show warnings, even
+     * though packets actually ride WiFi.
+     *
+     * Selection priority:
+     *   1. Ethernet (validated > unvalidated)
+     *   2. WiFi (validated > unvalidated)
+     *   3. Cellular (validated > unvalidated)
+     *
+     * This matches Android's own default-network selection, so the network
+     * we publish is the same one xray's protect()'d sockets follow.
+     */
+    private fun publishUnderlyingNetworks() {
         try {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val nonVpn = cm.allNetworks.filter { net ->
-                val caps = cm.getNetworkCapabilities(net) ?: return@filter false
-                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-            }.toTypedArray()
-            if (nonVpn.isNotEmpty()) {
-                setUnderlyingNetworks(nonVpn)
-                Log.i(TAG, "Underlying networks: ${nonVpn.size} non-VPN networks set")
+            val candidates = cm.allNetworks.mapNotNull { net ->
+                val caps = cm.getNetworkCapabilities(net) ?: return@mapNotNull null
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
+                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@mapNotNull null
+                net to caps
             }
+            if (candidates.isEmpty()) return
+            val best = candidates.maxByOrNull { (_, caps) ->
+                var score = 0
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) score += 300
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) score += 200
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) score += 100
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) score += 10
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) score += 1
+                score
+            }?.first ?: return
+            setUnderlyingNetworks(arrayOf(best))
+            Log.i(TAG, "Underlying network: $best")
         } catch (e: Exception) {
             Log.w(TAG, "setUnderlyingNetworks failed: ${e.message}")
         }
-        return fd
     }
 
     private fun registerNetworkCallback() {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-            .build()
 
         networkCallback = object : ConnectivityManager.NetworkCallback() {
+            // Current default non-VPN network as Android sees it.
             private var currentNetwork: Network? = null
+            // Last known default; survives onLost so the next onAvailable still
+            // detects "WiFi → cellular" even if there was a brief no-network gap.
+            private var lastNetwork: Network? = null
+            // Cellular subscription id (API 30+); -1 = unknown. Used to detect
+            // SIM swap when the Network reference itself doesn't change.
+            private var currentSubId: Int = -1
+            // Bitmask of TRANSPORT_* on the current network.
+            private var currentTransports: Int = 0
+            // Suppress reconnect on initial registration — first event is just
+            // Android telling us what the default is, not a switch.
+            private var firstAvailable = true
+            // First onCapabilitiesChanged for a given Network is a baseline,
+            // not a change. Reset to true whenever currentNetwork changes.
+            private var firstCaps = true
 
             override fun onAvailable(network: Network) {
-                val prev = currentNetwork
+                val prev = lastNetwork
                 currentNetwork = network
-                // Pin VpnService to the new underlying network so outbound sockets
-                // from xray route through it immediately instead of Android's
-                // default, which can briefly resolve to the old (possibly gone)
-                // network during a WiFi↔LTE switch.
-                try {
-                    setUnderlyingNetworks(arrayOf(network))
-                } catch (e: Exception) {
-                    Log.w(TAG, "setUnderlyingNetworks(onAvailable) failed: ${e.message}")
+                lastNetwork = network
+                firstCaps = true
+                // Republish underlying networks (all non-VPN, WiFi-preferred)
+                // so the framework knows which interface VPN traffic rides on
+                // and the OEM smart-switch logic doesn't override WiFi.
+                publishUnderlyingNetworks()
+                if (firstAvailable) {
+                    firstAvailable = false
+                    return
                 }
-                // Only reconnect if we had a DIFFERENT underlying network before (WiFi↔LTE switch)
-                if (prev != null && prev != network &&
-                    _connectionState.value is ConnectionState.Connected &&
-                    !isReconnecting && currentProfileId != -1L) {
-                    Log.i(TAG, "Underlying network changed, reconnecting (TUN kept alive)...")
-                    isReconnecting = true
-                    serviceScope?.launch {
-                        try {
-                            // Short debounce — long enough to coalesce multiple
-                            // onAvailable bursts during a single network swap,
-                            // short enough that the TUN black-hole window stays
-                            // sub-second on a clean handover.
-                            delay(500)
-                            if (currentProfileId != -1L) {
-                                // CRITICAL: only restart xray+tun2socks, keep TUN fd alive
-                                // This prevents ANY traffic from leaking during reconnect
-                                restartTunnelProcessesKeepTun()
-                            }
-                        } finally {
-                            isReconnecting = false
-                        }
-                    }
+                if (prev != network) {
+                    scheduleReconnect("default network ${prev ?: "?"} → $network", network, cm)
+                }
+            }
+
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                if (network != currentNetwork) return
+                val newTransports = encodeTransports(caps)
+                val newSubId = extractSubId(caps)
+                if (firstCaps) {
+                    firstCaps = false
+                    currentSubId = newSubId
+                    currentTransports = newTransports
+                    // VALIDATED status may have just become true — refresh
+                    // preferred-network ordering for setUnderlyingNetworks.
+                    publishUnderlyingNetworks()
+                    return
+                }
+                // SIM swap: same Network object stays around (modem doesn't
+                // re-register) but the active subscription changes.
+                val simSwapped = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+                    newSubId != currentSubId &&
+                    (currentSubId != -1 || newSubId != -1)
+                val transportChanged = newTransports != currentTransports
+                currentSubId = newSubId
+                currentTransports = newTransports
+                if (simSwapped) {
+                    scheduleReconnect("SIM swap (subId $currentSubId → $newSubId)", network, cm)
+                } else if (transportChanged) {
+                    scheduleReconnect("transports changed on $network", network, cm)
                 }
             }
 
             override fun onLost(network: Network) {
                 if (network == currentNetwork) {
                     currentNetwork = null
+                    currentSubId = -1
+                    currentTransports = 0
+                    // Keep lastNetwork — next onAvailable uses it to detect the swap.
                 }
+                // Drop the lost network from the underlying list so apps don't
+                // see a stale handle that points to a dead interface.
+                publishUnderlyingNetworks()
             }
         }
-        cm.registerNetworkCallback(request, networkCallback!!)
+        cm.registerDefaultNetworkCallback(networkCallback!!)
+    }
+
+    private fun encodeTransports(caps: NetworkCapabilities): Int {
+        var bits = 0
+        val all = intArrayOf(
+            NetworkCapabilities.TRANSPORT_CELLULAR,
+            NetworkCapabilities.TRANSPORT_WIFI,
+            NetworkCapabilities.TRANSPORT_BLUETOOTH,
+            NetworkCapabilities.TRANSPORT_ETHERNET,
+            NetworkCapabilities.TRANSPORT_VPN,
+            NetworkCapabilities.TRANSPORT_WIFI_AWARE,
+            NetworkCapabilities.TRANSPORT_LOWPAN
+        )
+        for (t in all) if (caps.hasTransport(t)) bits = bits or (1 shl t)
+        return bits
+    }
+
+    private fun extractSubId(caps: NetworkCapabilities): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return -1
+        val spec = caps.networkSpecifier ?: return -1
+        return try {
+            val cls = Class.forName("android.net.TelephonyNetworkSpecifier")
+            if (!cls.isInstance(spec)) return -1
+            (cls.getMethod("getSubscriptionId").invoke(spec) as? Int) ?: -1
+        } catch (_: Throwable) { -1 }
+    }
+
+    private fun scheduleReconnect(reason: String, network: Network, cm: ConnectivityManager) {
+        if (_connectionState.value !is ConnectionState.Connected) return
+        if (currentProfileId == -1L) return
+        // Cancel any prior pending reconnect — only the latest event wins so
+        // we never restart xray onto a network that's already been replaced.
+        reconnectJob?.cancel()
+        reconnectJob = serviceScope?.launch {
+            try {
+                isReconnecting = true
+                Log.i(TAG, "Reconnect scheduled — $reason")
+                LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть сменилась, переподключение…")
+                // Wait for VALIDATED so xray doesn't try to dial out before
+                // the new network has working internet (cellular handover,
+                // SIM activation, captive-portal probe all take 1-3s).
+                waitForValidated(cm, network, timeoutMs = 5000L)
+                // Coalesce trailing onAvailable/onCapabilitiesChanged bursts
+                // that arrive immediately after the network stabilizes.
+                delay(300)
+                if (currentProfileId != -1L && isActive) {
+                    restartTunnelProcessesKeepTun()
+                }
+            } catch (_: CancellationException) {
+                // Superseded by a newer network event.
+            } finally {
+                isReconnecting = false
+            }
+        }
+    }
+
+    private suspend fun waitForValidated(cm: ConnectivityManager, network: Network, timeoutMs: Long) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val caps = cm.getNetworkCapabilities(network) ?: return
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
+            delay(150)
+        }
     }
 
     private fun unregisterNetworkCallback() {
+        reconnectJob?.cancel()
+        reconnectJob = null
         networkCallback?.let { cb ->
             try {
                 val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
