@@ -42,10 +42,19 @@ class LogFragment : Fragment() {
         binding.rvLogs.layoutManager = LinearLayoutManager(requireContext())
         binding.rvLogs.adapter = adapter
 
-        binding.chipAll.setOnClickListener { filterBy(null) }
-        binding.chipInfo.setOnClickListener { filterBy(LogBuffer.LogLevel.INFO) }
-        binding.chipWarn.setOnClickListener { filterBy(LogBuffer.LogLevel.WARN) }
-        binding.chipError.setOnClickListener { filterBy(LogBuffer.LogLevel.ERROR) }
+        // ChipGroup.setOnCheckedStateChangeListener fires for both check AND
+        // uncheck. setOnClickListener on each chip only knew "user tapped me",
+        // not whether the result was selected or deselected — so deselecting
+        // Error still re-applied the Error filter.
+        binding.chipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            val level = when (checkedIds.firstOrNull()) {
+                R.id.chip_info -> LogBuffer.LogLevel.INFO
+                R.id.chip_warn -> LogBuffer.LogLevel.WARN
+                R.id.chip_error -> LogBuffer.LogLevel.ERROR
+                else -> null
+            }
+            filterBy(level)
+        }
 
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {

@@ -6,6 +6,7 @@ import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -163,8 +164,21 @@ class TunnelVpnService : VpnService() {
     private var tun2socksProcess: Process? = null
     @Volatile
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    // Secondary callback that fires for ANY non-VPN INTERNET network (not just
+    // the system default). On Realme/OPPO/MIUI a VPN with setUnderlyingNetworks
+    // pinned to cellular often inhibits the OS-level WiFi-promotion logic, so
+    // the default-network callback never fires when WiFi connects. This second
+    // callback notices new WiFi/Ethernet/etc. and lets us force a reconnect.
+    @Volatile
+    private var auxNetworkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile
     private var reconnectJob: Job? = null
+    // Target network of the in-progress reconnect. We refuse to cancel/restart
+    // a reconnect that's already aiming at this same network — otherwise a
+    // burst of OEM-spammed onCapabilitiesChanged events keeps cancelling us
+    // before we finish the actual restart.
+    @Volatile
+    private var reconnectTargetNetwork: Network? = null
     @Volatile
     private var currentProfileId: Long = -1
     @Volatile
@@ -198,6 +212,18 @@ class TunnelVpnService : VpnService() {
     private var xrayWatchdogJob: Job? = null
     @Volatile
     private var tun2socksWatchdogJob: Job? = null
+    // Reference to the in-progress startTunnel coroutine so a network event
+    // arriving mid-connect can cancel it and restart with the new network.
+    // Without this, a doomed dial through a dying network keeps running until
+    // CONNECTION_TIMEOUT_MS expires and the user stares at "Connecting…".
+    @Volatile
+    private var startTunnelJob: Job? = null
+    // Set to true while we are intentionally killing xray/tun2socks (reconnect,
+    // restart, stop). The watchdog checks this BEFORE treating a process exit
+    // as a crash — without it, cancel() of the watchdog races with waitFor()
+    // returning from our own destroy() and we falsely call recoverXrayCrash().
+    @Volatile
+    private var intentionalProcessKill = false
     @Volatile
     private var lastNotificationUpdate = 0L
 
@@ -384,7 +410,7 @@ class TunnelVpnService : VpnService() {
         return START_STICKY
     }
 
-    private fun startTunnel(profileId: Long) {
+    private fun startTunnel(profileId: Long, skipPreflight: Boolean = false) {
         if (isStarting) {
             Log.w(TAG, "startTunnel called while already starting, ignoring")
             return
@@ -408,8 +434,13 @@ class TunnelVpnService : VpnService() {
         LogBuffer.add(LogBuffer.LogLevel.INFO, "Starting tunnel...")
         currentProfileId = profileId
         isStarting = true
+        // Fresh session — reset crash counter so a new connect attempt isn't
+        // pre-loaded with attempts from a previous handover.
+        xrayRestartAttempts = 0
+        isReconnecting = false
 
-        serviceScope?.launch {
+        startTunnelJob?.cancel()
+        startTunnelJob = serviceScope?.launch {
             try {
                 withTimeout(CONNECTION_TIMEOUT_MS) {
                     val app = application as App
@@ -434,16 +465,22 @@ class TunnelVpnService : VpnService() {
                     // we no longer fail the tunnel on Dead — let xray attempt
                     // the real protocol; it handles its own retries / errors.
                     // DNS rebinding guard inside preflight still runs.
-                    when (val pf = ServerPreflight.check(profile)) {
-                        is ServerPreflight.Result.Dead -> {
-                            LogBuffer.add(LogBuffer.LogLevel.WARN,
-                                "Preflight: ${pf.reason} (non-fatal — let xray try)")
-                        }
-                        is ServerPreflight.Result.Slow -> {
-                            LogBuffer.add(LogBuffer.LogLevel.WARN, "Preflight slow: ${pf.rttMs} ms")
-                        }
-                        is ServerPreflight.Result.Ok -> {
-                            if (pf.rttMs > 0) Log.i(TAG, "Preflight OK ${pf.rttMs} ms")
+                    //
+                    // Skipped on network-handover restarts: preflight burns
+                    // ~1-2s of TCP SYN attempts, and the user is already
+                    // staring at "ожидание сети" — let xray dial directly.
+                    if (!skipPreflight) {
+                        when (val pf = ServerPreflight.check(profile)) {
+                            is ServerPreflight.Result.Dead -> {
+                                LogBuffer.add(LogBuffer.LogLevel.WARN,
+                                    "Preflight: ${pf.reason} (non-fatal — let xray try)")
+                            }
+                            is ServerPreflight.Result.Slow -> {
+                                LogBuffer.add(LogBuffer.LogLevel.WARN, "Preflight slow: ${pf.rttMs} ms")
+                            }
+                            is ServerPreflight.Result.Ok -> {
+                                if (pf.rttMs > 0) Log.i(TAG, "Preflight OK ${pf.rttMs} ms")
+                            }
                         }
                     }
 
@@ -534,6 +571,12 @@ class TunnelVpnService : VpnService() {
             } catch (e: TimeoutCancellationException) {
                 Log.e(TAG, "Connection timed out after ${CONNECTION_TIMEOUT_MS / 1000}s")
                 handleConnectFailure("Connection timed out", profileId)
+            } catch (e: CancellationException) {
+                // Cancelled by scheduleReconnect during a network handover —
+                // a new startTunnel is about to take over. Don't treat this
+                // as a failure: don't change state, don't trigger failover.
+                Log.i(TAG, "startTunnel cancelled (handover in progress)")
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start tunnel", e)
                 handleConnectFailure(e.message ?: "Unknown error", profileId)
@@ -763,10 +806,14 @@ class TunnelVpnService : VpnService() {
     private fun launchProcessWatchdog() {
         xrayWatchdogJob?.cancel()
         tun2socksWatchdogJob?.cancel()
+        // We're about to take responsibility for the new processes — clear the
+        // intentional-kill shield so a real crash IS observed.
+        intentionalProcessKill = false
 
         xrayWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
             try {
                 val exitCode = xrayProcess?.waitFor() ?: return@launch
+                if (intentionalProcessKill || isReconnecting) return@launch
                 val state = _connectionState.value
                 if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
                     Log.e(TAG, "Xray died (exit $exitCode); attempting recover")
@@ -777,6 +824,7 @@ class TunnelVpnService : VpnService() {
         tun2socksWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
             try {
                 val exitCode = tun2socksProcess?.waitFor() ?: return@launch
+                if (intentionalProcessKill || isReconnecting) return@launch
                 val state = _connectionState.value
                 if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
                     Log.e(TAG, "tun2socks died (exit $exitCode)")
@@ -796,6 +844,16 @@ class TunnelVpnService : VpnService() {
      * down. The TUN stays up; if xray comes back, traffic resumes seamlessly.
      */
     private fun recoverXrayCrash(exitCode: Int) {
+        // If a network-change reconnect is already pending, defer to it.
+        // Trying to revive xray on a network that's about to be replaced is
+        // pointless (the new dial will fail too) and burns through our 3
+        // attempts in seconds — after which we call stopTunnel() and tear
+        // the whole tunnel down right when the user expected a graceful
+        // handover.
+        if (isReconnecting || intentionalProcessKill) {
+            Log.i(TAG, "Xray exited ($exitCode) but reconnect is pending — skipping recover")
+            return
+        }
         xrayRestartAttempts++
         if (xrayRestartAttempts > 3) {
             Log.e(TAG, "Xray crashed $xrayRestartAttempts times, giving up")
@@ -1038,113 +1096,308 @@ class TunnelVpnService : VpnService() {
      * This matches Android's own default-network selection, so the network
      * we publish is the same one xray's protect()'d sockets follow.
      */
-    private fun publishUnderlyingNetworks() {
+    /**
+     * @param preferred Network the caller is sure is current (from a callback
+     *   parameter). When set, we trust it over [ConnectivityManager.activeNetwork],
+     *   which can return a lingering handle for ~1s after a default switch on
+     *   some OEMs. Pass null when you don't have a callback-fresh handle.
+     * @param avoid Network we KNOW is dead/no-longer-default (typically the
+     *   onLost arg). We never pick it even if cm.activeNetwork still returns
+     *   it from a stale cache.
+     */
+    /**
+     * Last non-VPN network we successfully published. Used as a fallback when a
+     * fresh `publishUnderlyingNetworks` call momentarily can't find any candidate
+     * (e.g., right after a TUN re-establish, when the system briefly reports our
+     * own VPN as the default and `cm.allNetworks` hasn't re-indexed yet). Better
+     * to keep the previously-known underlying than to leave VPN sockets bound to
+     * nothing — the alternative is the routing-tar-pit we saw in v1.2.16 logs.
+     */
+    @Volatile
+    private var lastPublishedNetwork: Network? = null
+
+    private fun pickUnderlyingNetwork(
+        cm: ConnectivityManager,
+        preferred: Network?,
+        avoid: Network?
+    ): Network? {
+        // If `preferred` is our own VPN, ignore it — that's a callback echo,
+        // not a real underlying network.
+        val cleanedPreferred = preferred?.let { net ->
+            val caps = cm.getNetworkCapabilities(net)
+            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) null
+            else net
+        }
+        val candidate: Network? = cleanedPreferred ?: cm.activeNetwork
+        candidate?.let { net ->
+            if (net == avoid) return@let
+            val caps = cm.getNetworkCapabilities(net) ?: return@let
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@let
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@let
+            return net
+        }
+        return cm.allNetworks.mapNotNull { net ->
+            if (net == avoid) return@mapNotNull null
+            val caps = cm.getNetworkCapabilities(net) ?: return@mapNotNull null
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
+            if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@mapNotNull null
+            net to caps
+        }.maxByOrNull { (_, caps) ->
+            var score = 0
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) score += 300
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) score += 200
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) score += 100
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) score += 10
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) score += 5
+            score
+        }?.first
+    }
+
+    private fun publishUnderlyingNetworks(preferred: Network? = null, avoid: Network? = null) {
         try {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val candidates = cm.allNetworks.mapNotNull { net ->
-                val caps = cm.getNetworkCapabilities(net) ?: return@mapNotNull null
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
-                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@mapNotNull null
-                net to caps
+            val chosen = pickUnderlyingNetwork(cm, preferred, avoid)
+            if (chosen == null) {
+                // No candidate right now. Two paths:
+                // 1) We have a memo of the last-published non-VPN network and it's
+                //    still valid (not equal to `avoid`, still has INTERNET) — keep
+                //    it published rather than leaving the VPN bound to nothing.
+                //    This covers the post-TUN-restart hole where the default
+                //    callback briefly reports our own VPN.
+                // 2) Otherwise schedule a short async retry: capabilities lag the
+                //    network appearing by 50–300ms on most OEMs.
+                val memo = lastPublishedNetwork
+                val memoUsable = memo != null && memo != avoid && run {
+                    val caps = cm.getNetworkCapabilities(memo)
+                    caps != null
+                        && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                }
+                if (memoUsable && memo != null) {
+                    Log.w(TAG, "publishUnderlyingNetworks: no fresh candidate, retaining $memo")
+                    setUnderlyingNetworks(arrayOf(memo))
+                    return
+                }
+                Log.w(TAG, "publishUnderlyingNetworks: no usable network — scheduling retry (avoid=$avoid)")
+                serviceScope?.launch {
+                    repeat(8) { i ->
+                        delay(150)
+                        val retry = pickUnderlyingNetwork(cm, null, avoid)
+                        if (retry != null) {
+                            try {
+                                setUnderlyingNetworks(arrayOf(retry))
+                                lastPublishedNetwork = retry
+                                Log.i(TAG, "Underlying network (retry #${i + 1}): $retry")
+                            } catch (_: Exception) {}
+                            return@launch
+                        }
+                    }
+                    Log.w(TAG, "publishUnderlyingNetworks: retry exhausted, still no usable network")
+                }
+                return
             }
-            if (candidates.isEmpty()) return
-            val best = candidates.maxByOrNull { (_, caps) ->
-                var score = 0
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) score += 300
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) score += 200
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) score += 100
-                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) score += 10
-                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) score += 1
-                score
-            }?.first ?: return
-            setUnderlyingNetworks(arrayOf(best))
-            Log.i(TAG, "Underlying network: $best")
+            setUnderlyingNetworks(arrayOf(chosen))
+            lastPublishedNetwork = chosen
+            Log.i(TAG, "Underlying network: $chosen (preferred=${preferred != null}, avoid=$avoid)")
         } catch (e: Exception) {
             Log.w(TAG, "setUnderlyingNetworks failed: ${e.message}")
         }
     }
 
+    /**
+     * Network handover detection — v1.2.18 redesign.
+     *
+     * Why the v1.2.16/v1.2.17 design was broken:
+     * `registerDefaultNetworkCallback` reports the default network for THIS
+     * UID. For a running VpnService, that's the VPN itself — so the default
+     * callback only ever fires with our own VPN network, which is useless for
+     * tracking the underlying transport (WiFi/cellular) carrying VPN packets.
+     * The previous code's SIM-swap, validated-flip, transport-changed logic
+     * was guarded by `if (network != currentNetwork) return` — and
+     * currentNetwork was either VPN-self (poisoned) or null after Fix #4 —
+     * so none of those events ever ran in practice.
+     *
+     * v1.2.18: aux callback (filtering out VPN) is the SOLE source of truth
+     * for what's underneath us. It tracks per-network state, detects the
+     * three real handover events (better network appeared, our underlying
+     * lost, cellular regained validation after tower loss), and drives
+     * publishUnderlyingNetworks + scheduleReconnect directly.
+     */
     private fun registerNetworkCallback() {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+        // Default callback kept alive only for diagnostic logging — the
+        // events here are dominated by VPN-self echoes and aren't actionable.
+        // We do NOT make handover decisions from this callback.
         networkCallback = object : ConnectivityManager.NetworkCallback() {
-            // Current default non-VPN network as Android sees it.
-            private var currentNetwork: Network? = null
-            // Last known default; survives onLost so the next onAvailable still
-            // detects "WiFi → cellular" even if there was a brief no-network gap.
-            private var lastNetwork: Network? = null
-            // Cellular subscription id (API 30+); -1 = unknown. Used to detect
-            // SIM swap when the Network reference itself doesn't change.
-            private var currentSubId: Int = -1
-            // Bitmask of TRANSPORT_* on the current network.
-            private var currentTransports: Int = 0
-            // Suppress reconnect on initial registration — first event is just
-            // Android telling us what the default is, not a switch.
-            private var firstAvailable = true
-            // First onCapabilitiesChanged for a given Network is a baseline,
-            // not a change. Reset to true whenever currentNetwork changes.
-            private var firstCaps = true
-
             override fun onAvailable(network: Network) {
-                val prev = lastNetwork
-                currentNetwork = network
-                lastNetwork = network
-                firstCaps = true
-                // Republish underlying networks (all non-VPN, WiFi-preferred)
-                // so the framework knows which interface VPN traffic rides on
-                // and the OEM smart-switch logic doesn't override WiFi.
-                publishUnderlyingNetworks()
-                if (firstAvailable) {
-                    firstAvailable = false
-                    return
-                }
-                if (prev != network) {
-                    scheduleReconnect("default network ${prev ?: "?"} → $network", network, cm)
-                }
+                val caps = cm.getNetworkCapabilities(network)
+                val isVpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+                Log.i(TAG, "default onAvailable: $network (vpn=$isVpn)")
             }
-
-            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                if (network != currentNetwork) return
-                val newTransports = encodeTransports(caps)
-                val newSubId = extractSubId(caps)
-                if (firstCaps) {
-                    firstCaps = false
-                    currentSubId = newSubId
-                    currentTransports = newTransports
-                    // VALIDATED status may have just become true — refresh
-                    // preferred-network ordering for setUnderlyingNetworks.
-                    publishUnderlyingNetworks()
-                    return
-                }
-                // SIM swap: same Network object stays around (modem doesn't
-                // re-register) but the active subscription changes.
-                val simSwapped = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
-                    newSubId != currentSubId &&
-                    (currentSubId != -1 || newSubId != -1)
-                val transportChanged = newTransports != currentTransports
-                currentSubId = newSubId
-                currentTransports = newTransports
-                if (simSwapped) {
-                    scheduleReconnect("SIM swap (subId $currentSubId → $newSubId)", network, cm)
-                } else if (transportChanged) {
-                    scheduleReconnect("transports changed on $network", network, cm)
-                }
-            }
-
             override fun onLost(network: Network) {
-                if (network == currentNetwork) {
-                    currentNetwork = null
-                    currentSubId = -1
-                    currentTransports = 0
-                    // Keep lastNetwork — next onAvailable uses it to detect the swap.
-                }
-                // Drop the lost network from the underlying list so apps don't
-                // see a stale handle that points to a dead interface.
-                publishUnderlyingNetworks()
+                Log.i(TAG, "default onLost: $network")
             }
         }
         cm.registerDefaultNetworkCallback(networkCallback!!)
+        registerAuxNetworkCallback(cm)
     }
+
+    private fun scoreCaps(caps: NetworkCapabilities): Int {
+        var s = 0
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) s += 300
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) s += 200
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) s += 100
+        if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) s += 10
+        if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) s += 5
+        return s
+    }
+
+    /**
+     * Watch every non-VPN INTERNET network. This is the real handover detector.
+     *
+     * Triggers a reconnect when:
+     *  - A network appears whose score beats `lastPublishedNetwork`
+     *    (e.g., WiFi connects while we're on cellular).
+     *  - Our current `lastPublishedNetwork` is lost (e.g., WiFi turned off).
+     *  - The cellular underlying loses then regains validation
+     *    (e.g., tower hiccup; same Network object survives but TCP died).
+     *  - SIM subscription id changes on the cellular underlying.
+     */
+    private fun registerAuxNetworkCallback(cm: ConnectivityManager) {
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
+        auxNetworkCallback = object : ConnectivityManager.NetworkCallback() {
+            // Per-network state cache. We compare each onCapabilitiesChanged
+            // against the prior snapshot for that exact Network to decide
+            // what (if anything) actually changed.
+            private val knownNet =
+                java.util.concurrent.ConcurrentHashMap<Network, NetState>()
+
+            override fun onAvailable(network: Network) {
+                Log.i(TAG, "aux onAvailable: $network")
+            }
+
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return
+                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return
+
+                val newTransports = encodeTransports(caps)
+                val newSubId = extractSubId(caps)
+                val nowValidated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                val prev = knownNet[network]
+                knownNet[network] = NetState(newSubId, newTransports, nowValidated)
+
+                val current = lastPublishedNetwork
+                val isOurUnderlying = (network == current)
+
+                // 1) Cellular tower-loss recovery: same Network, regained
+                //    validation. xray's TCP sockets through this transport
+                //    died during the gap and won't recover on their own.
+                if (isOurUnderlying
+                    && prev != null
+                    && !prev.validated
+                    && nowValidated
+                    && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                ) {
+                    Log.i(TAG, "aux: cellular underlying $network regained validation — reconnecting")
+                    LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть восстановлена — переподключение…")
+                    publishUnderlyingNetworks(preferred = network)
+                    scheduleReconnect("cellular re-validated $network", network, cm)
+                    return
+                }
+
+                // 2) SIM swap on the underlying.
+                if (isOurUnderlying
+                    && prev != null
+                    && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    && newSubId != prev.subId
+                    && (prev.subId != -1 || newSubId != -1)
+                ) {
+                    Log.i(TAG, "aux: SIM swap on underlying ${prev.subId} → $newSubId")
+                    scheduleReconnect("SIM swap on underlying", network, cm)
+                    return
+                }
+
+                // 3) Transports changed on the underlying (rare but possible).
+                if (isOurUnderlying
+                    && prev != null
+                    && newTransports != prev.transports
+                ) {
+                    Log.i(TAG, "aux: transports changed on underlying $network")
+                    scheduleReconnect("transports changed on underlying", network, cm)
+                    return
+                }
+
+                // 4) A different network is now strictly better than what we
+                //    publish. Switch to it. Compare scores using current caps
+                //    (the aux update we just got) vs. capabilities of
+                //    lastPublishedNetwork (re-fetched, since they may have
+                //    drifted since we published).
+                if (!isOurUnderlying && nowValidated) {
+                    val newScore = scoreCaps(caps)
+                    val curScore = current
+                        ?.let { cm.getNetworkCapabilities(it) }
+                        ?.let(::scoreCaps)
+                        ?: -1
+                    if (newScore > curScore) {
+                        Log.i(TAG, "aux: switching underlying $current ($curScore) → $network ($newScore)")
+                        LogBuffer.add(LogBuffer.LogLevel.INFO, "Найдена лучшая сеть — переключаемся…")
+                        publishUnderlyingNetworks(preferred = network)
+                        scheduleReconnect("aux promotion to $network", network, cm)
+                        return
+                    }
+                }
+
+                // 5) First time we see this network as our underlying (e.g., chosen by
+                //    pickUnderlyingNetwork at establishVpn) — record state and move on.
+                //    No action; we already published it.
+            }
+
+            override fun onLost(network: Network) {
+                knownNet.remove(network)
+                val wasOurUnderlying = (network == lastPublishedNetwork)
+                Log.i(TAG, "aux onLost: $network (was-underlying=$wasOurUnderlying)")
+                if (!wasOurUnderlying) return
+
+                // Our underlying just died. Find a replacement. Skip the lost
+                // network in the picker (avoid=network) so cm.activeNetwork's
+                // stale cache doesn't hand it back.
+                val replacement = pickUnderlyingNetwork(cm, null, network)
+                if (replacement != null) {
+                    try { setUnderlyingNetworks(arrayOf(replacement)) } catch (_: Exception) {}
+                    lastPublishedNetwork = replacement
+                    Log.i(TAG, "aux: underlying $network lost → switching to $replacement")
+                    LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть пропала — переключаемся…")
+                    scheduleReconnect("underlying lost, switching to $replacement", replacement, cm)
+                } else {
+                    // No replacement yet. Don't publish anything (keeping the
+                    // dead handle is worse than nothing — VPN-protected sockets
+                    // already can't reach it). When a new aux network appears
+                    // and validates, the score-based switch above picks it up.
+                    Log.w(TAG, "aux: underlying $network lost, no replacement yet")
+                    LogBuffer.add(LogBuffer.LogLevel.WARN, "Сеть пропала, ожидание замены…")
+                    // Mark lastPublished as null so the score comparison treats
+                    // any new validated network as a strict improvement.
+                    lastPublishedNetwork = null
+                }
+            }
+        }
+        try {
+            cm.registerNetworkCallback(request, auxNetworkCallback!!)
+        } catch (e: Exception) {
+            Log.w(TAG, "aux registerNetworkCallback failed: ${e.message}")
+            auxNetworkCallback = null
+        }
+    }
+
+    private data class NetState(
+        val subId: Int,
+        val transports: Int,
+        val validated: Boolean
+    )
 
     private fun encodeTransports(caps: NetworkCapabilities): Int {
         var bits = 0
@@ -1172,53 +1425,131 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun scheduleReconnect(reason: String, network: Network, cm: ConnectivityManager) {
-        if (_connectionState.value !is ConnectionState.Connected) return
         if (currentProfileId == -1L) return
-        // Cancel any prior pending reconnect — only the latest event wins so
-        // we never restart xray onto a network that's already been replaced.
-        reconnectJob?.cancel()
+        val st = _connectionState.value
+        if (st !is ConnectionState.Connected && st !is ConnectionState.Connecting) return
+
+        // If we're stuck in Connecting (a previous dial through a now-dead
+        // network is still grinding), abort it immediately and restart on
+        // the new network. The keep-tun reconnect path expects a Connected
+        // tunnel to mutate; in Connecting there's nothing to keep alive,
+        // we just need to retarget startTunnel.
+        if (st is ConnectionState.Connecting) {
+            Log.i(TAG, "Network change during Connecting — restarting dial: $reason")
+            LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть сменилась — повторный dial…")
+            // Tell the OS the new transport ASAP so xray's protect()'d socket
+            // binds to it, not the old network.
+            publishUnderlyingNetworks(preferred = network)
+            startTunnelJob?.cancel()
+            isStarting = false
+            isReconnecting = false
+            reconnectJob?.cancel()
+            stopTunnelProcesses()
+            startTunnel(currentProfileId, skipPreflight = true)
+            return
+        }
+        // CRITICAL: set isReconnecting BEFORE launching the coroutine. The
+        // watchdog reads this flag to skip recoverXrayCrash, and xray often
+        // dies right at the network-change boundary — before our coroutine
+        // even gets to run. If we set the flag inside the coroutine the
+        // watchdog races us, recoverXrayCrash burns through 4 attempts and
+        // then calls stopTunnel(), tearing down the tunnel we were about to
+        // reconnect.
+        //
+        // We deliberately do NOT clear isReconnecting in a finally block of
+        // the coroutine. If event A's coroutine is cancelled by event B,
+        // event B has already set the flag back to true synchronously above —
+        // but A's finally would race with B and clear it again, opening a
+        // window where the watchdog tears down the tunnel between events.
+        // Instead the flag is cleared on the success path
+        // (restartTunnelProcessesKeepTun → state Connected) or in the
+        // catch path that calls stopTunnel/startTunnel.
+        isReconnecting = true
+        Log.i(TAG, "Reconnect scheduled — $reason")
+        // Republish underlying network IMMEDIATELY (synchronously, before any
+        // suspension). Android rebinds VPN-protected sockets to the new
+        // interface so xray's outbound TCP can recover.
+        publishUnderlyingNetworks(preferred = network)
+
+        // Don't cancel an in-progress reconnect just because a new event
+        // arrived for the SAME network — Realme spams onCapabilitiesChanged
+        // events during a handover (signal strength, NOT_SUSPENDED toggles).
+        // If we cancel on every burst we never finish a reconnect cycle.
+        // Only cancel if the target network actually changed.
+        val existing = reconnectJob
+        if (existing != null && existing.isActive && reconnectTargetNetwork == network) {
+            Log.i(TAG, "Reconnect already running for $network; not cancelling")
+            return
+        }
+        existing?.cancel()
+        reconnectTargetNetwork = network
         reconnectJob = serviceScope?.launch {
             try {
-                isReconnecting = true
-                Log.i(TAG, "Reconnect scheduled — $reason")
-                LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть сменилась, переподключение…")
-                // Wait for VALIDATED so xray doesn't try to dial out before
-                // the new network has working internet (cellular handover,
-                // SIM activation, captive-portal probe all take 1-3s).
-                waitForValidated(cm, network, timeoutMs = 5000L)
-                // Coalesce trailing onAvailable/onCapabilitiesChanged bursts
-                // that arrive immediately after the network stabilizes.
-                delay(300)
-                if (currentProfileId != -1L && isActive) {
-                    restartTunnelProcessesKeepTun()
-                }
+                LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть сменилась — переподключение…")
+                // Active-poll for VALIDATED rather than a fixed delay. On a
+                // healthy WiFi attach this returns in 100-300ms; on slow
+                // cellular it caps at 2000ms. Either way we proceed with the
+                // freshest possible underlying-network state and avoid the
+                // user-perceived "ожидание сети" of a hardcoded 1.5s wait.
+                waitForValidated(cm, network, 2_000L)
+                if (!isActive || currentProfileId == -1L) return@launch
+                // Republish AFTER validation — caps may have flipped from
+                // unvalidated → validated → metered changes during the wait.
+                publishUnderlyingNetworks(preferred = network)
+                restartTunnelProcessesKeepTun()
+                // One more nudge for OEM smart-switch logic. Some Realme/OPPO
+                // builds latch the VPN's underlying-transport icon and only
+                // refresh on a second setUnderlyingNetworks() call.
+                delay(500L)
+                if (isActive) publishUnderlyingNetworks(preferred = network)
             } catch (_: CancellationException) {
-                // Superseded by a newer network event.
+                // Superseded — new event already re-set isReconnecting=true.
             } finally {
-                isReconnecting = false
+                // Always release the target lock, even if cancellation killed us
+                // before restartTunnelProcessesKeepTun() ran (e.g., during
+                // waitForValidated). Otherwise this network stays "locked" and
+                // future scheduleReconnect calls for it skip with "already
+                // running, not cancelling" — exactly the freeze we hit in 1.2.16.
+                reconnectTargetNetwork = null
             }
         }
     }
 
     private suspend fun waitForValidated(cm: ConnectivityManager, network: Network, timeoutMs: Long) {
         val deadline = System.currentTimeMillis() + timeoutMs
+        var sawCaps = false
         while (System.currentTimeMillis() < deadline) {
-            val caps = cm.getNetworkCapabilities(network) ?: return
+            val caps = cm.getNetworkCapabilities(network)
+            if (caps == null) {
+                // The network is gone (or hasn't published caps yet on a brand
+                // new cellular activation). If we already saw caps once and
+                // they vanished, the network died — bail and let the caller
+                // act on whatever the new default is.
+                if (sawCaps) return
+                delay(150)
+                continue
+            }
+            sawCaps = true
             if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
             delay(150)
         }
+        Log.w(TAG, "waitForValidated timed out after ${timeoutMs}ms; proceeding anyway")
     }
 
     private fun unregisterNetworkCallback() {
         reconnectJob?.cancel()
         reconnectJob = null
+        val cm = try {
+            getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        } catch (_: Exception) { null }
         networkCallback?.let { cb ->
-            try {
-                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                cm.unregisterNetworkCallback(cb)
-            } catch (_: Exception) {}
+            try { cm?.unregisterNetworkCallback(cb) } catch (_: Exception) {}
         }
         networkCallback = null
+        auxNetworkCallback?.let { cb ->
+            try { cm?.unregisterNetworkCallback(cb) } catch (_: Exception) {}
+        }
+        auxNetworkCallback = null
     }
 
     /**
@@ -1229,32 +1560,60 @@ class TunnelVpnService : VpnService() {
      */
     private suspend fun restartTunnelProcessesKeepTun() {
         try {
-            // Cancel old watchdogs BEFORE killing processes — otherwise they
-            // detect the intentional kill, see Connecting state, and call stopTunnel()
-            xrayWatchdogJob?.cancel()
-            tun2socksWatchdogJob?.cancel()
+            // CRITICAL ORDER: kill processes BEFORE cancelAndJoin'ing watchdogs.
+            // The watchdog body suspends in `xrayProcess.waitFor()` — that's a
+            // *blocking* IO call on Dispatchers.IO, NOT a cancellable suspension.
+            // If we cancelAndJoin first while the process is alive, the watchdog
+            // can't observe cancellation, waitFor() never returns, and join()
+            // hangs forever. v1.2.16-v1.2.18 had this in the wrong order, which
+            // is why "WiFi off → cellular fallback" never recovered: the old
+            // xray bound to the dead WiFi stayed alive, watchdog stayed stuck,
+            // keep-tun reconnect deadlocked, user's TG sat at "ожидание сети"
+            // until they manually toggled the VPN.
+            //
+            // New order:
+            //   1. Set intentionalProcessKill=true so the watchdog, when its
+            //      waitFor() returns, sees the flag and exits cleanly without
+            //      firing recoverXrayCrash.
+            //   2. Destroy processes — waitFor() returns immediately, watchdog
+            //      body completes.
+            //   3. cancelAndJoin watchdogs — completes instantly because the
+            //      watchdog coroutine already finished.
+            intentionalProcessKill = true
+
+            trafficMonitor?.stop()
+            trafficMonitor = null
+            tun2socksProcess?.let { p ->
+                try { p.destroy() } catch (_: Exception) {}
+                try { p.destroyForcibly() } catch (_: Exception) {}
+            }
+            tun2socksProcess = null
+            xrayProcess?.let { p ->
+                try { p.destroy() } catch (_: Exception) {}
+                try { p.destroyForcibly() } catch (_: Exception) {}
+            }
+            xrayProcess = null
+            CredentialManager.clear()
+
+            // Now safe to join — processes are dead, watchdogs have already
+            // returned (or are about to within microseconds).
+            xrayWatchdogJob?.cancelAndJoin()
+            tun2socksWatchdogJob?.cancelAndJoin()
+            xrayWatchdogJob = null
+            tun2socksWatchdogJob = null
 
             _connectionState.value = ConnectionState.Connecting
             LogBuffer.add(LogBuffer.LogLevel.INFO, "Reconnecting (network change)...")
 
-            withTimeout(CONNECTION_TIMEOUT_MS) {
-                // Kill old processes (but DON'T close vpnFd!)
-                trafficMonitor?.stop()
-                trafficMonitor = null
-                tun2socksProcess?.let { p ->
-                    try { p.destroy() } catch (_: Exception) {}
-                    try { p.destroyForcibly() } catch (_: Exception) {}
-                }
-                tun2socksProcess = null
-                xrayProcess?.let { p ->
-                    try { p.destroy() } catch (_: Exception) {}
-                    try { p.destroyForcibly() } catch (_: Exception) {}
-                }
-                xrayProcess = null
-                CredentialManager.clear()
-
+            // Tighter timeout for keep-tun reconnect (12s vs 30s for cold
+            // start). If we can't bring xray+tun2socks up in 12s, the new
+            // network is broken anyway — fall through to full restart sooner
+            // so the user isn't staring at "ожидание сети" for 30 seconds.
+            withTimeout(12_000L) {
+                yield()
                 val app = application as App
-                val profile = app.database.profileDao().getById(currentProfileId) ?: return@withTimeout
+                val profile = app.database.profileDao().getById(currentProfileId)
+                    ?: throw IllegalStateException("profile $currentProfileId gone")
                 val settings = app.loadSettings()
 
                 // Generate new config
@@ -1269,21 +1628,34 @@ class TunnelVpnService : VpnService() {
                 tempFile.writeText(config.json)
                 tempFile.renameTo(configFile)
 
-                // Restart xray, ensure config deleted even on failure
+                // Restart xray, ensure config deleted even on failure. From this
+                // point onwards new processes are ours — drop the intentional-kill
+                // shield so a real crash of the new process is still observable.
+                intentionalProcessKill = false
                 try {
                     startXrayProcess(configFile)
-                    waitForPort(config.socksPort ?: return@withTimeout, timeoutMs = 5000)
+                    waitForPort(
+                        config.socksPort ?: throw IllegalStateException("socksPort null"),
+                        timeoutMs = 5000
+                    )
                 } finally {
                     configFile.delete()
                 }
 
-                // Reuse existing TUN fd for tun2socks (validate it's still open)
+                yield()
+                // Reuse existing TUN fd for tun2socks (validate it's still open).
+                // If invalid we MUST throw so the catch block triggers a full
+                // restart — silent return would leave xray running, no tun2socks,
+                // state=Connecting forever and the user staring at a spinner.
                 val fd = synchronized(fdLock) {
                     vpnFd?.takeIf { it.fileDescriptor.valid() }
-                } ?: return@withTimeout
-                val socksPort = config.socksPort ?: return@withTimeout
-                val socksUser = config.socksUser ?: return@withTimeout
-                val socksPass = config.socksPass ?: return@withTimeout
+                } ?: throw IllegalStateException("TUN fd invalid after network change")
+                val socksPort = config.socksPort
+                    ?: throw IllegalStateException("socksPort null")
+                val socksUser = config.socksUser
+                    ?: throw IllegalStateException("socksUser null")
+                val socksPass = config.socksPass
+                    ?: throw IllegalStateException("socksPass null")
                 startTun2socksProcess(fd, socksPort, socksUser, socksPass)
 
                 // Restart monitors
@@ -1297,22 +1669,54 @@ class TunnelVpnService : VpnService() {
                 }
                 launchProcessWatchdog()
 
+                // Republish underlying network now that tun2socks is wired
+                // up to the new xray. Without this the VPN keeps inheriting
+                // the old (dead) network's capabilities and the OS status
+                // bar shows the wrong transport icon (or none at all).
+                publishUnderlyingNetworks()
                 _connectionState.value = ConnectionState.Connected()
                 NotificationHelper.showConnectedNotification(this@TunnelVpnService)
+                xrayRestartAttempts = 0
+                isReconnecting = false
+                reconnectTargetNetwork = null
                 Log.i(TAG, "Tunnel reconnected without TUN restart (no IP leak)")
             }
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Reconnect timed out, doing full restart")
+            LogBuffer.add(LogBuffer.LogLevel.WARN, "Reconnect timed out — full restart")
+            isReconnecting = false
             stopTunnelProcesses()
-            startTunnel(currentProfileId)
+            startTunnel(currentProfileId, skipPreflight = true)
+        } catch (e: CancellationException) {
+            Log.i(TAG, "Reconnect cancelled (handover superseded)")
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to reconnect, doing full restart", e)
+            LogBuffer.add(LogBuffer.LogLevel.WARN,
+                "Reconnect failed: ${e.javaClass.simpleName}: ${e.message ?: "?"} → full restart")
+            isReconnecting = false
             stopTunnelProcesses()
-            startTunnel(currentProfileId)
+            startTunnel(currentProfileId, skipPreflight = true)
+        } finally {
+            // Ensure the shield is dropped no matter how we exit. Leaving it
+            // true would silently neuter the watchdog for the next session.
+            intentionalProcessKill = false
+            // Clear the reconnect target on EVERY exit path (success, cancel,
+            // timeout, error). v1.2.16 only cleared it on success — so a job
+            // that died via cancel/timeout left target=<dead network> forever,
+            // which made every subsequent scheduleReconnect for the same Network
+            // see "already running, not cancelling" and silently skip. The result
+            // was a frozen VPN that ignored further handover events.
+            // Worst case: a superseding job already set target=newNet and our
+            // clear races it. Then the next event's "already running for X"
+            // check sees target=null and falls through to cancel+relaunch the
+            // superseder. One extra restart, no broken state.
+            reconnectTargetNetwork = null
         }
     }
 
     private fun stopTunnelProcesses() {
+        intentionalProcessKill = true
         trafficMonitor?.stop()
         trafficMonitor = null
         tun2socksProcess?.let { p ->
@@ -1566,6 +1970,8 @@ class TunnelVpnService : VpnService() {
         // fresh budget, not stale ledger entries from the previous chain.
         failoverInProgress = false
         failoverTried.clear()
+        isReconnecting = false
+        reconnectTargetNetwork = null
         unregisterNetworkCallback()
         trafficMonitor?.stop()
         trafficMonitor = null
