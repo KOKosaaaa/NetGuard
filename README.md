@@ -142,6 +142,69 @@ If we missed your project here, please open an issue - credit is the one thing w
 
 ## Release notes
 
+### v1.2.2 (2026-05-11) — handover rewrite + Hysteria2 fix
+
+**Hysteria2 outbound config fix (GitHub issue #2).** v1.2.16 generated
+`streamSettings.network = "hysteria2"`, which xray-core rejects with
+*"unknown transport protocol: hysteria2"*. Hysteria2 in xray-core is an
+outbound protocol, not a stream transport — the QUIC/UDP layer is
+implicit. `streamSettings` is only emitted now if TLS is enabled, and
+`obfs` moved into `settings` (not `streamSettings.hysteria2Settings`).
+
+**Network handover rewrite.**
+The handover code shipped in v1.2.16 ("registerDefaultNetworkCallback +
+SIM-swap detection") looked correct on paper but didn't actually trigger
+in practice. Three real-world scenarios (WiFi→cellular fallback, cellular
+→ WiFi promotion, cellular tower-loss recovery) all left the VPN bound
+to a dead network until the user manually toggled it.
+
+Five bugs found via logcat traces and fixed in `TunnelVpnService.kt`:
+
+- **`registerDefaultNetworkCallback` is useless for a VpnService** — the
+  default for our own UID *is* the VPN, so the callback only ever fires
+  with the VPN-self handle. All the SIM-swap / validation / transport
+  logic guarded on `if (network != currentNetwork) return` was dead code.
+  Default callback is now a stub that just logs; aux callback (which
+  filters `NET_CAPABILITY_NOT_VPN`) became the sole handover detector.
+- **Aux compared against `cm.activeNetwork`** which for a VPN service
+  is either the VPN itself or the candidate network. Switched to
+  comparing against `lastPublishedNetwork` — the network we actually
+  set as `setUnderlyingNetworks`.
+- **Aux `onLost` did nothing useful** — the lost network just got removed
+  from a `firedFor` set. Now: if the lost network was our underlying,
+  repick a replacement and reconnect; if no replacement is available
+  yet, set `lastPublishedNetwork = null` so the next validated aux
+  network counts as a strict improvement.
+- **`reconnectTargetNetwork` only cleared on success path.** A reconnect
+  job that died via cancel/timeout/error left `target=<dead network>`
+  forever. Subsequent `scheduleReconnect` calls for the same Network
+  saw "already running, not cancelling" and silently dropped. Now
+  cleared in `finally` of every exit path.
+- **`cancelAndJoin` deadlock in `restartTunnelProcessesKeepTun`.** The
+  watchdog body suspends in `Process.waitFor()` — uncancellable blocking
+  IO on `Dispatchers.IO`. Joining the watchdog before destroying the
+  process meant `waitFor()` never returned, the watchdog couldn't observe
+  cancellation, and `cancelAndJoin` hung indefinitely. This was the main
+  reason WiFi-off→cellular fallback never recovered: the old xray on the
+  dead WiFi stayed alive, watchdog stayed stuck, the keep-tun reconnect
+  job deadlocked. Reordered: kill processes first → watchdogs' `waitFor`
+  unblocks → `cancelAndJoin` returns instantly.
+
+Also fixed the log-fragment filter chips: deselecting Error/Warn/Info
+used to re-apply the level filter (the per-chip `OnClickListener` fired
+on both check and uncheck and unconditionally set `currentFilter` to
+that level). Switched to `ChipGroup.setOnCheckedStateChangeListener`
+which sees the resulting checked-IDs set, so an empty selection
+correctly maps to "all".
+
+Known issue: after airplane-mode toggle, the keep-tun reconnect to
+cellular completes successfully (`Tunnel reconnected without TUN restart`
+fires), but xray's upstream TCP doesn't actually carry traffic until
+WiFi comes back. Tracked separately — the handover detection is correct,
+the bug is now somewhere inside xray's protect/bind to the new Network.
+
+`versionCode` 50, `versionName` "1.2.2".
+
 ### v1.2.15 (2026-05-05) — БС-mode (Russian whitelist) hardening
 
 Russia turned on "white-list mode" for mobile data on May 5 (until May 9). Under that

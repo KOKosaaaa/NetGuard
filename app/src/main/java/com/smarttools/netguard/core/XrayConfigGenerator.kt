@@ -335,6 +335,13 @@ object XrayConfigGenerator {
     }
 
     private fun buildHysteria2Outbound(profile: ServerProfile, fingerprint: String): JsonObject {
+        // xray-core's hysteria2 outbound expects:
+        //   - settings.servers[].password (auth)
+        //   - settings.obfs (NOT in streamSettings)
+        //   - streamSettings.network must NOT be "hysteria2" (xray treats that
+        //     as an unknown transport — see GitHub issue #2). Hysteria2's UDP
+        //     transport is implicit in the outbound itself; streamSettings only
+        //     carries TLS config.
         return JsonObject().apply {
             addProperty("tag", "proxy")
             addProperty("protocol", "hysteria2")
@@ -348,16 +355,17 @@ object XrayConfigGenerator {
                         }
                     })
                 })
-            })
-            add("streamSettings", JsonObject().apply {
-                addProperty("network", "hysteria2")
                 if (profile.hysteriaObfs.isNotEmpty()) {
-                    add("hysteria2Settings", JsonObject().apply {
+                    add("obfs", JsonObject().apply {
                         addProperty("type", profile.hysteriaObfs)
                         addProperty("password", profile.hysteriaObfsPassword)
                     })
                 }
-                if (profile.security != SecurityType.NONE) {
+            })
+            // streamSettings is only needed for TLS — hysteria2 always uses
+            // QUIC over UDP, no transport selection.
+            if (profile.security != SecurityType.NONE) {
+                add("streamSettings", JsonObject().apply {
                     addProperty("security", "tls")
                     add("tlsSettings", JsonObject().apply {
                         if (profile.sni.isNotEmpty()) addProperty("serverName", profile.sni)
@@ -368,8 +376,8 @@ object XrayConfigGenerator {
                         }
                         addProperty("allowInsecure", profile.allowInsecure)
                     })
-                }
-            })
+                })
+            }
         }
     }
 
