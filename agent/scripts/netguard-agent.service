@@ -1,0 +1,42 @@
+[Unit]
+Description=NetGuard control-plane agent
+Documentation=https://github.com/KOKosaaaa/NetGuard
+# Sit between basic networking and any VPN stack we will eventually
+# manage, so a clean shutdown finishes before xray/sing-box restart.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/netguard-agent -listen :9443 -state /var/lib/netguard-agent
+# We need root to bind <1024 in future phases (port forwarding tasks) and
+# to manage other systemd units via D-Bus. Stay root for now.
+User=root
+Group=root
+# State dir is created by the binary on startup, but pre-create with the
+# right mode so the first run isn't surprised by inherited umask.
+StateDirectory=netguard-agent
+StateDirectoryMode=0700
+
+# Crash resilience: restart on any non-clean exit, but back off so a flat-
+# out broken binary doesn't burn the journal at 100% CPU.
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=10
+StartLimitIntervalSec=120
+
+# Hardening — agent doesn't write outside StateDirectory, and never reads
+# /home or other users' data.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/netguard-agent
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+# Log to journald — `journalctl -u netguard-agent` is the supported way
+# to see what the agent is doing.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
