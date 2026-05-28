@@ -196,6 +196,59 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	// --- bypass rules ---
+	mux.Handle("GET /v1/bypass/rules", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			rules, err := d.DB.ListBypassRules()
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_LIST_RULES", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"rules": rules})
+		},
+	)))
+
+	mux.Handle("POST /v1/bypass/rules", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.AddBypassRuleRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			rule, err := deploy.AddBypassRule(d.DB, &req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "E_ADD_RULE", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusCreated, rule)
+		},
+	)))
+
+	mux.Handle("PUT /v1/bypass/rules", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.PutBypassRulesRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			rules, err := deploy.ReplaceBypassRules(d.DB, req.Rules)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "E_PUT_RULES", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"rules": rules})
+		},
+	)))
+
+	mux.Handle("DELETE /v1/bypass/rules/{id}", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("id")
+			if err := deploy.DeleteBypassRule(d.DB, id); err != nil {
+				writeError(w, http.StatusNotFound, "E_DEL_RULE", err.Error())
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		},
+	)))
+
 	// --- tasks ---
 	mux.Handle("GET /v1/tasks/{id}", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {

@@ -255,6 +255,17 @@ func XrayDeploy(db *storage.DB, req *DeployXrayRequest) tasks.Runner {
 			}
 		}
 
+		// --- 13. re-apply config if there are pre-existing bypass rules ---
+		// Lets the user define routing rules before deploying xray for
+		// the first time — phase-1 deploy would otherwise drop them.
+		rules, _ := db.ListBypassRules()
+		if len(rules) > 0 {
+			h.LogF("re-applying config with %d bypass rule(s)", len(rules))
+			if err := ApplyBypassToXray(db); err != nil {
+				h.LogF("WARN apply bypass after deploy: %v", err)
+			}
+		}
+
 		return h.Ok(&XrayDeployResult{
 			XrayVersion: xrayVersion,
 			Inbound:     inboundRes,

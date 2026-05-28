@@ -94,6 +94,41 @@ class AgentApiClient(
         return TaskAck.fromJson(JSONObject(resp))
     }
 
+    // --- bypass rules -----------------------------------------------------
+
+    fun listBypassRules(): List<BypassRule> {
+        val resp = doGet("/bypass/rules", auth = true)
+        return BypassRule.listFromJson(JSONObject(resp))
+    }
+
+    fun addBypassRule(req: AddBypassRuleRequest): BypassRule {
+        val resp = doPost("/bypass/rules", body = req.toJson(), auth = true)
+        return BypassRule.fromJson(JSONObject(resp))
+    }
+
+    /** PUT — atomic batch replace. Empty list clears all rules. */
+    fun replaceBypassRules(rules: List<AddBypassRuleRequest>): List<BypassRule> {
+        val arr = org.json.JSONArray()
+        rules.forEach { arr.put(it.toJsonObject()) }
+        val body = JSONObject().put("rules", arr).toString()
+        val req = Request.Builder()
+            .url("$baseUrl/bypass/rules")
+            .put(body.toRequestBody(JSON))
+            .applyAuth(true)
+            .build()
+        val out = execute(req)
+        return BypassRule.listFromJson(JSONObject(out))
+    }
+
+    fun deleteBypassRule(id: String) {
+        val req = Request.Builder()
+            .url("$baseUrl/bypass/rules/$id")
+            .delete()
+            .applyAuth(true)
+            .build()
+        execute(req, allowEmpty = true)
+    }
+
     // --- HTTP plumbing ----------------------------------------------------
 
     private fun doGet(path: String, auth: Boolean): String {

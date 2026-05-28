@@ -273,6 +273,54 @@ data class InboundRow(
     }
 }
 
+// --- /v1/bypass/rules ----------------------------------------------------
+
+/**
+ * Server-side routing rule. kind ∈ domain|cidr|geosite|geoip,
+ * action ∈ direct|block (proxy is the implicit default catch-all).
+ */
+data class BypassRule(
+    val id: String,
+    val kind: String,
+    val value: String,
+    val action: String,
+    val order: Int,
+    val createdAt: String,
+) {
+    companion object {
+        fun fromJson(j: JSONObject) = BypassRule(
+            id = j.getString("id"),
+            kind = j.getString("kind"),
+            value = j.getString("value"),
+            action = j.getString("action"),
+            order = j.optInt("order"),
+            createdAt = j.optString("created_at"),
+        )
+
+        fun listFromJson(j: JSONObject): List<BypassRule> {
+            val arr = j.optJSONArray("rules") ?: return emptyList()
+            return (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
+        }
+    }
+}
+
+/** Body of POST /v1/bypass/rules (single) and PUT (batch via list). */
+data class AddBypassRuleRequest(
+    val kind: String,
+    val value: String,
+    val action: String,
+    val order: Int = 0,
+) {
+    fun toJsonObject(): JSONObject = JSONObject().apply {
+        put("kind", kind)
+        put("value", value)
+        put("action", action)
+        put("order", order)
+    }
+
+    fun toJson(): String = toJsonObject().toString()
+}
+
 // --- error envelope -------------------------------------------------------
 
 /** Server returns `{"error":{"code":"E_...","message":"..."}}` on failure. */

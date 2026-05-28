@@ -106,6 +106,20 @@ func (d *DB) migrate() error {
 			profile_uri TEXT NOT NULL,
 			created_at  TEXT NOT NULL
 		)`,
+		// bypass_rules: server-side routing rules. Each row becomes one
+		// entry in xray's "routing.rules" array. ord controls priority
+		// (xray takes the first matching rule). kind ∈ domain|cidr|geosite|geoip;
+		// action ∈ direct|block (proxy is the default catch-all and
+		// doesn't need a rule).
+		`CREATE TABLE IF NOT EXISTS bypass_rules (
+			id         TEXT PRIMARY KEY,
+			kind       TEXT NOT NULL,
+			value      TEXT NOT NULL,
+			action     TEXT NOT NULL,
+			ord        INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS bypass_rules_ord_idx ON bypass_rules(ord)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.db.Exec(s); err != nil {
@@ -362,6 +376,89 @@ func (d *DB) ListXrayInbounds() ([]*XrayInbound, error) {
 func (d *DB) DeleteXrayInbound(id string) error {
 	_, err := d.db.Exec(`DELETE FROM xray_inbounds WHERE inbound_id=?`, id)
 	return err
+}
+
+// --- bypass rules ---------------------------------------------------------
+
+type BypassRule struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`   // domain | cidr | geosite | geoip
+	Value     string    `json:"value"`  // depends on kind
+	Action    string    `json:"action"` // direct | block (proxy is implicit default)
+	Order     int       `json:"order"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (d *DB) ListBypassRules() ([]*BypassRule, error) {
+	rows, err := d.db.Query(
+		`SELECT id,kind,value,action,ord,created_at FROM bypass_rules ORDER BY ord ASC, created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*BypassRule
+	for rows.Next() {
+		r := &BypassRule{}
+		var created string
+		if err := rows.Scan(&r.ID, &r.Kind, &r.Value, &r.Action, &r.Order, &created); err != nil {
+			return nil, err
+		}
+		r.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) InsertBypassRule(r *BypassRule) error {
+	_, err := d.db.Exec(
+		`INSERT INTO bypass_rules(id,kind,value,action,ord,created_at) VALUES(?,?,?,?,?,?)`,
+		r.ID, r.Kind, r.Value, r.Action, r.Order,
+		r.CreatedAt.Format(time.RFC3339Nano))
+	return err
+}
+
+func (d *DB) DeleteBypassRule(id string) error {
+	res, err := d.db.Exec(`DELETE FROM bypass_rules WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ReplaceBypassRules wipes the table and inserts the provided list as
+// the new canonical set. Used by PUT /v1/bypass/rules so the Android
+// editor can submit a batch without orchestrating per-row diffs.
+func (d *DB) ReplaceBypassRules(rules []*BypassRule) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM bypass_rules`); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	stmt, err := tx.Prepare(
+		`INSERT INTO bypass_rules(id,kind,value,action,ord,created_at) VALUES(?,?,?,?,?,?)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	for _, r := range rules {
+		if _, err := stmt.Exec(r.ID, r.Kind, r.Value, r.Action, r.Order,
+			r.CreatedAt.Format(time.RFC3339Nano)); err != nil {
+			_ = stmt.Close()
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	_ = stmt.Close()
+	return tx.Commit()
 }
 
 // --- errors ---------------------------------------------------------------
