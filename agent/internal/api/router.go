@@ -369,6 +369,32 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	// --- telemost (phase 2 stubs — implemented in a follow-up) ---
+	// Surface the endpoints so the Android client can probe them and
+	// degrade gracefully ("Telemost not available on this agent yet")
+	// instead of timing out or crashing on a 404.
+	mux.Handle("GET /v1/telemost/health", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"available": false,
+				"note":      "Telemost deploy lands in agent phase 2; endpoint reserved",
+			})
+		},
+	)))
+	for _, p := range []string{
+		"POST /v1/telemost/deploy",
+		"POST /v1/telemost/scale",
+		"POST /v1/telemost/cookies",
+		"GET /v1/telemost/rooms",
+	} {
+		mux.Handle(p, authenticated(d, http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				writeError(w, http.StatusNotImplemented, "E_TELEMOST_PENDING",
+					"Telemost deploy is in agent phase 2 (planned). Track progress in the agent repo.")
+			},
+		)))
+	}
+
 	// --- agent self-update ---
 	mux.Handle("POST /v1/agent/update", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {

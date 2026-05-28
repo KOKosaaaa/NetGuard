@@ -164,6 +164,27 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         post("Rule deleted")
     }
 
+    fun uninstallXray(onDone: () -> Unit) = api {
+        val ack = client.uninstallXray()
+        // Poll task until it terminates so the UI knows xray is gone
+        // before we navigate away. Backoff is fixed 1s since this is a
+        // short operation.
+        repeat(60) {
+            try {
+                val t = client.task(ack.taskId)
+                if (t.isTerminal) {
+                    _profiles.value = client.inbounds() // should be empty now
+                    _status.value = client.status()
+                    post(if (t.status == "done") "xray uninstalled" else "uninstall: ${t.status}")
+                    withContext(Dispatchers.Main) { onDone() }
+                    return@api
+                }
+            } catch (_: Exception) { /* tolerate transient errors */ }
+            kotlinx.coroutines.delay(1000)
+        }
+        post("uninstall task timed out")
+    }
+
     /** Bearer-revoke + DB delete. Agent keeps running on the VPS. */
     fun removeServer(onDone: () -> Unit) = api {
         try { client.revoke() } catch (_: Exception) { /* best-effort */ }

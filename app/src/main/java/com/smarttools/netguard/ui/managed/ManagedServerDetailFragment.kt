@@ -102,8 +102,7 @@ class ManagedServerDetailFragment : Fragment() {
                 .setTitle(R.string.srv_action_uninstall_xray)
                 .setMessage("Wipe xray + config on this server?")
                 .setPositiveButton(android.R.string.ok) { _, _ ->
-                    Toast.makeText(requireContext(),
-                        "Uninstall handler: TODO follow-up", Toast.LENGTH_SHORT).show()
+                    viewModel.uninstallXray { /* stay on screen */ }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
