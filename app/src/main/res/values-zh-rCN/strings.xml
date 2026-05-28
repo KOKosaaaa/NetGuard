@@ -52,6 +52,13 @@
     <string name="auto_update_interval">更新间隔</string>
     <string name="auto_update_disabled">已禁用</string>
     <string name="auto_update_hours">每 %d 小时</string>
+    <string name="import_action">导入</string>
+    <string name="importing_subscription">正在导入订阅…</string>
+    <string name="import_success_format">已从「%2$s」导入 %1$d 个配置。\n添加另一个订阅或继续。</string>
+    <string name="import_error_format">错误: %1$s</string>
+    <string name="add_more">再添加</string>
+    <string name="continue_action">继续</string>
+    <string name="retry">重试</string>
 
     <!-- Settings -->
     <string name="routing">路由</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">所选应用在打开前被阻止访问网络</string>
     <string name="notif_title_quarantine">触发保护已启用</string>
     <string name="onb_profile_subscription_fetching">正在获取订阅…</string>
+    <string name="onb_profile_success_title">已导入 %d 个服务器</string>
+    <string name="onb_profile_success_body">添加另一个链接或继续完成设置。</string>
+    <string name="onb_profile_import_more">再导入</string>
+    <string name="onb_profile_continue">继续</string>
+    <string name="onb_profile_title_more">添加另一个服务器</string>
+    <string name="onb_profile_body_more">粘贴另一个链接或完成设置。</string>
+    <string name="onb_profile_skip_more">完成</string>
     <string name="ru_bypass_added">已将 %d 个应用加入绕过列表</string>
     <string name="sort_by_subscription">按订阅排序</string>
     <string name="sub_expired">已于 %1$s 过期</string>

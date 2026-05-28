@@ -52,6 +52,13 @@
     <string name="auto_update_interval">ช่วงเวลาอัปเดต</string>
     <string name="auto_update_disabled">ปิดใช้งาน</string>
     <string name="auto_update_hours">ทุก %d ชั่วโมง</string>
+    <string name="import_action">นำเข้า</string>
+    <string name="importing_subscription">กำลังนำเข้าการสมัครสมาชิก…</string>
+    <string name="import_success_format">นำเข้า %1$d โปรไฟล์จาก «%2$s» แล้ว\nเพิ่มการสมัครอื่นหรือดำเนินการต่อ</string>
+    <string name="import_error_format">ข้อผิดพลาด: %1$s</string>
+    <string name="add_more">เพิ่มอีก</string>
+    <string name="continue_action">ดำเนินการต่อ</string>
+    <string name="retry">ลองอีกครั้ง</string>
 
     <!-- Settings -->
     <string name="routing">การกำหนดเส้นทาง</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">แอปที่เลือกถูกปิดกั้นจากเครือข่ายจนกว่าคุณจะเปิด</string>
     <string name="notif_title_quarantine">การป้องกัน Trigger กำลังทำงาน</string>
     <string name="onb_profile_subscription_fetching">กำลังดึงข้อมูลการสมัคร…</string>
+    <string name="onb_profile_success_title">นำเข้า %d เซิร์ฟเวอร์แล้ว</string>
+    <string name="onb_profile_success_body">เพิ่มลิงก์อื่นหรือดำเนินการต่อเพื่อเสร็จสิ้นการตั้งค่า</string>
+    <string name="onb_profile_import_more">นำเข้าอีก</string>
+    <string name="onb_profile_continue">ดำเนินการต่อ</string>
+    <string name="onb_profile_title_more">เพิ่มเซิร์ฟเวอร์อีก</string>
+    <string name="onb_profile_body_more">วางลิงก์อื่นหรือเสร็จสิ้นการตั้งค่า</string>
+    <string name="onb_profile_skip_more">เสร็จแล้ว</string>
     <string name="ru_bypass_added">เพิ่ม %d แอปลงในรายการ bypass</string>
     <string name="sort_by_subscription">เรียงตามการสมัคร</string>
     <string name="sub_expired">หมดอายุ %1$s</string>

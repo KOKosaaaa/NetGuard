@@ -52,6 +52,13 @@
     <string name="auto_update_interval">업데이트 주기</string>
     <string name="auto_update_disabled">비활성화됨</string>
     <string name="auto_update_hours">%d시간마다</string>
+    <string name="import_action">가져오기</string>
+    <string name="importing_subscription">구독 가져오는 중…</string>
+    <string name="import_success_format">«%2$s»에서 %1$d개 프로필을 가져왔습니다.\n다른 구독을 추가하거나 계속하세요.</string>
+    <string name="import_error_format">오류: %1$s</string>
+    <string name="add_more">다른 항목 추가</string>
+    <string name="continue_action">계속</string>
+    <string name="retry">다시 시도</string>
 
     <!-- Settings -->
     <string name="routing">라우팅</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">선택된 앱은 열기 전까지 네트워크가 차단됩니다</string>
     <string name="notif_title_quarantine">트리거 가드 활성화</string>
     <string name="onb_profile_subscription_fetching">구독 가져오는 중…</string>
+    <string name="onb_profile_success_title">%d개 서버 가져옴</string>
+    <string name="onb_profile_success_body">다른 링크를 추가하거나 계속해서 설정을 완료하세요.</string>
+    <string name="onb_profile_import_more">다른 항목 가져오기</string>
+    <string name="onb_profile_continue">계속</string>
+    <string name="onb_profile_title_more">다른 서버 추가</string>
+    <string name="onb_profile_body_more">다른 링크를 붙여넣거나 설정을 완료하세요.</string>
+    <string name="onb_profile_skip_more">완료</string>
     <string name="ru_bypass_added">%d개 앱을 우회 목록에 추가</string>
     <string name="sort_by_subscription">구독별 정렬</string>
     <string name="sub_expired">%1$s 만료됨</string>

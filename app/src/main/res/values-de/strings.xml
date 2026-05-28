@@ -41,6 +41,13 @@
     <string name="auto_update_interval">Update-Intervall</string>
     <string name="auto_update_disabled">Deaktiviert</string>
     <string name="auto_update_hours">Alle %d Stunden</string>
+    <string name="import_action">Importieren</string>
+    <string name="importing_subscription">Abo wird importiert…</string>
+    <string name="import_success_format">%1$d Profile aus „%2$s“ importiert.\nWeiteres Abo hinzufügen oder fortfahren.</string>
+    <string name="import_error_format">Fehler: %1$s</string>
+    <string name="add_more">Weiteres hinzufügen</string>
+    <string name="continue_action">Weiter</string>
+    <string name="retry">Erneut versuchen</string>
     <string name="routing">Routing</string>
     <string name="routing_global">Globaler Proxy</string>
     <string name="routing_rules">Regelbasiert</string>
@@ -247,6 +254,13 @@
     <string name="notif_text_quarantine">Ausgewählte Apps sind vom Netzwerk gesperrt, bis du sie öffnest</string>
     <string name="notif_title_quarantine">Trigger-Schutz aktiv</string>
     <string name="onb_profile_subscription_fetching">Abo wird geladen…</string>
+    <string name="onb_profile_success_title">%d Server importiert</string>
+    <string name="onb_profile_success_body">Weiteren Link hinzufügen oder Einrichtung abschließen.</string>
+    <string name="onb_profile_import_more">Weiteres importieren</string>
+    <string name="onb_profile_continue">Weiter</string>
+    <string name="onb_profile_title_more">Weiteren Server hinzufügen</string>
+    <string name="onb_profile_body_more">Weiteren Link einfügen oder Einrichtung beenden.</string>
+    <string name="onb_profile_skip_more">Fertig</string>
     <string name="ru_bypass_added">%d Apps zur Bypass-Liste hinzugefügt</string>
     <string name="sort_by_subscription">Nach Abo sortieren</string>
     <string name="sub_expired">abgelaufen %1$s</string>

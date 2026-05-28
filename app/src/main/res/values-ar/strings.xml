@@ -52,6 +52,13 @@
     <string name="auto_update_interval">فترة التحديث</string>
     <string name="auto_update_disabled">معطّل</string>
     <string name="auto_update_hours">كل %d ساعات</string>
+    <string name="import_action">استيراد</string>
+    <string name="importing_subscription">جارٍ استيراد الاشتراك…</string>
+    <string name="import_success_format">تم استيراد %1$d ملف تعريف من «%2$s».\nأضف اشتراكًا آخر أو تابع.</string>
+    <string name="import_error_format">خطأ: %1$s</string>
+    <string name="add_more">إضافة آخر</string>
+    <string name="continue_action">متابعة</string>
+    <string name="retry">إعادة المحاولة</string>
 
     <!-- Settings -->
     <string name="routing">التوجيه</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">التطبيقات المحددة محجوبة عن الشبكة حتى تفتحها</string>
     <string name="notif_title_quarantine">حماية المُحفّز قيد التشغيل</string>
     <string name="onb_profile_subscription_fetching">جارٍ جلب الاشتراك…</string>
+    <string name="onb_profile_success_title">تم استيراد %d خادم</string>
+    <string name="onb_profile_success_body">أضف رابطًا آخر أو تابع لإنهاء الإعداد.</string>
+    <string name="onb_profile_import_more">استيراد آخر</string>
+    <string name="onb_profile_continue">متابعة</string>
+    <string name="onb_profile_title_more">إضافة خادم آخر</string>
+    <string name="onb_profile_body_more">الصق رابطًا آخر أو أنهِ الإعداد.</string>
+    <string name="onb_profile_skip_more">انتهيت</string>
     <string name="ru_bypass_added">تمت إضافة %d تطبيقاً إلى قائمة التجاوز</string>
     <string name="sort_by_subscription">الترتيب حسب الاشتراك</string>
     <string name="sub_expired">انتهت في %1$s</string>

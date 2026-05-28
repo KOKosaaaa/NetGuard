@@ -52,6 +52,13 @@
     <string name="auto_update_interval">Güncelleme aralığı</string>
     <string name="auto_update_disabled">Devre dışı</string>
     <string name="auto_update_hours">Her %d saatte bir</string>
+    <string name="import_action">İçe aktar</string>
+    <string name="importing_subscription">Abonelik içe aktarılıyor…</string>
+    <string name="import_success_format">«%2$s» kaynağından %1$d profil içe aktarıldı.\nBaşka bir abonelik ekleyin veya devam edin.</string>
+    <string name="import_error_format">Hata: %1$s</string>
+    <string name="add_more">Başka ekle</string>
+    <string name="continue_action">Devam et</string>
+    <string name="retry">Tekrar dene</string>
 
     <!-- Settings -->
     <string name="routing">Yönlendirme</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">Seçili uygulamalar siz açana kadar ağdan engellenir</string>
     <string name="notif_title_quarantine">Tetik koruması etkin</string>
     <string name="onb_profile_subscription_fetching">Abonelik alınıyor…</string>
+    <string name="onb_profile_success_title">%d sunucu içe aktarıldı</string>
+    <string name="onb_profile_success_body">Başka bir bağlantı ekleyin veya kurulumu tamamlamak için devam edin.</string>
+    <string name="onb_profile_import_more">Başka içe aktar</string>
+    <string name="onb_profile_continue">Devam et</string>
+    <string name="onb_profile_title_more">Başka sunucu ekle</string>
+    <string name="onb_profile_body_more">Başka bir bağlantı yapıştırın veya kurulumu bitirin.</string>
+    <string name="onb_profile_skip_more">Bitti</string>
     <string name="ru_bypass_added">%d uygulama bypass listesine eklendi</string>
     <string name="sort_by_subscription">Aboneliğe göre sırala</string>
     <string name="sub_expired">%1$s tarihinde doldu</string>

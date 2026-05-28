@@ -600,83 +600,134 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/tv_profile_title"
+                <!-- Input sub-state: shown by default -->
+                <LinearLayout
+                    android:id="@+id/group_profile_input"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/onb_profile_title"
-                    android:textSize="22sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorOnSurface" />
+                    android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/tv_profile_body"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="@string/onb_profile_body"
-                    android:textSize="14sp"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/til_profile_uri"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="18dp"
-                    android:hint="@string/onb_profile_hint"
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/et_profile_uri"
+                    <TextView
+                        android:id="@+id/tv_profile_title"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textUri"
-                        android:maxLines="3" />
-                </com.google.android.material.textfield.TextInputLayout>
+                        android:text="@string/onb_profile_title"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorOnSurface" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/tv_profile_body"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="@string/onb_profile_body"
+                        android:textSize="14sp"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/til_profile_uri"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:hint="@string/onb_profile_hint"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_profile_uri"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:maxLines="3" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_profile_paste"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="6dp"
+                            android:filterTouchesWhenObscured="true"
+                            android:text="@string/onb_profile_paste"
+                            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_profile_import"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="6dp"
+                            android:filterTouchesWhenObscured="true"
+                            android:text="@string/onb_profile_import" />
+                    </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_profile_paste"
-                        android:layout_width="0dp"
+                        android:id="@+id/btn_profile_skip"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="6dp"
+                        android:layout_marginTop="6dp"
                         android:filterTouchesWhenObscured="true"
-                        android:text="@string/onb_profile_paste"
+                        android:text="@string/onb_profile_skip"
+                        style="@style/Widget.Material3.Button.TextButton" />
+
+                    <TextView
+                        android:id="@+id/tv_profile_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:gravity="center"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <!-- Success sub-state: shown after a successful import -->
+                <LinearLayout
+                    android:id="@+id/group_profile_success"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tv_profile_success_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorOnSurface" />
+
+                    <TextView
+                        android:id="@+id/tv_profile_success_body"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="@string/onb_profile_success_body"
+                        android:textSize="14sp"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_profile_import_more"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:filterTouchesWhenObscured="true"
+                        android:text="@string/onb_profile_import_more"
                         style="@style/Widget.Material3.Button.OutlinedButton" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_profile_import"
-                        android:layout_width="0dp"
+                        android:id="@+id/btn_profile_continue"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="6dp"
                         android:filterTouchesWhenObscured="true"
-                        android:text="@string/onb_profile_import" />
+                        android:text="@string/onb_profile_continue" />
                 </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_profile_skip"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:filterTouchesWhenObscured="true"
-                    android:text="@string/onb_profile_skip"
-                    style="@style/Widget.Material3.Button.TextButton" />
-
-                <TextView
-                    android:id="@+id/tv_profile_status"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:gravity="center"
-                    android:textSize="13sp"
-                    android:visibility="gone" />
             </LinearLayout>
         </ScrollView>
 

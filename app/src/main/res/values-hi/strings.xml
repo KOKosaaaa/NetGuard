@@ -52,6 +52,13 @@
     <string name="auto_update_interval">अपडेट अंतराल</string>
     <string name="auto_update_disabled">अक्षम</string>
     <string name="auto_update_hours">हर %d घंटे</string>
+    <string name="import_action">आयात करें</string>
+    <string name="importing_subscription">सदस्यता आयात की जा रही है…</string>
+    <string name="import_success_format">«%2$s» से %1$d प्रोफ़ाइल आयात की गईं।\nएक और सदस्यता जोड़ें या जारी रखें।</string>
+    <string name="import_error_format">त्रुटि: %1$s</string>
+    <string name="add_more">और जोड़ें</string>
+    <string name="continue_action">जारी रखें</string>
+    <string name="retry">पुनः प्रयास करें</string>
 
     <!-- Settings -->
     <string name="routing">रूटिंग</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">चुने हुए ऐप्स तब तक नेटवर्क से अवरुद्ध हैं जब तक आप उन्हें खोलें</string>
     <string name="notif_title_quarantine">ट्रिगर गार्ड सक्रिय</string>
     <string name="onb_profile_subscription_fetching">सब्सक्रिप्शन प्राप्त हो रही है…</string>
+    <string name="onb_profile_success_title">%d सर्वर आयात हुए</string>
+    <string name="onb_profile_success_body">एक और लिंक जोड़ें या सेटअप पूरा करने के लिए जारी रखें।</string>
+    <string name="onb_profile_import_more">और आयात करें</string>
+    <string name="onb_profile_continue">जारी रखें</string>
+    <string name="onb_profile_title_more">एक और सर्वर जोड़ें</string>
+    <string name="onb_profile_body_more">एक और लिंक पेस्ट करें या सेटअप पूरा करें।</string>
+    <string name="onb_profile_skip_more">हो गया</string>
     <string name="ru_bypass_added">बायपास सूची में %d ऐप्स जोड़े गए</string>
     <string name="sort_by_subscription">सब्सक्रिप्शन के अनुसार क्रमित करें</string>
     <string name="sub_expired">%1$s को समाप्त</string>

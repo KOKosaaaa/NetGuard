@@ -59,6 +59,13 @@
     <string name="auto_update_interval">Update interval</string>
     <string name="auto_update_disabled">Disabled</string>
     <string name="auto_update_hours">Every %d hours</string>
+    <string name="import_action">Import</string>
+    <string name="importing_subscription">Importing subscription…</string>
+    <string name="import_success_format">Imported %1$d profiles from “%2$s”.\nAdd another subscription or continue.</string>
+    <string name="import_error_format">Error: %1$s</string>
+    <string name="add_more">Add another</string>
+    <string name="continue_action">Continue</string>
+    <string name="retry">Retry</string>
 
     <!-- Settings -->
     <string name="routing">Routing</string>
@@ -193,6 +200,13 @@
     <string name="onb_profile_empty">Clipboard is empty</string>
     <string name="onb_profile_skip">I\'ll add a server later</string>
     <string name="onb_profile_subscription_fetching">Fetching subscription…</string>
+    <string name="onb_profile_success_title">Imported %d server(s)</string>
+    <string name="onb_profile_success_body">Add another link or continue to finish setup.</string>
+    <string name="onb_profile_import_more">Import another</string>
+    <string name="onb_profile_continue">Continue</string>
+    <string name="onb_profile_title_more">Add another server</string>
+    <string name="onb_profile_body_more">Paste another link or finish setup.</string>
+    <string name="onb_profile_skip_more">I\'m done</string>
 
     <!-- Clipboard -->
     <string name="paste_from_clipboard">Paste</string>

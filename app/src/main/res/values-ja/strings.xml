@@ -52,6 +52,13 @@
     <string name="auto_update_interval">更新間隔</string>
     <string name="auto_update_disabled">無効</string>
     <string name="auto_update_hours">%d 時間ごと</string>
+    <string name="import_action">インポート</string>
+    <string name="importing_subscription">サブスクリプションをインポート中…</string>
+    <string name="import_success_format">「%2$s」から %1$d 件のプロファイルをインポートしました。\n別のサブスクリプションを追加するか、続行してください。</string>
+    <string name="import_error_format">エラー: %1$s</string>
+    <string name="add_more">別のものを追加</string>
+    <string name="continue_action">続行</string>
+    <string name="retry">再試行</string>
 
     <!-- Settings -->
     <string name="routing">ルーティング</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">選択したアプリは開くまでネットワークから遮断されます</string>
     <string name="notif_title_quarantine">トリガーガード作動中</string>
     <string name="onb_profile_subscription_fetching">サブスクリプションを取得中…</string>
+    <string name="onb_profile_success_title">%d 件のサーバーをインポート</string>
+    <string name="onb_profile_success_body">別のリンクを追加するか、セットアップを完了してください。</string>
+    <string name="onb_profile_import_more">別のものをインポート</string>
+    <string name="onb_profile_continue">続行</string>
+    <string name="onb_profile_title_more">別のサーバーを追加</string>
+    <string name="onb_profile_body_more">別のリンクを貼り付けるか、セットアップを完了してください。</string>
+    <string name="onb_profile_skip_more">完了</string>
     <string name="ru_bypass_added">%d 個のアプリをバイパス一覧に追加</string>
     <string name="sort_by_subscription">サブスクリプションで並び替え</string>
     <string name="sub_expired">%1$s に失効</string>

@@ -23,11 +23,20 @@ class MainActivity : AppCompatActivity() {
     lateinit var mainViewModel: MainViewModel
         private set
 
+    /**
+     * Action to run after the system VPN permission dialog returns OK.
+     * Defaults to a plain connect, but [requestVpnPermissionAndAutoSelect]
+     * swaps in autoSelectAndConnect so the same launcher serves both flows.
+     */
+    private var pendingVpnAction: () -> Unit = { mainViewModel.connect() }
+
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        val action = pendingVpnAction
+        pendingVpnAction = { mainViewModel.connect() }
         if (result.resultCode == RESULT_OK) {
-            mainViewModel.connect()
+            action()
         } else {
             Toast.makeText(this, R.string.vpn_permission_denied, Toast.LENGTH_SHORT).show()
         }
@@ -137,6 +146,10 @@ class MainActivity : AppCompatActivity() {
                 navController.navigate(R.id.nav_settings)
                 navController.navigate(R.id.action_settings_to_trigger)
             } catch (_: Exception) { /* graph mismatch — ignore */ }
+            // Consume the extra so a later recreation (theme/locale change)
+            // doesn't re-fire the same navigation and bounce the user back to
+            // the trigger settings screen out of nowhere.
+            intent?.removeExtra(OnboardingActivity.EXTRA_OPEN_TRIGGER)
         }
     }
 
@@ -216,9 +229,26 @@ class MainActivity : AppCompatActivity() {
     fun requestVpnPermissionAndConnect() {
         val prepareIntent = VpnService.prepare(this)
         if (prepareIntent != null) {
+            pendingVpnAction = { mainViewModel.connect() }
             vpnPermissionLauncher.launch(prepareIntent)
         } else {
             mainViewModel.connect()
+        }
+    }
+
+    /**
+     * Same as [requestVpnPermissionAndConnect] but, on the OK callback, runs
+     * the auto-select probe and connects to whichever server wins. Used by
+     * the Home Connect button when no profile is selected yet — saves the
+     * user a manual "pick a server" step.
+     */
+    fun requestVpnPermissionAndAutoSelect() {
+        val prepareIntent = VpnService.prepare(this)
+        if (prepareIntent != null) {
+            pendingVpnAction = { mainViewModel.autoSelectAndConnect() }
+            vpnPermissionLauncher.launch(prepareIntent)
+        } else {
+            mainViewModel.autoSelectAndConnect()
         }
     }
 }

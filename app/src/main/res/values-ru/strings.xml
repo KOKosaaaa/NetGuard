@@ -49,6 +49,13 @@
     <string name="auto_update_interval">Интервал обновления</string>
     <string name="auto_update_disabled">Отключено</string>
     <string name="auto_update_hours">Каждые %d ч.</string>
+    <string name="import_action">Импорт</string>
+    <string name="importing_subscription">Импорт подписки…</string>
+    <string name="import_success_format">Импортировано %1$d профилей из «%2$s».\nДобавить ещё подписку или продолжить.</string>
+    <string name="import_error_format">Ошибка: %1$s</string>
+    <string name="add_more">Добавить ещё</string>
+    <string name="continue_action">Продолжить</string>
+    <string name="retry">Повторить</string>
     <string name="routing">Маршрутизация</string>
     <string name="routing_global">Глобальный прокси</string>
     <string name="routing_rules">По правилам</string>
@@ -176,6 +183,13 @@
     <string name="onb_profile_empty">Буфер обмена пуст</string>
     <string name="onb_profile_skip">Добавлю сервер позже</string>
     <string name="onb_profile_subscription_fetching">Загрузка подписки…</string>
+    <string name="onb_profile_success_title">Импортировано серверов: %d</string>
+    <string name="onb_profile_success_body">Добавьте ещё ссылку или продолжите настройку.</string>
+    <string name="onb_profile_import_more">Импортировать ещё</string>
+    <string name="onb_profile_continue">Продолжить</string>
+    <string name="onb_profile_title_more">Добавить ещё сервер</string>
+    <string name="onb_profile_body_more">Вставьте ещё одну ссылку или завершите настройку.</string>
+    <string name="onb_profile_skip_more">Готово</string>
 
     <string name="paste_from_clipboard">Вставить</string>
     <string name="clipboard_empty">Буфер обмена пуст</string>

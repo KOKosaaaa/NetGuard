@@ -159,6 +159,82 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
+     * Same logic as [addSubscription] but returns the outcome directly instead
+     * of routing it through the shared message flow. Used by the stateful
+     * "Add subscription" dialog that renders its own loading / success / error
+     * UI inside the dialog body.
+     *
+     * The result reflects whichever branch fired:
+     *  - single profile URI → `profileCount = 1`, name = profile name
+     *  - HTTP subscription   → `profileCount = N`, name = subscription name
+     */
+    suspend fun importSubscription(
+        name: String,
+        url: String,
+        autoUpdateHours: Int
+    ): Result<ImportResult> {
+        val trimmedUrl = url.trim()
+        if (trimmedUrl.isBlank()) {
+            return Result.failure(IllegalArgumentException("URL is empty"))
+        }
+
+        // Branch 1: single-profile URI or multi-line Telemost paste.
+        val asProfileUri = normalizeAsSingleProfileUri(trimmedUrl)
+        if (asProfileUri != null) {
+            val parsed = try {
+                com.smarttools.netguard.core.ProfileParser.parseSingleUri(asProfileUri)
+            } catch (e: Exception) {
+                return Result.failure(IllegalArgumentException("Invalid profile URI: ${e.message}"))
+            }
+            if (parsed == null) {
+                return Result.failure(IllegalArgumentException("Unsupported profile URI"))
+            }
+            val finalName = name.trim().ifBlank { parsed.name.ifBlank { "Profile" } }
+            val profile = parsed.copy(name = finalName.take(MAX_SUB_NAME_LENGTH))
+            app.profileRepository.insert(profile)
+            return Result.success(ImportResult(finalName, 1))
+        }
+
+        // Branch 2: HTTP subscription.
+        try {
+            subRepo.validateUrl(trimmedUrl)
+        } catch (e: Exception) {
+            return Result.failure(IllegalArgumentException("Invalid URL: ${e.message}"))
+        }
+        val userTypedName = name.isNotBlank()
+        val safeName = if (userTypedName) {
+            name.take(MAX_SUB_NAME_LENGTH)
+        } else {
+            hostFromUrl(trimmedUrl) ?: "Subscription"
+        }
+        val sub = Subscription(
+            name = safeName,
+            url = trimmedUrl,
+            autoUpdateHours = autoUpdateHours,
+            userRenamed = userTypedName
+        )
+        val id = subRepo.insert(sub)
+        val fetched = subRepo.updateSubscription(sub.copy(id = id))
+        return fetched.fold(
+            onSuccess = { count ->
+                // Re-read the subscription so we surface the final name —
+                // updateSubscription may have overwritten safeName with the
+                // server's profile-title header.
+                val finalSub = subRepo.getById(id) ?: sub.copy(id = id)
+                Result.success(ImportResult(finalSub.name, count))
+            },
+            onFailure = { error ->
+                // Roll back the empty subscription row so the user does not
+                // see a "0 profiles" ghost card after a failed import.
+                subRepo.delete(sub.copy(id = id))
+                Result.failure(error)
+            }
+        )
+    }
+
+    data class ImportResult(val name: String, val profileCount: Int)
+
+    /**
      * Persist a user-chosen subscription name and mark the subscription as
      * `userRenamed=true` so subsequent `updateSubscription` calls keep the
      * chosen name instead of overwriting it from the server's `profile-title`.

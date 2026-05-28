@@ -46,6 +46,9 @@ class OnboardingActivity : AppCompatActivity() {
     private var profileImportedCount = 0
     private var transitioning = false
     private var pickedLanguage: String = "system"
+    /** Prevents back-to-back taps on the Import button from kicking off a
+     *  second fetch (and a second subscription row) before the first finishes. */
+    private var importing: Boolean = false
     /**
      * Map of (TextView/Button → string resource ID) that we manually
      * re-resolve when the locale changes. We keep this so the activity does
@@ -124,6 +127,30 @@ class OnboardingActivity : AppCompatActivity() {
             if (step == STEP_DONE) R.string.onb_finish else R.string.onb_next
         )
         binding.btnBack.text = getString(R.string.onb_back)
+        // The TextInputLayout hint is not in refreshMap — it lives on the
+        // wrapper, not the EditText, so resync it manually too.
+        binding.tilProfileUri.hint = getString(R.string.onb_profile_hint)
+        // Dynamically-set strings (title/body/skip variants that depend on
+        // profileImportedCount, the success-state title with a format arg)
+        // ignore refreshMap because they were set via setText, not @string.
+        // Re-run the state setters so they pick up the new locale.
+        if (binding.groupProfileSuccess.visibility == View.VISIBLE) {
+            binding.tvProfileSuccessTitle.text = getString(
+                R.string.onb_profile_success_title, profileImportedCount
+            )
+        }
+        if (binding.groupProfileInput.visibility == View.VISIBLE) {
+            val hasImported = profileImportedCount > 0
+            binding.tvProfileTitle.text = getString(
+                if (hasImported) R.string.onb_profile_title_more else R.string.onb_profile_title
+            )
+            binding.tvProfileBody.text = getString(
+                if (hasImported) R.string.onb_profile_body_more else R.string.onb_profile_body
+            )
+            binding.btnProfileSkip.text = getString(
+                if (hasImported) R.string.onb_profile_skip_more else R.string.onb_profile_skip
+            )
+        }
         // The language list contains language *names* (already universal) but
         // its title/subtitle/strings come from the refreshMap above. Rebuild
         // the rows anyway so the selection's stroke color tracks the theme
@@ -165,6 +192,9 @@ class OnboardingActivity : AppCompatActivity() {
             binding.btnProfilePaste to R.string.onb_profile_paste,
             binding.btnProfileImport to R.string.onb_profile_import,
             binding.btnProfileSkip to R.string.onb_profile_skip,
+            binding.tvProfileSuccessBody to R.string.onb_profile_success_body,
+            binding.btnProfileImportMore to R.string.onb_profile_import_more,
+            binding.btnProfileContinue to R.string.onb_profile_continue,
             binding.tvDoneTitle to R.string.onb_done_title,
             binding.tvDoneBody to R.string.onb_done_body,
         )
@@ -311,14 +341,53 @@ class OnboardingActivity : AppCompatActivity() {
                 binding.tvProfileStatus.visibility = View.GONE
             }
         }
+        binding.btnProfileImportMore.setOnClickListener { showProfileInputState() }
+        binding.btnProfileContinue.setOnClickListener {
+            if (transitioning) return@setOnClickListener
+            step = STEP_DONE
+            renderStep(animate = true, forward = true)
+        }
+    }
+
+    private fun showProfileInputState() {
+        binding.groupProfileSuccess.visibility = View.GONE
+        binding.groupProfileInput.visibility = View.VISIBLE
+        binding.tvProfileStatus.visibility = View.GONE
+        binding.etProfileUri.setText("")
+        // Once the user has already imported at least one server, reframe the
+        // step from "first server" to "another one" so the copy matches reality.
+        val hasImported = profileImportedCount > 0
+        binding.tvProfileTitle.text = getString(
+            if (hasImported) R.string.onb_profile_title_more else R.string.onb_profile_title
+        )
+        binding.tvProfileBody.text = getString(
+            if (hasImported) R.string.onb_profile_body_more else R.string.onb_profile_body
+        )
+        binding.btnProfileSkip.text = getString(
+            if (hasImported) R.string.onb_profile_skip_more else R.string.onb_profile_skip
+        )
+    }
+
+    private fun showProfileSuccessState(addedCount: Int) {
+        binding.tvProfileSuccessTitle.text = getString(
+            R.string.onb_profile_success_title, addedCount
+        )
+        binding.groupProfileInput.visibility = View.GONE
+        binding.groupProfileSuccess.visibility = View.VISIBLE
+        binding.groupProfileSuccess.alpha = 0f
+        binding.groupProfileSuccess.animate().alpha(1f).setDuration(220).start()
     }
 
     private fun importTypedProfile() {
+        if (importing) return
         val text = binding.etProfileUri.text?.toString()?.trim().orEmpty()
         if (text.isBlank()) {
             showProfileStatus(getString(R.string.onb_profile_empty), error = true)
             return
         }
+        // Dismiss the soft keyboard so the success card / status text is not
+        // hidden behind the IME on small screens.
+        hideKeyboard(binding.etProfileUri)
         // Subscription URLs are http(s)://… links the user copies from their
         // provider. They aren't valid for ProfileParser (which expects
         // vless://, vmess://, …). Detect them up-front and run the
@@ -332,23 +401,43 @@ class OnboardingActivity : AppCompatActivity() {
         importVpnProfiles(text)
     }
 
+    private fun hideKeyboard(view: View) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+        imm?.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+
+    /** Wraps the body of an import so the button is disabled while it runs. */
+    private fun beginImport() {
+        importing = true
+        binding.btnProfileImport.isEnabled = false
+    }
+
+    private fun endImport() {
+        importing = false
+        binding.btnProfileImport.isEnabled = true
+    }
+
     private fun importVpnProfiles(text: String) {
+        beginImport()
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { ProfileParser.parseMultiline(text) }
-            if (result.profiles.isEmpty()) {
-                val reason = result.errors.firstOrNull() ?: "unknown"
-                showProfileStatus(getString(R.string.onb_profile_error, reason), error = true)
-                return@launch
+            try {
+                val result = withContext(Dispatchers.IO) { ProfileParser.parseMultiline(text) }
+                if (result.profiles.isEmpty()) {
+                    val reason = result.errors.firstOrNull() ?: "unknown"
+                    showProfileStatus(getString(R.string.onb_profile_error, reason), error = true)
+                    return@launch
+                }
+                withContext(Dispatchers.IO) {
+                    val app = application as App
+                    val existing = app.profileRepository.getAll().size
+                    val toInsert = result.profiles.mapIndexed { idx, p -> p.copy(sortOrder = existing + idx) }
+                    app.profileRepository.insertAll(toInsert)
+                }
+                profileImportedCount += result.profiles.size
+                showProfileSuccessState(result.profiles.size)
+            } finally {
+                endImport()
             }
-            withContext(Dispatchers.IO) {
-                val app = application as App
-                val existing = app.profileRepository.getAll().size
-                val toInsert = result.profiles.mapIndexed { idx, p -> p.copy(sortOrder = existing + idx) }
-                app.profileRepository.insertAll(toInsert)
-            }
-            profileImportedCount += result.profiles.size
-            showProfileStatus(getString(R.string.onb_profile_added, result.profiles.size), error = false)
-            binding.etProfileUri.setText("")
         }
     }
 
@@ -356,7 +445,9 @@ class OnboardingActivity : AppCompatActivity() {
         val app = application as App
         val repo = app.subscriptionRepository
         showProfileStatus(getString(R.string.onb_profile_subscription_fetching), error = false)
+        beginImport()
         lifecycleScope.launch {
+            try {
             // Same SSRF / HTTPS-only guard as the regular Add Subscription flow.
             try {
                 withContext(Dispatchers.IO) { repo.validateUrl(url) }
@@ -367,9 +458,13 @@ class OnboardingActivity : AppCompatActivity() {
                 )
                 return@launch
             }
-            // Persist a stub subscription, then trigger an update so the real
-            // profile list is fetched and inserted right inside the wizard.
+            // Reuse an existing subscription row for this URL if there is one
+            // — without dedup the wizard's repeated taps (or a brief network
+            // hiccup that fails the first fetch) leave a graveyard of stub
+            // rows in the Subscriptions tab.
             val sub = withContext(Dispatchers.IO) {
+                val existing = repo.getAll().firstOrNull { it.url == url }
+                if (existing != null) return@withContext existing
                 val s = com.smarttools.netguard.model.Subscription(
                     name = subscriptionNameFromUrl(url),
                     url = url,
@@ -381,19 +476,27 @@ class OnboardingActivity : AppCompatActivity() {
             result.fold(
                 onSuccess = { count ->
                     profileImportedCount += count
-                    showProfileStatus(
-                        getString(R.string.onb_profile_added, count),
-                        error = false,
-                    )
-                    binding.etProfileUri.setText("")
+                    showProfileSuccessState(count)
                 },
                 onFailure = { err ->
+                    // If the fetch failed AND we just created an empty stub for
+                    // this URL, drop it — otherwise the user sees a "0 profiles"
+                    // ghost in the Subscriptions tab.
+                    withContext(Dispatchers.IO) {
+                        val curr = repo.getById(sub.id)
+                        if (curr != null && curr.profileCount == 0 && curr.lastUpdatedMs == 0L) {
+                            repo.delete(curr)
+                        }
+                    }
                     showProfileStatus(
                         getString(R.string.onb_profile_error, friendlyTlsError(err)),
                         error = true,
                     )
                 },
             )
+            } finally {
+                endImport()
+            }
         }
     }
 
@@ -521,9 +624,24 @@ class OnboardingActivity : AppCompatActivity() {
         val currentlyVisible = views.firstOrNull { it.visibility == View.VISIBLE && it !== target }
 
         binding.btnBack.visibility = if (step == STEP_LANG) View.INVISIBLE else View.VISIBLE
+        // Hide the generic Next/Finish footer on the Profile step — the in-card
+        // buttons (Skip / Continue / Import another) drive navigation there, so
+        // a second "Next" only invited accidental skipping past the import.
+        binding.btnNext.visibility = if (step == STEP_PROFILE) View.INVISIBLE else View.VISIBLE
         binding.btnNext.text = getString(
             if (step == STEP_DONE) R.string.onb_finish else R.string.onb_next
         )
+
+        // Sync step_profile sub-state with the running counter — if the user
+        // has already imported anything and is just navigating back into this
+        // step, jump straight to the success card instead of the empty form.
+        if (step == STEP_PROFILE) {
+            if (profileImportedCount > 0) {
+                showProfileSuccessState(profileImportedCount)
+            } else {
+                showProfileInputState()
+            }
+        }
 
         if (!animate) {
             views.forEach { it.visibility = if (it === target) View.VISIBLE else View.GONE }
@@ -614,8 +732,15 @@ class OnboardingActivity : AppCompatActivity() {
         val app = application as App
         val current = app.loadSettings()
         val withMode = when (pickedMode) {
+            // Trigger mode is the whole point of the user picking this card —
+            // ship the toggle in the "on" position instead of dropping them on
+            // a settings screen where they still have to flip a switch.
+            // Strict allow-list defaults to ON in AppSettings, but new users
+            // haven't picked their trigger-app list yet — leave it OFF so the
+            // tunnel doesn't blackhole everything until they configure it.
             OnboardingMode.TRIGGER -> current.copy(
-                triggerEnabled = false,
+                triggerEnabled = true,
+                triggerStrictMode = false,
                 perAppMode = PerAppMode.DISABLED
             )
             OnboardingMode.GLOBAL -> current.copy(

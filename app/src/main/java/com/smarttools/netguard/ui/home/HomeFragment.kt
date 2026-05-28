@@ -498,7 +498,15 @@ class HomeFragment : Fragment() {
         binding.btnConnect.setOnClickListener {
             val state = viewModel.connectionState.value
             if (state is ConnectionState.Disconnected || state is ConnectionState.Error) {
-                (activity as? MainActivity)?.requestVpnPermissionAndConnect()
+                val act = activity as? MainActivity ?: return@setOnClickListener
+                // No server picked yet → run the auto-select probe instead of
+                // failing with "No profile selected". autoSelectAndConnect
+                // itself surfaces a toast if no servers are added at all.
+                if (viewModel.selectedProfile.value == null) {
+                    act.requestVpnPermissionAndAutoSelect()
+                } else {
+                    act.requestVpnPermissionAndConnect()
+                }
             } else {
                 viewModel.disconnect()
             }

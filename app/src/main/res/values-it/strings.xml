@@ -52,6 +52,13 @@
     <string name="auto_update_interval">Intervallo di aggiornamento</string>
     <string name="auto_update_disabled">Disattivato</string>
     <string name="auto_update_hours">Ogni %d ore</string>
+    <string name="import_action">Importa</string>
+    <string name="importing_subscription">Importazione abbonamento…</string>
+    <string name="import_success_format">%1$d profili importati da «%2$s».\nAggiungi un altro abbonamento o continua.</string>
+    <string name="import_error_format">Errore: %1$s</string>
+    <string name="add_more">Aggiungi un altro</string>
+    <string name="continue_action">Continua</string>
+    <string name="retry">Riprova</string>
 
     <!-- Settings -->
     <string name="routing">Instradamento</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">Le app selezionate sono bloccate dalla rete finché non le apri</string>
     <string name="notif_title_quarantine">Protezione trigger attiva</string>
     <string name="onb_profile_subscription_fetching">Recupero abbonamento…</string>
+    <string name="onb_profile_success_title">%d server importati</string>
+    <string name="onb_profile_success_body">Aggiungi un altro link o continua per terminare la configurazione.</string>
+    <string name="onb_profile_import_more">Importa un altro</string>
+    <string name="onb_profile_continue">Continua</string>
+    <string name="onb_profile_title_more">Aggiungi un altro server</string>
+    <string name="onb_profile_body_more">Incolla un altro link o termina la configurazione.</string>
+    <string name="onb_profile_skip_more">Fatto</string>
     <string name="ru_bypass_added">%d app aggiunte alla lista di bypass</string>
     <string name="sort_by_subscription">Ordina per sottoscrizione</string>
     <string name="sub_expired">scaduto %1$s</string>

@@ -52,6 +52,13 @@
     <string name="auto_update_interval">Intervalo de atualização</string>
     <string name="auto_update_disabled">Desativado</string>
     <string name="auto_update_hours">A cada %d horas</string>
+    <string name="import_action">Importar</string>
+    <string name="importing_subscription">Importando assinatura…</string>
+    <string name="import_success_format">Importados %1$d perfis de \"%2$s\".\nAdicione outra assinatura ou continue.</string>
+    <string name="import_error_format">Erro: %1$s</string>
+    <string name="add_more">Adicionar outra</string>
+    <string name="continue_action">Continuar</string>
+    <string name="retry">Tentar novamente</string>
 
     <!-- Settings -->
     <string name="routing">Roteamento</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">Os apps selecionados estão bloqueados da rede até você abri-los</string>
     <string name="notif_title_quarantine">Proteção de trigger ativa</string>
     <string name="onb_profile_subscription_fetching">Buscando assinatura…</string>
+    <string name="onb_profile_success_title">%d servidores importados</string>
+    <string name="onb_profile_success_body">Adicione outro link ou continue para finalizar a configuração.</string>
+    <string name="onb_profile_import_more">Importar outro</string>
+    <string name="onb_profile_continue">Continuar</string>
+    <string name="onb_profile_title_more">Adicionar outro servidor</string>
+    <string name="onb_profile_body_more">Cole outro link ou conclua a configuração.</string>
+    <string name="onb_profile_skip_more">Pronto</string>
     <string name="ru_bypass_added">%d apps adicionados à lista de bypass</string>
     <string name="sort_by_subscription">Ordenar por assinatura</string>
     <string name="sub_expired">expirou %1$s</string>

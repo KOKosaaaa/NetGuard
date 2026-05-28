@@ -17,9 +17,11 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.smarttools.netguard.R
+import com.smarttools.netguard.databinding.DialogAddSubscriptionBinding
 import com.smarttools.netguard.databinding.FragmentSubscriptionBinding
 import com.smarttools.netguard.model.Subscription
 import com.smarttools.netguard.util.QRGenerator
@@ -147,58 +149,101 @@ class SubscriptionFragment : Fragment() {
     }
 
     private fun showAddDialog() {
-        val layout = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 32, 48, 0)
-        }
-        val etName = EditText(requireContext()).apply {
-            hint = getString(R.string.add_subscription_name_optional_hint)
-            layout.addView(this)
-        }
-        // Small explainer below the name field — most providers expose a
-        // human-readable display name in the `profile-title` response header,
-        // so leaving this blank is the right default.
-        val tvHelp = android.widget.TextView(requireContext()).apply {
-            text = getString(R.string.add_subscription_name_optional_help)
-            textSize = 12f
-            setTextColor(
-                com.google.android.material.color.MaterialColors.getColor(
-                    this,
-                    com.google.android.material.R.attr.colorOnSurfaceVariant,
-                )
-            )
-            setPadding(0, 4, 0, 12)
-            layout.addView(this)
-        }
-        val etUrl = EditText(requireContext()).apply {
-            hint = "https://..."
-            layout.addView(this)
-        }
+        val dlgBinding = DialogAddSubscriptionBinding.inflate(layoutInflater)
 
         val intervals = listOf("Disabled", "6 hours", "12 hours", "24 hours", "48 hours")
         val intervalValues = listOf(0, 6, 12, 24, 48)
-        val spInterval = android.widget.Spinner(requireContext()).apply {
-            adapter = android.widget.ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_spinner_dropdown_item,
-                intervals
-            )
-            layout.addView(this)
+        dlgBinding.spInterval.adapter = android.widget.ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            intervals
+        )
+
+        // Pre-fill URL from clipboard if it looks like a subscription/profile
+        // link — saves the user one paste step. Recognise https://, the
+        // proxy-profile schemes (vless/vmess/trojan/ss/hysteria2/hy2) and bare
+        // Telemost join links, since the ViewModel handles all of these.
+        runCatching {
+            val cb = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = cb.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+            if (!text.isNullOrEmpty() && looksLikeSubscriptionInput(text)) {
+                dlgBinding.etUrl.setText(text)
+            }
         }
 
-        MaterialAlertDialogBuilder(requireContext())
+        val dialog: AlertDialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.add_subscription)
-            .setView(layout)
-            .setPositiveButton(R.string.add) { _, _ ->
-                val hours = intervalValues[spInterval.selectedItemPosition]
-                viewModel.addSubscription(
-                    etName.text.toString().trim(),
-                    etUrl.text.toString().trim(),
-                    hours
+            .setView(dlgBinding.root)
+            .setCancelable(true)
+            .create()
+
+        fun setState(state: ImportDialogState) {
+            dlgBinding.stateInput.visibility = if (state == ImportDialogState.INPUT) View.VISIBLE else View.GONE
+            dlgBinding.stateLoading.visibility = if (state == ImportDialogState.LOADING) View.VISIBLE else View.GONE
+            dlgBinding.stateSuccess.visibility = if (state == ImportDialogState.SUCCESS) View.VISIBLE else View.GONE
+            dlgBinding.stateError.visibility = if (state == ImportDialogState.ERROR) View.VISIBLE else View.GONE
+            dlgBinding.buttonBarInput.visibility = if (state == ImportDialogState.INPUT) View.VISIBLE else View.GONE
+            dlgBinding.buttonBarSuccess.visibility = if (state == ImportDialogState.SUCCESS) View.VISIBLE else View.GONE
+            dlgBinding.buttonBarError.visibility = if (state == ImportDialogState.ERROR) View.VISIBLE else View.GONE
+            // Lock back / outside-tap during the network request so the user
+            // can't dismiss the dialog mid-import and lose the result toast.
+            dialog.setCancelable(state != ImportDialogState.LOADING)
+        }
+
+        fun runImport() {
+            val name = dlgBinding.etName.text?.toString()?.trim().orEmpty()
+            val url = dlgBinding.etUrl.text?.toString()?.trim().orEmpty()
+            val hours = intervalValues[dlgBinding.spInterval.selectedItemPosition]
+            // Drop the soft keyboard so the loading spinner / success card isn't
+            // hidden behind the IME.
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+            imm?.hideSoftInputFromWindow(dlgBinding.etUrl.windowToken, 0)
+            setState(ImportDialogState.LOADING)
+            viewLifecycleOwner.lifecycleScope.launch {
+                val result = viewModel.importSubscription(name, url, hours)
+                result.fold(
+                    onSuccess = { info ->
+                        dlgBinding.tvSuccess.text = getString(
+                            R.string.import_success_format, info.profileCount, info.name
+                        )
+                        setState(ImportDialogState.SUCCESS)
+                    },
+                    onFailure = { error ->
+                        dlgBinding.tvError.text = getString(
+                            R.string.import_error_format, error.message ?: error.javaClass.simpleName
+                        )
+                        setState(ImportDialogState.ERROR)
+                    }
                 )
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+
+        dlgBinding.btnImport.setOnClickListener { runImport() }
+        dlgBinding.btnCancel.setOnClickListener { dialog.dismiss() }
+        dlgBinding.btnRetry.setOnClickListener { setState(ImportDialogState.INPUT) }
+        dlgBinding.btnClose.setOnClickListener { dialog.dismiss() }
+        dlgBinding.btnAddMore.setOnClickListener {
+            dlgBinding.etName.setText("")
+            dlgBinding.etUrl.setText("")
+            dlgBinding.spInterval.setSelection(0)
+            setState(ImportDialogState.INPUT)
+        }
+        dlgBinding.btnContinue.setOnClickListener {
+            dialog.dismiss()
+            // Jump straight to the profile list so the user sees what was imported.
+            findNavController().navigate(R.id.nav_profiles)
+        }
+
+        setState(ImportDialogState.INPUT)
+        dialog.show()
+    }
+
+    private enum class ImportDialogState { INPUT, LOADING, SUCCESS, ERROR }
+
+    private fun looksLikeSubscriptionInput(text: String): Boolean {
+        if (text.startsWith("https://")) return true
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
+        return schemes.any { text.startsWith(it) }
     }
 
     private fun showRenameDialog(sub: Subscription) {

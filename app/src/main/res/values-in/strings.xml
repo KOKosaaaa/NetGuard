@@ -52,6 +52,13 @@
     <string name="auto_update_interval">Interval pembaruan</string>
     <string name="auto_update_disabled">Nonaktif</string>
     <string name="auto_update_hours">Setiap %d jam</string>
+    <string name="import_action">Impor</string>
+    <string name="importing_subscription">Mengimpor langganan…</string>
+    <string name="import_success_format">%1$d profil diimpor dari \"%2$s\".\nTambahkan langganan lain atau lanjutkan.</string>
+    <string name="import_error_format">Galat: %1$s</string>
+    <string name="add_more">Tambahkan lagi</string>
+    <string name="continue_action">Lanjutkan</string>
+    <string name="retry">Coba lagi</string>
 
     <!-- Settings -->
     <string name="routing">Routing</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">Aplikasi yang dipilih diblokir dari jaringan sampai Anda membukanya</string>
     <string name="notif_title_quarantine">Penjaga trigger aktif</string>
     <string name="onb_profile_subscription_fetching">Mengambil langganan…</string>
+    <string name="onb_profile_success_title">%d server diimpor</string>
+    <string name="onb_profile_success_body">Tambahkan link lain atau lanjutkan untuk menyelesaikan.</string>
+    <string name="onb_profile_import_more">Impor lagi</string>
+    <string name="onb_profile_continue">Lanjutkan</string>
+    <string name="onb_profile_title_more">Tambah server lain</string>
+    <string name="onb_profile_body_more">Tempel link lain atau selesaikan pengaturan.</string>
+    <string name="onb_profile_skip_more">Selesai</string>
     <string name="ru_bypass_added">%d aplikasi ditambahkan ke daftar bypass</string>
     <string name="sort_by_subscription">Urutkan berdasarkan langganan</string>
     <string name="sub_expired">kedaluwarsa %1$s</string>

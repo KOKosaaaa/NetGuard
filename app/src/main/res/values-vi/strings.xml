@@ -52,6 +52,13 @@
     <string name="auto_update_interval">Chu kỳ cập nhật</string>
     <string name="auto_update_disabled">Đã tắt</string>
     <string name="auto_update_hours">Mỗi %d giờ</string>
+    <string name="import_action">Nhập</string>
+    <string name="importing_subscription">Đang nhập đăng ký…</string>
+    <string name="import_success_format">Đã nhập %1$d hồ sơ từ \"%2$s\".\nThêm đăng ký khác hoặc tiếp tục.</string>
+    <string name="import_error_format">Lỗi: %1$s</string>
+    <string name="add_more">Thêm cái khác</string>
+    <string name="continue_action">Tiếp tục</string>
+    <string name="retry">Thử lại</string>
 
     <!-- Settings -->
     <string name="routing">Định tuyến</string>
@@ -294,6 +301,13 @@
     <string name="notif_text_quarantine">Các ứng dụng đã chọn bị chặn khỏi mạng cho đến khi bạn mở chúng</string>
     <string name="notif_title_quarantine">Trigger guard đang hoạt động</string>
     <string name="onb_profile_subscription_fetching">Đang lấy đăng ký…</string>
+    <string name="onb_profile_success_title">Đã nhập %d máy chủ</string>
+    <string name="onb_profile_success_body">Thêm liên kết khác hoặc tiếp tục để hoàn tất cài đặt.</string>
+    <string name="onb_profile_import_more">Nhập cái khác</string>
+    <string name="onb_profile_continue">Tiếp tục</string>
+    <string name="onb_profile_title_more">Thêm máy chủ khác</string>
+    <string name="onb_profile_body_more">Dán liên kết khác hoặc hoàn tất cài đặt.</string>
+    <string name="onb_profile_skip_more">Xong</string>
     <string name="ru_bypass_added">Đã thêm %d ứng dụng vào danh sách bypass</string>
     <string name="sort_by_subscription">Sắp xếp theo đăng ký</string>
     <string name="sub_expired">hết hạn %1$s</string>
