@@ -216,6 +216,38 @@ data class TaskError(
     val retryable: Boolean,
 )
 
+// --- /v1/xray/profile (sync) ---------------------------------------------
+
+data class AddProfileRequest(
+    val protocol: String = "vless",
+    val port: Int = 0,
+    val uuid: String = "",
+    val label: String = "",
+) {
+    fun toJson(): String = JSONObject().apply {
+        put("protocol", protocol)
+        if (port != 0) put("port", port)
+        if (uuid.isNotEmpty()) put("uuid", uuid)
+        if (label.isNotEmpty()) put("label", label)
+    }.toString()
+}
+
+data class InboundResult(
+    val inboundId: String,
+    val protocol: String,
+    val port: Int,
+    val profileUri: String,
+) {
+    companion object {
+        fun fromJson(j: JSONObject) = InboundResult(
+            inboundId = j.getString("inbound_id"),
+            protocol = j.getString("protocol"),
+            port = j.getInt("port"),
+            profileUri = j.getString("profile_uri"),
+        )
+    }
+}
+
 // --- /v1/xray/inbounds ----------------------------------------------------
 
 data class InboundRow(

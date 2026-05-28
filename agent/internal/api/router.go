@@ -133,6 +133,46 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	mux.Handle("POST /v1/xray/profile", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.XrayAddProfileRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			res, err := deploy.XrayAddProfile(d.DB, &req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "E_XRAY_ADD_PROFILE", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, res)
+		},
+	)))
+
+	mux.Handle("DELETE /v1/xray/profile/{id}", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("id")
+			if err := deploy.XrayDeleteProfile(d.DB, id); err != nil {
+				writeError(w, http.StatusBadRequest, "E_XRAY_DEL_PROFILE", err.Error())
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		},
+	)))
+
+	mux.Handle("POST /v1/xray/uninstall", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id, err := d.Tasks.Spawn("xray.uninstall", deploy.XrayUninstall(d.DB))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
+
 	mux.Handle("GET /v1/xray/inbounds", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			list, err := d.DB.ListXrayInbounds()

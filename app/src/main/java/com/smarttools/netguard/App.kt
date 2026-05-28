@@ -55,6 +55,10 @@ class App : Application() {
         com.smarttools.netguard.util.GeoLookup.init(this)
         NotificationHelper.createChannel(this)
         scheduleSubscriptionUpdates()
+        // Phase 1: keep cached telemetry (load, RAM, last-seen) fresh for
+        // the "My Servers" list. Worker self-no-ops when zero servers are
+        // registered, so scheduling unconditionally is cheap.
+        com.smarttools.netguard.agent.ManagedServerSyncWorker.schedule(this)
 
         if (settings.autoConnectWifi) {
             wifiAutoConnectManager = WifiAutoConnectManager(this).also { it.register() }

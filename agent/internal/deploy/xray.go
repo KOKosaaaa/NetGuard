@@ -19,22 +19,19 @@ import (
 	"github.com/KOKosaaaa/NetGuard/agent/internal/tasks"
 )
 
-// Pinned Xray-core release. Update by bumping these three constants —
-// version tag + matching sha256 per arch (from XTLS/Xray-core release page).
-// Always pinned (rule 2) — "latest" lets a malicious release sneak in.
+// Pinned Xray-core release. Update by bumping version tag + matching
+// sha256 per arch (from XTLS/Xray-core release page). Always pinned —
+// "latest" lets a compromised release sneak in via MITM on the download.
 const (
-	xrayVersion     = "v25.5.16"
+	xrayVersion     = "v26.5.9"
 	xrayURLTemplate = "https://github.com/XTLS/Xray-core/releases/download/%s/Xray-linux-%s.zip"
-	// SHA256s of the .zip on the release page. The download path expands
-	// the archive and installs /usr/local/bin/xray. We re-verify the
-	// final binary too via XrayBinSha256ByArch.
 )
 
+// SHA256s captured from the XTLS/Xray-core v26.5.9 release page on
+// 2026-05-28 via `curl -L | sha256sum`. Bump alongside xrayVersion.
 var xrayZipSha256ByArch = map[string]string{
-	// Filled at first build; if empty we skip verification (PoC only).
-	// TODO: pin real hashes before we ship phase 1.
-	"64":      "",
-	"arm64-v8a": "",
+	"64":        "f56c106b7c0159ad386bccd340faa5bbf55fd5c15821ec9e63e6a6ba11d3d1c7",
+	"arm64-v8a": "7bc1da606e26e4ac2d7831181745bb3bcf4dca0fd7825f41388ae032e1247d15",
 }
 
 // XrayInstallPath is where the agent puts the xray binary regardless of
@@ -90,7 +87,27 @@ func XrayDeploy(db *storage.DB, req *DeployXrayRequest) tasks.Runner {
 		// --- 1. detect existing install ---
 		alreadyHaveBinary := WhichExists("xray") || fileExists(XrayInstallPath)
 		alreadyRunning := SystemctlIsActive(ctx, "xray")
-		h.LogF("detect: xray binary=%v unit_active=%v", alreadyHaveBinary, alreadyRunning)
+		hasConfig := fileExists(XrayConfigPath)
+		ourInbounds, _ := db.ListXrayInbounds()
+		isOurs := len(ourInbounds) > 0
+		h.LogF("detect: xray binary=%v unit_active=%v config=%v our=%v",
+			alreadyHaveBinary, alreadyRunning, hasConfig, isOurs)
+
+		// Refuse to touch an xray we didn't put there. The user may have
+		// configured this server by hand; silently overwriting their
+		// inbounds would lose data even with a backup (they wouldn't
+		// know to look in /var/lib/netguard-agent/backups/). Android
+		// surfaces this E_ code as a dialog offering "Cancel" or
+		// "Wipe and reinstall" — the latter hits /v1/xray/uninstall
+		// and then re-spawns this task.
+		if hasConfig && !isOurs {
+			return h.Fail("E_XRAY_PREEXISTING",
+				"xray is already configured on this server but was not "+
+					"installed by the agent. Refusing to overwrite. Use "+
+					"POST /v1/xray/uninstall to wipe the existing setup "+
+					"before retrying, or remove xray manually.",
+				false /* non-retryable until the user resolves it */)
+		}
 
 		// --- 2. install prerequisites (curl + unzip) ---
 		h.SetStep("prereqs", 10)

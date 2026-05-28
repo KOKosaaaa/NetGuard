@@ -64,6 +64,36 @@ class AgentApiClient(
         return InboundRow.listFromJson(JSONObject(resp))
     }
 
+    /**
+     * Sync — adds a VLESS inbound to a running xray and returns the new
+     * vless:// URI. Caller usually exposes this as "Add another profile"
+     * once the server is set up.
+     */
+    fun addProfile(req: AddProfileRequest): InboundResult {
+        val resp = doPost("/xray/profile", body = req.toJson(), auth = true)
+        return InboundResult.fromJson(JSONObject(resp))
+    }
+
+    fun deleteProfile(inboundId: String) {
+        val req = Request.Builder()
+            .url("$baseUrl/xray/profile/$inboundId")
+            .delete()
+            .applyAuth(true)
+            .build()
+        execute(req, allowEmpty = true)
+    }
+
+    /**
+     * Wipe an externally-installed xray so a subsequent /xray/deploy can
+     * proceed. Async — returns a task_id; poll /tasks/{id} for completion.
+     * Used after /xray/deploy returned E_XRAY_PREEXISTING and the user
+     * confirmed "Wipe and reinstall" in the UI dialog.
+     */
+    fun uninstallXray(): TaskAck {
+        val resp = doPost("/xray/uninstall", body = "{}", auth = true)
+        return TaskAck.fromJson(JSONObject(resp))
+    }
+
     // --- HTTP plumbing ----------------------------------------------------
 
     private fun doGet(path: String, auth: Boolean): String {
