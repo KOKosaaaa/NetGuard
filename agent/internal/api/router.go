@@ -174,6 +174,20 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	mux.Handle("POST /v1/xray/refresh-geo-dat", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id, err := d.Tasks.Spawn("xray.refresh_geo_dat", deploy.XrayRefreshGeoDat())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
+
 	mux.Handle("GET /v1/xray/inbounds", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			list, err := d.DB.ListXrayInbounds()
@@ -244,6 +258,44 @@ func Mount(d *Deps) http.Handler {
 			id := r.PathValue("id")
 			if err := deploy.DeleteBypassRule(d.DB, id); err != nil {
 				writeError(w, http.StatusNotFound, "E_DEL_RULE", err.Error())
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		},
+	)))
+
+	// --- bypass outbounds (user-defined upstream proxies) ---
+	mux.Handle("GET /v1/bypass/outbounds", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			outs, err := d.DB.ListBypassOutbounds()
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_LIST_OUTBOUNDS", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"outbounds": outs})
+		},
+	)))
+
+	mux.Handle("POST /v1/bypass/outbounds", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.AddBypassOutboundRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			o, err := deploy.AddBypassOutbound(d.DB, &req)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "E_ADD_OUTBOUND", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusCreated, o)
+		},
+	)))
+
+	mux.Handle("DELETE /v1/bypass/outbounds/{id}", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("id")
+			if err := deploy.DeleteBypassOutbound(d.DB, id); err != nil {
+				writeError(w, http.StatusNotFound, "E_DEL_OUTBOUND", err.Error())
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)

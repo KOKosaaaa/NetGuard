@@ -13,6 +13,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,6 +41,14 @@ class ProfileListFragment : Fragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentProfileListBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Silent re-ping so the user sees fresh ms values every time
+        // they open Servers. Internal stale-window prevents spam on
+        // rapid tab switches.
+        viewModel.pingAllSilently()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -116,6 +125,10 @@ class ProfileListFragment : Fragment() {
 
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_my_servers -> {
+                    findNavController().navigate(R.id.action_profiles_to_my_servers)
+                    true
+                }
                 R.id.action_ping_all -> { viewModel.pingAll(); true }
                 R.id.action_test_services -> { viewModel.testServices(); true }
                 R.id.action_sort_ping -> { viewModel.toggleSort(); true }

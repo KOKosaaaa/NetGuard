@@ -629,6 +629,9 @@ class HomeFragment : Fragment() {
                 launch {
                     viewModel.autoSelectMessage.collect { msg ->
                         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                        // Drop the replay cache — otherwise navigating
+                        // away and back to Home replays the same toast.
+                        viewModel.consumeAutoSelectMessage()
                     }
                 }
                 // Speed test collectors

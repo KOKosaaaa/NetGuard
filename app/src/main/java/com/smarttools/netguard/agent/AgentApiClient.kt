@@ -35,6 +35,17 @@ class AgentApiClient(
         return HealthResponse.fromJson(JSONObject(resp))
     }
 
+    /**
+     * Exchange a one-shot pair-token (read from the agent over SSH at
+     * bootstrap time) for a long-lived bearer. The [ManagedServer] this
+     * client was built with is expected to have an empty bearer for
+     * this call — `auth = false` skips the Authorization header.
+     */
+    fun pair(req: PairRequest): PairResponse {
+        val resp = doPost("/auth/pair", body = req.toJson(), auth = false)
+        return PairResponse.fromJson(JSONObject(resp))
+    }
+
     fun status(): StatusResponse {
         val resp = doGet("/status", auth = true)
         return StatusResponse.fromJson(JSONObject(resp))
@@ -127,6 +138,46 @@ class AgentApiClient(
             .applyAuth(true)
             .build()
         execute(req, allowEmpty = true)
+    }
+
+    // --- bypass outbounds (user-defined upstream proxies) ---------------
+
+    fun listBypassOutbounds(): List<BypassOutbound> {
+        val resp = doGet("/bypass/outbounds", auth = true)
+        return BypassOutbound.listFromJson(JSONObject(resp))
+    }
+
+    fun addBypassOutbound(req: AddBypassOutboundRequest): BypassOutbound {
+        val resp = doPost("/bypass/outbounds", body = req.toJson(), auth = true)
+        return BypassOutbound.fromJson(JSONObject(resp))
+    }
+
+    fun deleteBypassOutbound(id: String) {
+        val req = Request.Builder()
+            .url("$baseUrl/bypass/outbounds/$id")
+            .delete()
+            .applyAuth(true)
+            .build()
+        execute(req, allowEmpty = true)
+    }
+
+    // --- service control -----------------------------------------------
+
+    fun restartService(name: String) {
+        doPost("/services/$name/restart", body = "{}", auth = true)
+    }
+
+    fun startService(name: String) {
+        doPost("/services/$name/start", body = "{}", auth = true)
+    }
+
+    fun stopService(name: String) {
+        doPost("/services/$name/stop", body = "{}", auth = true)
+    }
+
+    fun serviceLogs(name: String, lines: Int = 200): ServiceLogsResponse {
+        val resp = doGet("/services/$name/logs?lines=$lines", auth = true)
+        return ServiceLogsResponse.fromJson(JSONObject(resp))
     }
 
     // --- HTTP plumbing ----------------------------------------------------

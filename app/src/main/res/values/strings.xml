@@ -66,6 +66,71 @@
     <string name="add_more">Add another</string>
     <string name="continue_action">Continue</string>
     <string name="retry">Retry</string>
+    <string name="add_by_link">Add by link</string>
+
+    <!-- My Servers — VPS instances this device controls via netguard-agent. -->
+    <string name="my_servers">My Servers</string>
+    <string name="my_servers_empty">No servers yet</string>
+    <string name="my_servers_empty_hint">Tap + to deploy netguard-agent on your VPS over SSH. Currently supports Debian 11+ and Ubuntu 22.04+.</string>
+    <string name="add_server">Add server</string>
+    <string name="add_server_host_hint">Hostname or IP</string>
+    <string name="add_server_port_hint">SSH port</string>
+    <string name="add_server_user_hint">SSH user</string>
+    <string name="add_server_pass_hint">Password</string>
+    <string name="add_server_name_hint">Server name (shown in the list)</string>
+    <string name="add_server_distro_warning">Only Debian 11+ and Ubuntu 22.04+ are supported. On other systems the deploy will fail.</string>
+    <string name="add_server_deploy">Deploy agent</string>
+    <string name="stage_connecting">Connecting via SSH…</string>
+    <string name="stage_os_check">Checking distribution…</string>
+    <string name="stage_installing">Installing netguard-agent…</string>
+    <string name="stage_waiting_service">Waiting for service…</string>
+    <string name="stage_fetching_pin">Fetching TLS pin…</string>
+    <string name="stage_done">Done</string>
+    <string name="add_server_success">Agent deployed</string>
+    <string name="add_server_failed">Bootstrap failed</string>
+    <string name="add_server_show_log">Show log</string>
+
+    <!-- Server Detail tabs -->
+    <string name="srv_tab_overview">Overview</string>
+    <string name="srv_tab_profiles">Profiles</string>
+    <string name="srv_tab_rules">Rules</string>
+    <string name="srv_tab_logs">Logs</string>
+    <string name="srv_action_restart_xray">Restart xray</string>
+    <string name="srv_action_update_agent">Update agent</string>
+    <string name="srv_action_uninstall_xray">Uninstall xray</string>
+    <string name="srv_action_remove_server">Remove server</string>
+    <!-- Overview -->
+    <string name="srv_load_avg">Load avg</string>
+    <string name="srv_memory">Memory</string>
+    <string name="srv_disk">Disk</string>
+    <string name="srv_uptime">Uptime</string>
+    <string name="srv_services">Services</string>
+    <string name="srv_active">active</string>
+    <string name="srv_inactive">inactive</string>
+    <!-- Profiles tab -->
+    <string name="srv_no_profiles">No profiles yet</string>
+    <string name="srv_add_profile">Add VLESS inbound</string>
+    <string name="srv_profile_label_hint">Label (optional)</string>
+    <string name="srv_profile_port_hint">Port (blank = auto)</string>
+    <!-- Rules tab -->
+    <string name="srv_no_rules">No bypass rules</string>
+    <string name="srv_upstreams">Upstream proxies</string>
+    <string name="srv_no_upstreams">No custom upstreams</string>
+    <string name="srv_add_upstream">Add upstream</string>
+    <string name="srv_add_rule">Add rule</string>
+    <string name="srv_upstream_tag_hint">Tag (e.g. rf-vps)</string>
+    <string name="srv_upstream_type_hint">Type</string>
+    <string name="srv_upstream_host_hint">Host</string>
+    <string name="srv_upstream_port_hint">Port</string>
+    <string name="srv_upstream_user_hint">Username (optional)</string>
+    <string name="srv_upstream_pass_hint">Password (optional)</string>
+    <string name="srv_rule_kind_hint">Kind</string>
+    <string name="srv_rule_value_hint">Value (domain / cidr / geosite name / geoip name)</string>
+    <string name="srv_rule_action_hint">Action</string>
+    <string name="srv_rule_via_hint">Via (when action=via)</string>
+    <!-- Logs tab -->
+    <string name="srv_logs_service_hint">Service</string>
+    <string name="srv_refresh">Refresh</string>
 
     <!-- Settings -->
     <string name="routing">Routing</string>

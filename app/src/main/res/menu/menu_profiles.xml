@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!-- "My Servers" — VPS instances this device controls through
+         netguard-agent. Lives in the Servers toolbar instead of a
+         bottom-nav slot so we don't crowd the 5-icon nav. -->
+    <item
+        android:id="@+id/action_my_servers"
+        android:title="@string/my_servers"
+        android:icon="@drawable/ic_cloud"
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_ping_all"
         android:title="@string/test_all"

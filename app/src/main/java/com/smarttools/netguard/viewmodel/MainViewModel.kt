@@ -28,8 +28,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _autoSelecting = MutableStateFlow(false)
     val autoSelecting: StateFlow<Boolean> = _autoSelecting.asStateFlow()
 
+    // replay=1 so the result shows on the Home tab even if the user
+    // tapped Best Server and switched away before it finished. UI is
+    // expected to call [consumeAutoSelectMessage] after showing the
+    // Toast — otherwise every Home re-enter would re-pop the same
+    // "Best: X (Yms)" toast.
     private val _autoSelectMessage = MutableSharedFlow<String>(replay = 1)
     val autoSelectMessage: SharedFlow<String> = _autoSelectMessage.asSharedFlow()
+
+    fun consumeAutoSelectMessage() {
+        _autoSelectMessage.resetReplayCache()
+    }
 
     private val _speedTesting = MutableStateFlow(false)
     val speedTesting: StateFlow<Boolean> = _speedTesting.asStateFlow()

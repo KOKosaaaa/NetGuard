@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
-    <item
-        android:id="@+id/action_scan_qr"
-        android:title="@string/scan_qr"
-        app:showAsAction="ifRoom" />
+    <!-- Scan-QR moved into the "+" FAB chooser; the toolbar now only
+         carries Update-All, which is a list-wide operation that
+         doesn't fit the per-card refresh button. -->
     <item
         android:id="@+id/action_update_all"
         android:title="@string/update_all"

@@ -56,6 +56,67 @@
     <string name="add_more">Добавить ещё</string>
     <string name="continue_action">Продолжить</string>
     <string name="retry">Повторить</string>
+    <string name="add_by_link">По ссылке</string>
+
+    <!-- Мои серверы -->
+    <string name="my_servers">Мои серверы</string>
+    <string name="my_servers_empty">Серверов пока нет</string>
+    <string name="my_servers_empty_hint">Нажмите +, чтобы развернуть netguard-agent на вашем VPS по SSH. Поддерживаются Debian 11+ и Ubuntu 22.04+.</string>
+    <string name="add_server">Добавить сервер</string>
+    <string name="add_server_host_hint">Хост или IP</string>
+    <string name="add_server_port_hint">Порт SSH</string>
+    <string name="add_server_user_hint">SSH-пользователь</string>
+    <string name="add_server_pass_hint">Пароль</string>
+    <string name="add_server_name_hint">Название сервера (для списка)</string>
+    <string name="add_server_distro_warning">Поддерживаются только Debian 11+ и Ubuntu 22.04+. На других дистрибутивах развёртывание не сработает.</string>
+    <string name="add_server_deploy">Развернуть агент</string>
+    <string name="stage_connecting">Подключение по SSH…</string>
+    <string name="stage_os_check">Проверка дистрибутива…</string>
+    <string name="stage_installing">Установка netguard-agent…</string>
+    <string name="stage_waiting_service">Ожидание сервиса…</string>
+    <string name="stage_fetching_pin">Получение TLS-пина…</string>
+    <string name="stage_done">Готово</string>
+    <string name="add_server_success">Агент развёрнут</string>
+    <string name="add_server_failed">Сбой развёртывания</string>
+    <string name="add_server_show_log">Показать лог</string>
+
+    <!-- Детальный экран сервера -->
+    <string name="srv_tab_overview">Обзор</string>
+    <string name="srv_tab_profiles">Профили</string>
+    <string name="srv_tab_rules">Правила</string>
+    <string name="srv_tab_logs">Логи</string>
+    <string name="srv_action_restart_xray">Перезапустить xray</string>
+    <string name="srv_action_update_agent">Обновить агент</string>
+    <string name="srv_action_uninstall_xray">Удалить xray</string>
+    <string name="srv_action_remove_server">Удалить сервер</string>
+    <string name="srv_load_avg">Нагрузка</string>
+    <string name="srv_memory">Память</string>
+    <string name="srv_disk">Диск</string>
+    <string name="srv_uptime">Uptime</string>
+    <string name="srv_services">Сервисы</string>
+    <string name="srv_active">активен</string>
+    <string name="srv_inactive">остановлен</string>
+    <string name="srv_no_profiles">Профилей пока нет</string>
+    <string name="srv_add_profile">Добавить VLESS inbound</string>
+    <string name="srv_profile_label_hint">Метка (необязательно)</string>
+    <string name="srv_profile_port_hint">Порт (пусто = авто)</string>
+    <string name="srv_no_rules">Правил обхода нет</string>
+    <string name="srv_upstreams">Кастомные upstream</string>
+    <string name="srv_no_upstreams">Нет своих upstream</string>
+    <string name="srv_add_upstream">Добавить upstream</string>
+    <string name="srv_add_rule">Добавить правило</string>
+    <string name="srv_upstream_tag_hint">Тег (например rf-vps)</string>
+    <string name="srv_upstream_type_hint">Тип</string>
+    <string name="srv_upstream_host_hint">Хост</string>
+    <string name="srv_upstream_port_hint">Порт</string>
+    <string name="srv_upstream_user_hint">Пользователь (необязательно)</string>
+    <string name="srv_upstream_pass_hint">Пароль (необязательно)</string>
+    <string name="srv_rule_kind_hint">Тип</string>
+    <string name="srv_rule_value_hint">Значение (домен / cidr / geosite / geoip)</string>
+    <string name="srv_rule_action_hint">Действие</string>
+    <string name="srv_rule_via_hint">Через (если действие=через)</string>
+    <string name="srv_logs_service_hint">Сервис</string>
+    <string name="srv_refresh">Обновить</string>
     <string name="routing">Маршрутизация</string>
     <string name="routing_global">Глобальный прокси</string>
     <string name="routing_rules">По правилам</string>
@@ -242,7 +303,7 @@
     <string name="speed_notif_desc">Показывать скорость в строке состояния</string>
     <string name="security_test_desc">Проверить целостность и безопасность VPN-туннеля</string>
     <string name="kill_switch_full_desc">Блокирует весь интернет при отключении VPN. Включите «Постоянный VPN» в настройках Android.</string>
-    <string name="per_app_desc">Только для глобального VPN. Если используешь триггер-режим - оставь ВЫКЛЮЧЕНО, триггер сам управляет маршрутизацией.</string>
+    <string name="per_app_desc">Только для глобального VPN. Если используешь триггер-режим - оставь Отключено, триггер сам управляет маршрутизацией.</string>
     <string name="export_import_desc">Копировать конфигурацию в буфер обмена для передачи</string>
     <string name="backup_restore_desc">Сохранить профили в файл или восстановить из резервной копии</string>
     <!-- Server switching -->

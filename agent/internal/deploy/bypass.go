@@ -38,10 +38,21 @@ const (
 
 // AddBypassRuleRequest is the body for POST /v1/bypass/rules.
 type AddBypassRuleRequest struct {
-	Kind   string `json:"kind"`
-	Value  string `json:"value"`
-	Action string `json:"action"`
-	Order  int    `json:"order"`
+	Kind           string `json:"kind"`
+	Value          string `json:"value"`
+	Action         string `json:"action"`             // direct | block | via
+	ViaOutboundTag string `json:"via_outbound_tag,omitempty"` // required when Action="via"
+	Order          int    `json:"order"`
+}
+
+// AddBypassOutboundRequest — POST /v1/bypass/outbounds.
+type AddBypassOutboundRequest struct {
+	Tag      string `json:"tag"`
+	Type     string `json:"type"` // socks | http
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 // PutBypassRulesRequest replaces the whole rule set atomically.
@@ -57,11 +68,38 @@ func validateRule(r *AddBypassRuleRequest) error {
 	}
 	switch r.Action {
 	case "direct", "block":
+	case "via":
+		if r.ViaOutboundTag == "" {
+			return fmt.Errorf("action=via requires via_outbound_tag")
+		}
 	default:
-		return fmt.Errorf("action must be direct|block (got %q)", r.Action)
+		return fmt.Errorf("action must be direct|block|via (got %q)", r.Action)
 	}
 	if r.Value == "" {
 		return fmt.Errorf("value required")
+	}
+	return nil
+}
+
+func validateOutbound(o *AddBypassOutboundRequest) error {
+	if o.Tag == "" {
+		return fmt.Errorf("tag required")
+	}
+	// Reserved outbound tags clash with our managed ones below.
+	switch o.Tag {
+	case OutboundFreedomTag, OutboundDirectTag, OutboundBlackholeTag:
+		return fmt.Errorf("tag %q is reserved", o.Tag)
+	}
+	switch o.Type {
+	case "socks", "http":
+	default:
+		return fmt.Errorf("type must be socks|http (got %q)", o.Type)
+	}
+	if o.Host == "" {
+		return fmt.Errorf("host required")
+	}
+	if o.Port <= 0 || o.Port > 65535 {
+		return fmt.Errorf("port out of range")
 	}
 	return nil
 }
@@ -72,13 +110,29 @@ func AddBypassRule(db *storage.DB, req *AddBypassRuleRequest) (*storage.BypassRu
 	if err := validateRule(req); err != nil {
 		return nil, err
 	}
+	// When action=via, sanity-check the referenced upstream exists so
+	// the user gets a clear error instead of a silently-broken xray.
+	if req.Action == "via" {
+		outs, _ := db.ListBypassOutbounds()
+		ok := false
+		for _, o := range outs {
+			if o.Tag == req.ViaOutboundTag {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return nil, fmt.Errorf("upstream %q not found", req.ViaOutboundTag)
+		}
+	}
 	r := &storage.BypassRule{
-		ID:        newBypassID(),
-		Kind:      req.Kind,
-		Value:     req.Value,
-		Action:    req.Action,
-		Order:     req.Order,
-		CreatedAt: time.Now(),
+		ID:             newBypassID(),
+		Kind:           req.Kind,
+		Value:          req.Value,
+		Action:         req.Action,
+		ViaOutboundTag: req.ViaOutboundTag,
+		Order:          req.Order,
+		CreatedAt:      time.Now(),
 	}
 	if err := db.InsertBypassRule(r); err != nil {
 		return nil, err
@@ -113,12 +167,13 @@ func ReplaceBypassRules(db *storage.DB, reqs []*AddBypassRuleRequest) ([]*storag
 	rules := make([]*storage.BypassRule, 0, len(reqs))
 	for _, r := range reqs {
 		rules = append(rules, &storage.BypassRule{
-			ID:        newBypassID(),
-			Kind:      r.Kind,
-			Value:     r.Value,
-			Action:    r.Action,
-			Order:     r.Order,
-			CreatedAt: now,
+			ID:             newBypassID(),
+			Kind:           r.Kind,
+			Value:          r.Value,
+			Action:         r.Action,
+			ViaOutboundTag: r.ViaOutboundTag,
+			Order:          r.Order,
+			CreatedAt:      now,
 		})
 	}
 	if err := db.ReplaceBypassRules(rules); err != nil {
@@ -185,14 +240,45 @@ func buildXrayConfigFromDB(db *storage.DB) (map[string]any, error) {
 		map[string]any{"tag": OutboundDirectTag, "protocol": "freedom"},
 		map[string]any{"tag": OutboundBlackholeTag, "protocol": "blackhole"},
 	}
+	// Append user-defined upstream proxies (typical use: an RF VPS
+	// SOCKS5 so a few RF-only domains exit via a Russian IP). xray
+	// outbound shape for socks/http is identical save the protocol.
+	userOuts, err := db.ListBypassOutbounds()
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range userOuts {
+		server := map[string]any{"address": o.Host, "port": o.Port}
+		if o.Username != "" {
+			if o.Type == "socks" {
+				server["users"] = []any{
+					map[string]any{"user": o.Username, "pass": o.Password},
+				}
+			} else { // http
+				server["users"] = []any{
+					map[string]any{"user": o.Username, "pass": o.Password},
+				}
+			}
+		}
+		outbounds = append(outbounds, map[string]any{
+			"tag":      o.Tag,
+			"protocol": o.Type,
+			"settings": map[string]any{
+				"servers": []any{server},
+			},
+		})
+	}
 
 	// Build routing.rules from the bypass table. xray takes the first
 	// matching rule, so DB ord is preserved on serialization.
 	xrRules := make([]any, 0, len(rules))
 	for _, r := range rules {
 		outboundTag := OutboundDirectTag
-		if r.Action == "block" {
+		switch r.Action {
+		case "block":
 			outboundTag = OutboundBlackholeTag
+		case "via":
+			outboundTag = r.ViaOutboundTag
 		}
 		entry := map[string]any{
 			"type":        "field",
@@ -229,4 +315,46 @@ func newBypassID() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return "br-" + hex.EncodeToString(b)
+}
+
+func newOutboundID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return "bo-" + hex.EncodeToString(b)
+}
+
+// AddBypassOutbound inserts a user-defined upstream proxy and re-applies
+// the xray config (so the new outbound shows up under "outbounds" and
+// is reachable by tag from any rule).
+func AddBypassOutbound(db *storage.DB, req *AddBypassOutboundRequest) (*storage.BypassOutbound, error) {
+	if err := validateOutbound(req); err != nil {
+		return nil, err
+	}
+	o := &storage.BypassOutbound{
+		ID:        newOutboundID(),
+		Tag:       req.Tag,
+		Type:      req.Type,
+		Host:      req.Host,
+		Port:      req.Port,
+		Username:  req.Username,
+		Password:  req.Password,
+		CreatedAt: time.Now(),
+	}
+	if err := db.InsertBypassOutbound(o); err != nil {
+		return nil, err
+	}
+	if err := ApplyBypassToXray(db); err != nil {
+		return o, fmt.Errorf("outbound saved but apply to xray failed: %w", err)
+	}
+	return o, nil
+}
+
+// DeleteBypassOutbound removes the upstream by id and re-applies.
+// Caller should warn the user when rules still reference this tag —
+// xray fails to load if a rule references an unknown outbound.
+func DeleteBypassOutbound(db *storage.DB, id string) error {
+	if err := db.DeleteBypassOutbound(id); err != nil {
+		return err
+	}
+	return ApplyBypassToXray(db)
 }

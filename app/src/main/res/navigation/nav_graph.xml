@@ -16,7 +16,32 @@
         <action
             android:id="@+id/action_profiles_to_edit"
             app:destination="@id/nav_profile_edit" />
+        <action
+            android:id="@+id/action_profiles_to_my_servers"
+            app:destination="@id/nav_my_servers" />
     </fragment>
+
+    <fragment
+        android:id="@+id/nav_my_servers"
+        android:name="com.smarttools.netguard.ui.managed.ManagedServerListFragment"
+        android:label="@string/my_servers">
+        <action
+            android:id="@+id/action_my_servers_to_add_server"
+            app:destination="@id/nav_add_server" />
+        <action
+            android:id="@+id/action_my_servers_to_detail"
+            app:destination="@id/nav_managed_server_detail" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_add_server"
+        android:name="com.smarttools.netguard.ui.managed.AddServerFragment"
+        android:label="@string/add_server" />
+
+    <fragment
+        android:id="@+id/nav_managed_server_detail"
+        android:name="com.smarttools.netguard.ui.managed.ManagedServerDetailFragment"
+        android:label="@string/my_servers" />
 
     <fragment
         android:id="@+id/nav_qr_scan"

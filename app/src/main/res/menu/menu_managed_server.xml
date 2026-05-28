@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_restart_xray"
+        android:title="@string/srv_action_restart_xray"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_update_agent"
+        android:title="@string/srv_action_update_agent"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_uninstall_xray"
+        android:title="@string/srv_action_uninstall_xray"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_remove_server"
+        android:title="@string/srv_action_remove_server"
+        app:showAsAction="never" />
+</menu>

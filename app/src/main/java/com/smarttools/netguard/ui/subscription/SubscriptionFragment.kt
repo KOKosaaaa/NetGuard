@@ -41,6 +41,14 @@ class SubscriptionFragment : Fragment() {
         return binding.root
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Refresh stale subscriptions silently so the "updated at"
+        // timestamp on each card stays current. Bounded to >1h since
+        // last fetch — frequent tab switches don't hammer the provider.
+        viewModel.refreshIfStale()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -54,14 +62,10 @@ class SubscriptionFragment : Fragment() {
         binding.rvSubs.layoutManager = LinearLayoutManager(requireContext())
         binding.rvSubs.adapter = adapter
 
-        binding.fabAddSub.setOnClickListener { showAddDialog() }
+        binding.fabAddSub.setOnClickListener { showAddSourceChooser() }
 
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.action_scan_qr -> {
-                    findNavController().navigate(R.id.action_subscriptions_to_qr_scan)
-                    true
-                }
                 R.id.action_update_all -> {
                     viewModel.updateAll()
                     true
@@ -86,6 +90,10 @@ class SubscriptionFragment : Fragment() {
                 launch {
                     viewModel.message.collect { msg ->
                         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                        // Drop the replay cache so re-entering the tab
+                        // doesn't re-show the same "Updated N profiles"
+                        // toast over and over.
+                        viewModel.consumeMessage()
                     }
                 }
             }
@@ -144,6 +152,28 @@ class SubscriptionFragment : Fragment() {
                 val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 clipboard.setPrimaryClip(ClipData.newPlainText("subscription", sub.url))
                 Toast.makeText(requireContext(), R.string.copied, Toast.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    /**
+     * Triggered from the "+" FAB. Asks whether the user wants to add a
+     * subscription by pasting a link (the existing stateful import
+     * dialog) or by scanning a QR code (existing QR-scan fragment).
+     * Consolidates two top-of-screen actions into one bottom action.
+     */
+    private fun showAddSourceChooser() {
+        val items = arrayOf(
+            getString(R.string.add_by_link),
+            getString(R.string.scan_qr),
+        )
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.add_subscription)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> showAddDialog()
+                    1 -> findNavController().navigate(R.id.action_subscriptions_to_qr_scan)
+                }
             }
             .show()
     }

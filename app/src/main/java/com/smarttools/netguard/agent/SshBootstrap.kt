@@ -39,11 +39,30 @@ class SshBootstrap(
     private val sshPassword: String? = null,
     /** PEM-encoded private key (ED25519 or RSA). Mutually exclusive with password. */
     private val sshPrivateKey: String? = null,
-    private val agentBinary: ByteArray,
+    /**
+     * Map of remote `uname -m` output → agent binary for that arch.
+     * Keys we currently ship: "x86_64", "aarch64". On a host whose
+     * uname doesn't match any key the bootstrap fails with
+     * E_UNSUPPORTED_ARCH instead of silently picking a wrong one.
+     */
+    private val binariesByArch: Map<String, ByteArray>,
     private val installScript: String,
     private val agentListenAddr: String = ":9443",
     private val timeoutMs: Long = 90_000,
+    /** Called whenever the bootstrap moves to the next phase. UI binds
+     *  this to a progress label so the user sees what is happening. */
+    private val onProgress: (Stage) -> Unit = {},
 ) {
+
+    /** Coarse-grained stages the UI can render as bullet points / progress bar. */
+    enum class Stage(val pct: Int, val labelKey: String) {
+        CONNECTING(10, "stage_connecting"),
+        OS_CHECK(20, "stage_os_check"),
+        INSTALLING(55, "stage_installing"),
+        WAITING_SERVICE(80, "stage_waiting_service"),
+        FETCHING_PIN(95, "stage_fetching_pin"),
+        DONE(100, "stage_done"),
+    }
 
     data class BootstrapResult(
         val pairToken: String,
@@ -58,6 +77,9 @@ class SshBootstrap(
         class SshAuthFailed(msg: String) : Failure("E_SSH_AUTH: $msg")
         class OsUnsupported(detected: String) : Failure(
             "E_OS_UNSUPPORTED: detected '$detected', supported: Debian, Ubuntu"
+        )
+        class ArchUnsupported(detected: String) : Failure(
+            "E_UNSUPPORTED_ARCH: detected '$detected', supported: x86_64, aarch64"
         )
         class InstallFailed(code: String, msg: String, val transcript: String) :
             Failure("$code: $msg")
@@ -74,21 +96,27 @@ class SshBootstrap(
             timeout = timeoutMs.toInt()
         }
         try {
+            onProgress(Stage.CONNECTING)
             ssh.connect(host, sshPort)
             authenticate(ssh)
 
-            // 1. distro check (Debian/Ubuntu only)
-            val osLine = exec(ssh, "cat /etc/os-release 2>/dev/null | grep -E '^ID=' | head -1")
-                .stdout.trim()
-            // ID=ubuntu / ID=debian — anything else is unsupported.
+            // 1. distro + arch check (Debian/Ubuntu, x86_64/aarch64)
+            onProgress(Stage.OS_CHECK)
+            val probe = exec(ssh, "cat /etc/os-release 2>/dev/null | grep -E '^ID=' | head -1; uname -m")
+            val probeLines = probe.stdout.lines().filter { it.isNotBlank() }
+            val osLine = probeLines.getOrNull(0).orEmpty()
+            val arch = probeLines.getOrNull(1)?.trim().orEmpty()
             val osId = osLine.substringAfter('=').trim('"', ' ')
             if (osId !in setOf("ubuntu", "debian")) {
                 throw Failure.OsUnsupported(osId.ifEmpty { "unknown" })
             }
+            val agentBinary = binariesByArch[arch]
+                ?: throw Failure.ArchUnsupported(arch.ifEmpty { "unknown" })
 
             // 2. run installer. Pipe the script in over stdin, pass the
             //    binary as a NG_BIN_B64 env var. Sha256 too so the script
             //    can verify before writing /usr/local/bin/netguard-agent.
+            onProgress(Stage.INSTALLING)
             val sha = sha256Hex(agentBinary)
             val b64 = Base64.encodeToString(agentBinary, Base64.NO_WRAP)
             val cmd = buildString {
@@ -107,6 +135,7 @@ class SshBootstrap(
                     transcript = "stdout:\n${r.stdout}\nstderr:\n${r.stderr}")
             }
 
+            onProgress(Stage.WAITING_SERVICE)
             val pairToken = r.stdout.lines().last { it.isNotBlank() }.trim()
             if (pairToken.isEmpty()) {
                 throw Failure.NoPairToken(transcript = r.stdout + "\n" + r.stderr)
@@ -115,7 +144,9 @@ class SshBootstrap(
             // 3. read the cert from disk and compute its SPKI hash —
             //    we're still on SSH, so the result is trustworthy (same
             //    trust boundary as the install we just performed).
+            onProgress(Stage.FETCHING_PIN)
             val spki = fetchSpkiHash(ssh)
+            onProgress(Stage.DONE)
 
             // 4. probe /v1/health for the agent version. We do this over
             //    plain HTTPS skip-verify because we don't have the pin

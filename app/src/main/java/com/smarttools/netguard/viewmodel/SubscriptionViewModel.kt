@@ -19,8 +19,20 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
     private val _updating = MutableStateFlow(false)
     val updating: StateFlow<Boolean> = _updating.asStateFlow()
 
+    // replay=1 so a message emitted while the fragment is paused (e.g.
+    // updateAll fires from a background work flow) is still delivered
+    // on its next resume. Callers must invoke [consumeMessage] right
+    // after surfacing the Toast — otherwise every subsequent re-entry
+    // to the Subs tab would re-show the same message via the replay
+    // cache. There is no UI gesture that opens the Subs tab and
+    // *legitimately* needs to see the previous message.
     private val _message = MutableSharedFlow<String>(replay = 1)
     val message: SharedFlow<String> = _message.asSharedFlow()
+
+    /** Clears the replay-cached message after the UI has displayed it. */
+    fun consumeMessage() {
+        _message.resetReplayCache()
+    }
 
     fun addSubscription(name: String, url: String, autoUpdateHours: Int = 0) {
         viewModelScope.launch {
@@ -148,6 +160,28 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
                 _message.emit("Updated $total profiles")
             }
             _updating.value = false
+        }
+    }
+
+    /**
+     * Refresh subscriptions whose `lastUpdatedMs` is older than [staleAfterMs]
+     * (or never updated). Called silently from the fragment's onResume so the
+     * Subs cell always shows a recent "updated at" timestamp; we don't want
+     * to hit the user with a toast for every tab switch, so this path does
+     * not emit messages.
+     */
+    fun refreshIfStale(staleAfterMs: Long = 60L * 60 * 1000) {
+        if (_updating.value) return
+        viewModelScope.launch {
+            val cutoff = System.currentTimeMillis() - staleAfterMs
+            val stale = subRepo.getAll().filter { it.enabled && it.lastUpdatedMs < cutoff }
+            if (stale.isEmpty()) return@launch
+            _updating.value = true
+            try {
+                stale.forEach { subRepo.updateSubscription(it) }
+            } finally {
+                _updating.value = false
+            }
         }
     }
 

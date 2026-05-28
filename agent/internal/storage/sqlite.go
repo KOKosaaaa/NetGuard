@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,20 +110,49 @@ func (d *DB) migrate() error {
 		// bypass_rules: server-side routing rules. Each row becomes one
 		// entry in xray's "routing.rules" array. ord controls priority
 		// (xray takes the first matching rule). kind ∈ domain|cidr|geosite|geoip;
-		// action ∈ direct|block (proxy is the default catch-all and
-		// doesn't need a rule).
+		// action ∈ direct|block|via (proxy is the default catch-all and
+		// doesn't need a rule). When action=via, via_outbound_tag must
+		// reference a row in bypass_outbounds (FK enforced by code).
 		`CREATE TABLE IF NOT EXISTS bypass_rules (
-			id         TEXT PRIMARY KEY,
-			kind       TEXT NOT NULL,
-			value      TEXT NOT NULL,
-			action     TEXT NOT NULL,
-			ord        INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL
+			id                TEXT PRIMARY KEY,
+			kind              TEXT NOT NULL,
+			value             TEXT NOT NULL,
+			action            TEXT NOT NULL,
+			via_outbound_tag  TEXT,
+			ord               INTEGER NOT NULL DEFAULT 0,
+			created_at        TEXT NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS bypass_rules_ord_idx ON bypass_rules(ord)`,
+		// Older agents had the schema without via_outbound_tag — best-
+		// effort ALTER for upgrades. Errors here are fine: a fresh agent
+		// already has the column from the CREATE above.
+		`ALTER TABLE bypass_rules ADD COLUMN via_outbound_tag TEXT`,
+		// bypass_outbounds: user-defined upstream proxies that bypass
+		// rules can route through. Typical use: an RF VPS exposing a
+		// SOCKS5 on :1080, so traffic for a few RF-only domains exits
+		// from a Russian IP while everything else stays on the main
+		// outbound. tag uniqueness matters because xray references it
+		// directly from routing.rules.
+		`CREATE TABLE IF NOT EXISTS bypass_outbounds (
+			id         TEXT PRIMARY KEY,
+			tag        TEXT NOT NULL UNIQUE,
+			type       TEXT NOT NULL,
+			host       TEXT NOT NULL,
+			port       INTEGER NOT NULL,
+			username   TEXT,
+			password   TEXT,
+			created_at TEXT NOT NULL
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.db.Exec(s); err != nil {
+			// ALTER TABLE ADD COLUMN errors out with "duplicate column"
+			// on the second start — that's fine, the column already
+			// exists from this same statement on a previous boot.
+			if strings.HasPrefix(strings.TrimSpace(s), "ALTER TABLE") &&
+				strings.Contains(err.Error(), "duplicate column") {
+				continue
+			}
 			return fmt.Errorf("migrate: %s: %w", firstLine(s), err)
 		}
 	}
@@ -381,17 +411,19 @@ func (d *DB) DeleteXrayInbound(id string) error {
 // --- bypass rules ---------------------------------------------------------
 
 type BypassRule struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`   // domain | cidr | geosite | geoip
-	Value     string    `json:"value"`  // depends on kind
-	Action    string    `json:"action"` // direct | block (proxy is implicit default)
-	Order     int       `json:"order"`
-	CreatedAt time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	Kind           string    `json:"kind"`             // domain | cidr | geosite | geoip
+	Value          string    `json:"value"`            // depends on kind
+	Action         string    `json:"action"`           // direct | block | via (proxy is implicit default)
+	ViaOutboundTag string    `json:"via_outbound_tag"` // set when Action=="via"
+	Order          int       `json:"order"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 func (d *DB) ListBypassRules() ([]*BypassRule, error) {
 	rows, err := d.db.Query(
-		`SELECT id,kind,value,action,ord,created_at FROM bypass_rules ORDER BY ord ASC, created_at ASC`)
+		`SELECT id,kind,value,action,COALESCE(via_outbound_tag,''),ord,created_at
+		 FROM bypass_rules ORDER BY ord ASC, created_at ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +432,8 @@ func (d *DB) ListBypassRules() ([]*BypassRule, error) {
 	for rows.Next() {
 		r := &BypassRule{}
 		var created string
-		if err := rows.Scan(&r.ID, &r.Kind, &r.Value, &r.Action, &r.Order, &created); err != nil {
+		if err := rows.Scan(&r.ID, &r.Kind, &r.Value, &r.Action,
+			&r.ViaOutboundTag, &r.Order, &created); err != nil {
 			return nil, err
 		}
 		r.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
@@ -411,10 +444,18 @@ func (d *DB) ListBypassRules() ([]*BypassRule, error) {
 
 func (d *DB) InsertBypassRule(r *BypassRule) error {
 	_, err := d.db.Exec(
-		`INSERT INTO bypass_rules(id,kind,value,action,ord,created_at) VALUES(?,?,?,?,?,?)`,
-		r.ID, r.Kind, r.Value, r.Action, r.Order,
+		`INSERT INTO bypass_rules(id,kind,value,action,via_outbound_tag,ord,created_at)
+		 VALUES(?,?,?,?,?,?,?)`,
+		r.ID, r.Kind, r.Value, r.Action, nullable(r.ViaOutboundTag), r.Order,
 		r.CreatedAt.Format(time.RFC3339Nano))
 	return err
+}
+
+func nullable(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func (d *DB) DeleteBypassRule(id string) error {
@@ -444,13 +485,15 @@ func (d *DB) ReplaceBypassRules(rules []*BypassRule) error {
 		return err
 	}
 	stmt, err := tx.Prepare(
-		`INSERT INTO bypass_rules(id,kind,value,action,ord,created_at) VALUES(?,?,?,?,?,?)`)
+		`INSERT INTO bypass_rules(id,kind,value,action,via_outbound_tag,ord,created_at)
+		 VALUES(?,?,?,?,?,?,?)`)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	for _, r := range rules {
-		if _, err := stmt.Exec(r.ID, r.Kind, r.Value, r.Action, r.Order,
+		if _, err := stmt.Exec(r.ID, r.Kind, r.Value, r.Action,
+			nullable(r.ViaOutboundTag), r.Order,
 			r.CreatedAt.Format(time.RFC3339Nano)); err != nil {
 			_ = stmt.Close()
 			_ = tx.Rollback()
@@ -459,6 +502,63 @@ func (d *DB) ReplaceBypassRules(rules []*BypassRule) error {
 	}
 	_ = stmt.Close()
 	return tx.Commit()
+}
+
+// --- bypass outbounds (custom upstream proxies) --------------------------
+
+type BypassOutbound struct {
+	ID        string    `json:"id"`
+	Tag       string    `json:"tag"` // unique; referenced by rules via_outbound_tag
+	Type      string    `json:"type"` // socks | http
+	Host      string    `json:"host"`
+	Port      int       `json:"port"`
+	Username  string    `json:"username,omitempty"`
+	Password  string    `json:"password,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (d *DB) ListBypassOutbounds() ([]*BypassOutbound, error) {
+	rows, err := d.db.Query(
+		`SELECT id,tag,type,host,port,COALESCE(username,''),COALESCE(password,''),created_at
+		 FROM bypass_outbounds ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*BypassOutbound
+	for rows.Next() {
+		o := &BypassOutbound{}
+		var created string
+		if err := rows.Scan(&o.ID, &o.Tag, &o.Type, &o.Host, &o.Port,
+			&o.Username, &o.Password, &created); err != nil {
+			return nil, err
+		}
+		o.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+func (d *DB) InsertBypassOutbound(o *BypassOutbound) error {
+	_, err := d.db.Exec(
+		`INSERT INTO bypass_outbounds(id,tag,type,host,port,username,password,created_at)
+		 VALUES(?,?,?,?,?,?,?,?)`,
+		o.ID, o.Tag, o.Type, o.Host, o.Port,
+		nullable(o.Username), nullable(o.Password),
+		o.CreatedAt.Format(time.RFC3339Nano))
+	return err
+}
+
+func (d *DB) DeleteBypassOutbound(id string) error {
+	res, err := d.db.Exec(`DELETE FROM bypass_outbounds WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // --- errors ---------------------------------------------------------------

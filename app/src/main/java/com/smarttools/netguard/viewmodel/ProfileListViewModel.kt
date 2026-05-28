@@ -125,6 +125,58 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * Silent re-ping triggered from the fragment's onResume. Mirrors
+     * [pingAll] but bails out if a manual ping ran in the last
+     * [staleAfterMs] window, so quick tab switches don't spam.
+     *
+     * Why not "only profiles where lastPingMs<0"? That was the previous
+     * version and the UI never updated: when a probe fails PingHelper
+     * also returns -1, so an unreachable server stays at the default
+     * value forever and Room's Flow doesn't fire (value didn't change).
+     * Re-pinging the whole list and letting the timestamp-less "ms"
+     * column move (even by a couple of ms) makes the Flow emit and
+     * the cell repaint, which is what the user expects to see.
+     */
+    fun pingAllSilently(staleAfterMs: Long = 60L * 1000) {
+        if (_pinging.value) return
+        viewModelScope.launch {
+            // Use the canonical DB snapshot — profiles StateFlow may not
+            // have produced its first emission yet on the very first
+            // onResume after process start.
+            val all = try {
+                profileRepo.getAll()
+            } catch (_: Exception) {
+                return@launch
+            }
+            if (all.isEmpty()) return@launch
+            val freshest = all.maxOfOrNull { it.lastPingMs.toLong() } ?: 0L
+            // The schema doesn't track "last pinged at"; fall back to
+            // "if we already have at least one good ms value AND the
+            // user just opened the tab again within a minute, skip".
+            if (lastPingedAt + staleAfterMs > System.currentTimeMillis() && freshest > 0) {
+                return@launch
+            }
+            _pinging.value = true
+            try {
+                val jobs = all.map { profile ->
+                    async {
+                        val ms = PingHelper.pingForProfile(profile.address, profile.port, profile.protocol)
+                        profileRepo.updatePing(profile.id, ms)
+                    }
+                }
+                jobs.awaitAll()
+                lastPingedAt = System.currentTimeMillis()
+            } finally {
+                _pinging.value = false
+            }
+        }
+    }
+
+    /** Wall-clock of the last completed ping pass; used by [pingAllSilently]
+     *  to avoid hammering on every fragment resume. */
+    @Volatile private var lastPingedAt: Long = 0L
+
     /** True when last applied sort was "by ping" — toggles each click. */
     private val _sortByPingActive = MutableStateFlow(false)
     val sortByPingActive: StateFlow<Boolean> = _sortByPingActive.asStateFlow()

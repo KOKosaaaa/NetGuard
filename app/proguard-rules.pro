@@ -39,3 +39,10 @@
     public static *** d(...);
     public static *** v(...);
 }
+
+# sshj (Add Server wizard) pulls in i2p EdDSA which optionally references
+# sun.security.x509.X509Key — that class only exists in OpenJDK and is
+# never reached on Android. R8 flags it as a missing reference; silence.
+-dontwarn sun.security.x509.**
+-dontwarn org.bouncycastle.jce.**
+-dontwarn net.schmizz.sshj.**

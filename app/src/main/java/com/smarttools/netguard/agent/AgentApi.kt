@@ -277,13 +277,15 @@ data class InboundRow(
 
 /**
  * Server-side routing rule. kind ∈ domain|cidr|geosite|geoip,
- * action ∈ direct|block (proxy is the implicit default catch-all).
+ * action ∈ direct|block|via. For action=via, viaOutboundTag references
+ * one of the upstream proxies in /v1/bypass/outbounds.
  */
 data class BypassRule(
     val id: String,
     val kind: String,
     val value: String,
     val action: String,
+    val viaOutboundTag: String,
     val order: Int,
     val createdAt: String,
 ) {
@@ -293,6 +295,7 @@ data class BypassRule(
             kind = j.getString("kind"),
             value = j.getString("value"),
             action = j.getString("action"),
+            viaOutboundTag = j.optString("via_outbound_tag"),
             order = j.optInt("order"),
             createdAt = j.optString("created_at"),
         )
@@ -308,17 +311,84 @@ data class BypassRule(
 data class AddBypassRuleRequest(
     val kind: String,
     val value: String,
-    val action: String,
+    val action: String,         // direct | block | via
+    val viaOutboundTag: String = "",
     val order: Int = 0,
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("kind", kind)
         put("value", value)
         put("action", action)
+        if (viaOutboundTag.isNotEmpty()) put("via_outbound_tag", viaOutboundTag)
         put("order", order)
     }
 
     fun toJson(): String = toJsonObject().toString()
+}
+
+// --- /v1/bypass/outbounds (user-defined upstream proxies) -----------------
+
+data class BypassOutbound(
+    val id: String,
+    val tag: String,
+    val type: String,    // socks | http
+    val host: String,
+    val port: Int,
+    val username: String,
+    val password: String,
+    val createdAt: String,
+) {
+    companion object {
+        fun fromJson(j: JSONObject) = BypassOutbound(
+            id = j.getString("id"),
+            tag = j.getString("tag"),
+            type = j.getString("type"),
+            host = j.getString("host"),
+            port = j.getInt("port"),
+            username = j.optString("username"),
+            password = j.optString("password"),
+            createdAt = j.optString("created_at"),
+        )
+
+        fun listFromJson(j: JSONObject): List<BypassOutbound> {
+            val arr = j.optJSONArray("outbounds") ?: return emptyList()
+            return (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
+        }
+    }
+}
+
+data class AddBypassOutboundRequest(
+    val tag: String,
+    val type: String,
+    val host: String,
+    val port: Int,
+    val username: String = "",
+    val password: String = "",
+) {
+    fun toJson(): String = JSONObject().apply {
+        put("tag", tag)
+        put("type", type)
+        put("host", host)
+        put("port", port)
+        if (username.isNotEmpty()) put("username", username)
+        if (password.isNotEmpty()) put("password", password)
+    }.toString()
+}
+
+// --- /v1/services/{name}/... ---------------------------------------------
+
+data class ServiceLogsResponse(
+    val service: String,
+    val lines: Int,
+    val log: String,
+) {
+    companion object {
+        fun fromJson(j: JSONObject) = ServiceLogsResponse(
+            service = j.getString("service"),
+            lines = j.optInt("lines"),
+            log = j.getString("log"),
+        )
+    }
 }
 
 // --- error envelope -------------------------------------------------------

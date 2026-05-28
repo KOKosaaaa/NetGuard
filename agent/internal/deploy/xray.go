@@ -41,6 +41,21 @@ const (
 	XrayConfigPath  = "/etc/xray/config.json"
 	XrayUnitPath    = "/etc/systemd/system/xray.service"
 	XrayDataDir     = "/var/lib/xray"
+	// XrayAssetDir holds geoip.dat + geosite.dat. xray reads files
+	// from XRAY_LOCATION_ASSET, which we point at this dir via the
+	// systemd unit's Environment= directive. Without these files,
+	// any rule using kind=geosite / kind=geoip prevents xray from
+	// loading config.
+	XrayAssetDir = "/usr/local/share/xray"
+)
+
+// Pinned v2fly geo-data releases. Bump alongside testing; matching
+// sha256 captured 2026-05-28 from the official release pages.
+const (
+	geoipURL     = "https://github.com/v2fly/geoip/releases/download/202605120112/geoip.dat"
+	geoipSha256  = "e9002979e0df72bce1c8751ff70725386594c551db684b7a232935b8b2bb8aa2"
+	geositeURL   = "https://github.com/v2fly/domain-list-community/releases/download/20260527110433/dlc.dat"
+	geositeSha256 = "50a1f17d12f1d44495ddea7d32a8c5d852ccefe848cf375f5adff22346b68cef"
 )
 
 // DeployXrayRequest is the body of POST /v1/xray/deploy.
@@ -168,6 +183,15 @@ func XrayDeploy(db *storage.DB, req *DeployXrayRequest) tasks.Runner {
 		// --- 5. data dir ---
 		if err := os.MkdirAll(XrayDataDir, 0o755); err != nil {
 			return h.Fail("E_DATA_DIR", err.Error(), false)
+		}
+
+		// --- 5b. geo-dat files (skip if both already present) ---
+		h.SetStep("geo_dat", 55)
+		if err := ensureGeoDat(ctx, h); err != nil {
+			// Geo-dat download failures are non-fatal — xray still
+			// runs without geosite/geoip rules. We surface a warning
+			// so the user knows kind=geosite/geoip will not work.
+			h.LogF("WARN geo-dat: %v (kind=geosite/geoip rules will fail until next deploy)", err)
 		}
 
 		// --- 6. config.json — minimal if first install, otherwise leave ---
@@ -379,6 +403,11 @@ func buildVlessURI(uuid, host string, port int, label string) string {
 // xraySystemdUnit is what we write to /etc/systemd/system/xray.service.
 // One-shot ExecStart, restart-on-failure, no hardening flags (xray needs
 // CAP_NET_ADMIN if Reality is ever enabled; keep it simple for phase 1).
+//
+// XRAY_LOCATION_ASSET points at the directory holding geoip.dat +
+// geosite.dat (downloaded during deploy). Without this var xray
+// defaults to looking next to the binary, which only works if the dat
+// files happen to live there.
 const xraySystemdUnit = `[Unit]
 Description=Xray Service (managed by netguard-agent)
 Documentation=https://xtls.github.io/
@@ -387,6 +416,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+Environment=XRAY_LOCATION_ASSET=/usr/local/share/xray
 ExecStart=/usr/local/bin/xray -config /etc/xray/config.json
 Restart=on-failure
 RestartSec=3
@@ -396,6 +426,61 @@ LimitNOFILE=1048576
 [Install]
 WantedBy=multi-user.target
 `
+
+// XrayRefreshGeoDat is a Runner that re-downloads pinned geo-data
+// regardless of whether files already exist. Useful when the user
+// bumps the agent and wants the latest dat blobs without redeploying
+// the whole xray stack.
+func XrayRefreshGeoDat() tasks.Runner {
+	return func(ctx context.Context, h *tasks.Handle) tasks.Outcome {
+		// Force re-download by wiping the existing files first.
+		_ = os.Remove(filepath.Join(XrayAssetDir, "geoip.dat"))
+		_ = os.Remove(filepath.Join(XrayAssetDir, "geosite.dat"))
+		h.SetStep("download", 30)
+		if err := ensureGeoDat(ctx, h); err != nil {
+			return h.Fail("E_GEO_DAT", err.Error(), true)
+		}
+		// xray reads geoip/geosite at config load — restart to pick up
+		// the fresh files.
+		h.SetStep("reload", 80)
+		if SystemctlIsActive(ctx, "xray") {
+			if _, err := Run(ctx, "systemctl", "restart", "xray"); err != nil {
+				return h.Fail("E_RESTART_XRAY", err.Error(), true)
+			}
+		}
+		return h.Ok(map[string]any{"ok": true})
+	}
+}
+
+// ensureGeoDat downloads pinned geoip.dat + geosite.dat into
+// XrayAssetDir if either is missing. Idempotent — re-runs are no-ops
+// when both files exist. We don't verify sha256 of existing files
+// here on purpose: the user might have a newer set placed manually,
+// and overwriting would be surprising. Bumping the constants above
+// forces a fresh download on the next deploy by changing the URLs.
+func ensureGeoDat(ctx context.Context, h *tasks.Handle) error {
+	if err := os.MkdirAll(XrayAssetDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", XrayAssetDir, err)
+	}
+	jobs := []struct {
+		path, url, sha, label string
+	}{
+		{filepath.Join(XrayAssetDir, "geoip.dat"), geoipURL, geoipSha256, "geoip"},
+		{filepath.Join(XrayAssetDir, "geosite.dat"), geositeURL, geositeSha256, "geosite"},
+	}
+	for _, j := range jobs {
+		if fileExists(j.path) {
+			h.LogF("geo-dat: %s already present", j.label)
+			continue
+		}
+		h.LogF("geo-dat: downloading %s", j.label)
+		if err := DownloadAndVerify(ctx, j.url, j.path, j.sha); err != nil {
+			return fmt.Errorf("%s: %w", j.label, err)
+		}
+		h.LogF("geo-dat: installed %s", j.path)
+	}
+	return nil
+}
 
 // --- small helpers --------------------------------------------------------
 
