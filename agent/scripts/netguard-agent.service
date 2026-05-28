@@ -5,6 +5,11 @@ Documentation=https://github.com/KOKosaaaa/NetGuard
 # manage, so a clean shutdown finishes before xray/sing-box restart.
 After=network-online.target
 Wants=network-online.target
+# Burst protection: if the agent fails to start ≥10 times within 120s,
+# systemd backs off and stops trying — flips us into 'failed' instead of
+# an infinite restart loop. Both directives must live in [Unit].
+StartLimitBurst=10
+StartLimitIntervalSec=120
 
 [Service]
 Type=simple
@@ -22,13 +27,13 @@ StateDirectoryMode=0700
 # out broken binary doesn't burn the journal at 100% CPU.
 Restart=on-failure
 RestartSec=5
-StartLimitBurst=10
-StartLimitIntervalSec=120
 
-# Hardening — agent doesn't write outside StateDirectory, and never reads
-# /home or other users' data.
-ProtectSystem=strict
-ReadWritePaths=/var/lib/netguard-agent
+# Hardening: ProtectSystem=strict was the obvious choice but it blocks
+# /var/cache/apt during package installs (Read-only file system errors),
+# breaking xray/sing-box deploy. The agent legitimately needs to mutate
+# /etc/xray, /usr/local/bin, /etc/systemd/system, and run apt-get — so
+# leaving root with full FS access. We keep the milder protections that
+# don't conflict with that role.
 ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=true

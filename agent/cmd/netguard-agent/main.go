@@ -1,9 +1,8 @@
 // netguard-agent — control-plane daemon for self-hosted NetGuard VPN.
 //
-// Phase 0 (MVP): serves /v1/health, /v1/status, /v1/auth/pair over
-// HTTPS:9443 with a self-signed cert (SPKI-pinned by the Android client).
-//
-// Run: netguard-agent [-listen :9443] [-state /var/lib/netguard-agent]
+// Phase 1 (current): pair + bearer + rotate + revoke, xray deploy with
+// idempotency / rollback / healthcheck, task queue persisted in SQLite,
+// status endpoint with /proc-derived host telemetry.
 package main
 
 import (
@@ -22,17 +21,16 @@ import (
 	"github.com/KOKosaaaa/NetGuard/agent/internal/api"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/auth"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/storage"
+	"github.com/KOKosaaaa/NetGuard/agent/internal/tasks"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/tlsutil"
 )
 
-// Bumped on each public release. Surfaced via /v1/health and /v1/status so
-// the Android client can decide whether to nudge the user to update.
-const agentVersion = "0.1.0"
+const agentVersion = "0.2.0"
 
 func main() {
 	listen := flag.String("listen", ":9443", "address to serve HTTPS on")
 	stateDir := flag.String("state", "/var/lib/netguard-agent",
-		"directory for state.json, TLS material, pair-token file")
+		"directory for state.db, TLS material, pair-token file")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -49,17 +47,29 @@ func main() {
 	}
 	log.Printf("TLS SPKI pin (sha256): %x", identity.SPKIHash)
 
-	store, err := storage.Open(filepath.Join(*stateDir, "state.json"))
+	db, err := storage.Open(filepath.Join(*stateDir, "state.db"))
 	if err != nil {
 		log.Fatalf("storage: %v", err)
 	}
-	authMgr := auth.New(store)
-	tok, err := authMgr.EnsurePairToken()
-	if err != nil {
+	defer db.Close()
+
+	// Mark anything left pending/running by a previous crash as failed.
+	// We do NOT auto-resume — too many half-finished states to reason
+	// about; the operator hits Retry from the Android UI.
+	if n, err := db.FailRunningTasksOnStartup(); err != nil {
+		log.Printf("WARN fail-on-startup: %v", err)
+	} else if n > 0 {
+		log.Printf("flagged %d tasks left over from previous run as failed", n)
+	}
+
+	authMgr := auth.New(db)
+	if _, err := authMgr.EnsurePairToken(); err != nil {
 		log.Fatalf("pair token: %v", err)
 	}
-	log.Printf("pair token ready at %s (TTL %s)", auth.PairTokenPath, auth.PairTokenTTL)
-	_ = tok // token is on disk; we don't echo it to the log on purpose
+	log.Printf("pair token ready at %s (TTL %s)",
+		auth.PairTokenPath, auth.PairTokenTTL)
+
+	taskMgr := tasks.NewManager(db)
 
 	cert, err := tls.X509KeyPair(identity.CertPEM, identity.KeyPEM)
 	if err != nil {
@@ -68,10 +78,10 @@ func main() {
 
 	handler := api.Mount(&api.Deps{
 		Auth:          authMgr,
+		Tasks:         taskMgr,
+		DB:            db,
 		AgentVersion:  agentVersion,
 		AgentStarted:  time.Now(),
-		// Names match the systemd units the agent will eventually deploy.
-		// They show up in /v1/status as inactive until something runs.
 		KnownServices: []string{"xray", "sing-box", "headless-telemost-creator"},
 	})
 
@@ -84,8 +94,11 @@ func main() {
 		},
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		// xray deploy + future telemost deploy can stream long responses
+		// (poll-style logs are out of scope; we use task IDs). Keep this
+		// generous so unrelated long-running PROXY requests don't timeout.
+		WriteTimeout: 5 * time.Minute,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(),
@@ -95,7 +108,6 @@ func main() {
 	errCh := make(chan error, 1)
 	go func() {
 		log.Printf("listening on https://%s", *listen)
-		// Empty file args because cert+key are in TLSConfig already.
 		errCh <- srv.ListenAndServeTLS("", "")
 	}()
 
