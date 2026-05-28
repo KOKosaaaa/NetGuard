@@ -21,6 +21,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -246,6 +247,93 @@ func Mount(d *Deps) http.Handler {
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
+		},
+	)))
+
+	// --- services (restart/start/stop/logs/status of whitelisted units) ---
+	mux.Handle("POST /v1/services/{name}/{action}", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			name := r.PathValue("name")
+			action := r.PathValue("action")
+			out, err := deploy.ServiceAction(r.Context(), name, action)
+			if err != nil {
+				code := "E_SERVICE"
+				switch {
+				case errors.Is(err, deploy.ErrServiceUnknown):
+					code = "E_SERVICE_UNKNOWN"
+					writeError(w, http.StatusNotFound, code, err.Error())
+					return
+				case errors.Is(err, deploy.ErrServiceFailed):
+					code = "E_SERVICE_FAILED"
+				}
+				writeError(w, http.StatusBadRequest, code, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"service": name, "action": action,
+				"output": string(out),
+			})
+		},
+	)))
+
+	mux.Handle("GET /v1/services/{name}/logs", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			name := r.PathValue("name")
+			lines := 200
+			if v := r.URL.Query().Get("lines"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil {
+					lines = n
+				}
+			}
+			out, err := deploy.ServiceLogs(r.Context(), name, lines)
+			if err != nil {
+				if errors.Is(err, deploy.ErrServiceUnknown) {
+					writeError(w, http.StatusNotFound, "E_SERVICE_UNKNOWN", err.Error())
+					return
+				}
+				writeError(w, http.StatusInternalServerError, "E_LOGS", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"service": name, "lines": lines,
+				"log": string(out),
+			})
+		},
+	)))
+
+	mux.Handle("GET /v1/services/{name}/status", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			name := r.PathValue("name")
+			st, err := deploy.ServiceStatus(r.Context(), name)
+			if err != nil {
+				if errors.Is(err, deploy.ErrServiceUnknown) {
+					writeError(w, http.StatusNotFound, "E_SERVICE_UNKNOWN", err.Error())
+					return
+				}
+				writeError(w, http.StatusInternalServerError, "E_STATUS", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, st)
+		},
+	)))
+
+	// --- agent self-update ---
+	mux.Handle("POST /v1/agent/update", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.UpdateAgentRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			id, err := d.Tasks.Spawn("agent.update", deploy.AgentUpdate(d.DB, &req))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+				"note":    "agent will exit briefly when update completes; poll /v1/health to confirm reboot",
+			})
 		},
 	)))
 
