@@ -7,18 +7,21 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.smarttools.netguard.agent.ManagedServer
+import com.smarttools.netguard.agent.ManagedServerDao
 import com.smarttools.netguard.model.ServerProfile
 import com.smarttools.netguard.model.Subscription
 import java.io.File
 
 @Database(
-    entities = [ServerProfile::class, Subscription::class],
-    version = 6,
+    entities = [ServerProfile::class, Subscription::class, ManagedServer::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun subscriptionDao(): SubscriptionDao
+    abstract fun managedServerDao(): ManagedServerDao
 
     companion object {
         private const val TAG = "AppDatabase"
@@ -59,6 +62,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v7: add managed_servers table — the Android device's view of
+         * each VPS running netguard-agent. Created empty on existing
+         * installs; users add rows via the "Add Server" wizard.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `managed_servers` (
+                        `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `name` TEXT NOT NULL,
+                        `host` TEXT NOT NULL,
+                        `port` INTEGER NOT NULL,
+                        `bearer` TEXT NOT NULL,
+                        `spkiPin` TEXT NOT NULL,
+                        `agentVersion` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `lastSeenAt` INTEGER NOT NULL,
+                        `lastLoadAvg1` REAL NOT NULL,
+                        `lastMemUsedMb` INTEGER NOT NULL,
+                        `lastMemTotalMb` INTEGER NOT NULL,
+                        `bearerExpiresAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -73,7 +105,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         DB_NAME
                     )
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                         .fallbackToDestructiveMigration()
                         .build()
                         .also { INSTANCE = it }

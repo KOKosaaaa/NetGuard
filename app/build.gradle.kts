@@ -135,6 +135,12 @@ dependencies {
     // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // SSH client — used by the "Add Server" wizard to bootstrap a fresh
+    // VPS into a netguard-agent install. sshj is Apache-2.0, ~700KB, and
+    // is the only modern Kotlin/Java SSH lib that supports ED25519 keys
+    // and current KEX algorithms (JSch is unmaintained, fails on Ubuntu 24+).
+    implementation("com.hierynomus:sshj:0.38.0")
+
     // libv2ray / libXray AAR — place in app/libs/
     // Download from https://github.com/AnyaKovaleva/libXray/releases
     // or build from 2dust/AndroidLibXrayLite
