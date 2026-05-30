@@ -215,6 +215,55 @@ object AgentErrorMessages {
                 retryable = true,
                 rawDetails = raw,
             )
+            "E_PORT_BUSY" -> FriendlyError(
+                title = "Порт уже занят",
+                body = "На сервере выбранный порт занят другой программой " +
+                    "(например, уже работающим VPN на этом же сервере). " +
+                    "Выбери другой порт в режиме эксперта или используй " +
+                    "отдельный сервер.",
+                retryable = false,
+                rawDetails = raw,
+            )
+            "E_TELEMOST_NOT_DEPLOYED" -> FriendlyError(
+                title = "Telemost ещё не развёрнут",
+                body = "Сначала разверни Telemost на сервере (кнопка " +
+                    "«Поднять Telemost»), потом можно менять число потоков.",
+                retryable = false,
+                rawDetails = raw,
+            )
+            "E_TELEMOST_NO_COOKIES" -> FriendlyError(
+                title = "Нужен вход в Яндекс",
+                body = "Чтобы создать больше комнат, нужны куки Яндекса. " +
+                    "Войди через «Войти через Яндекс» и повтори.",
+                retryable = false,
+                rawDetails = raw,
+            )
+            "E_OOM",
+            "E_CREATE_ROOM" -> FriendlyError(
+                title = "Серверу не хватило памяти",
+                body = "Не получилось поднять столько потоков — серверу " +
+                    "мало RAM. Уменьши число потоков, добавь swap " +
+                    "(в меню сервера) или возьми VPS с 1 GB+ RAM.",
+                retryable = true,
+                rawDetails = raw,
+            )
+            "E_NO_DISK" -> FriendlyError(
+                title = "Мало места на диске",
+                body = "На сервере недостаточно свободного места для " +
+                    "файла подкачки. Освободи место и повтори.",
+                retryable = false,
+                rawDetails = raw,
+            )
+            "E_ALLOCATE",
+            "E_MKSWAP",
+            "E_SWAPON" -> FriendlyError(
+                title = "Не удалось включить swap",
+                body = "Сервер не смог создать файл подкачки. Можно " +
+                    "повторить; если не выходит — у провайдера может быть " +
+                    "запрещён swap на этом тарифе.",
+                retryable = true,
+                rawDetails = raw,
+            )
             else -> null
         }
     }

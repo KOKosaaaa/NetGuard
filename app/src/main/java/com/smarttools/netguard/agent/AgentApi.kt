@@ -218,6 +218,41 @@ data class TaskError(
     val retryable: Boolean,
 )
 
+// --- /v1/telemost/rooms (sync) -------------------------------------------
+
+data class TelemostRoomInstance(
+    val index: Int,
+    val room: String,
+    val active: Boolean,
+)
+
+data class TelemostRooms(
+    val deployed: Boolean,
+    val installed: Int,
+    val activeCount: Int,
+    val instances: List<TelemostRoomInstance>,
+) {
+    companion object {
+        fun fromJson(j: JSONObject): TelemostRooms {
+            val arr = j.optJSONArray("instances") ?: JSONArray()
+            val list = (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                TelemostRoomInstance(
+                    index = o.optInt("index"),
+                    room = o.optString("room"),
+                    active = o.optBoolean("active"),
+                )
+            }
+            return TelemostRooms(
+                deployed = j.optBoolean("deployed"),
+                installed = j.optInt("installed"),
+                activeCount = j.optInt("active_count"),
+                instances = list,
+            )
+        }
+    }
+}
+
 // --- /v1/xray/profile (sync) ---------------------------------------------
 
 data class AddProfileRequest(

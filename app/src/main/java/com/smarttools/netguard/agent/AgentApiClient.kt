@@ -103,6 +103,31 @@ class AgentApiClient(
         return TaskAck.fromJson(JSONObject(resp))
     }
 
+    /** Change the number of running Telemost instances (0..12) without a
+     *  full re-deploy. Async — poll /tasks/{id}. */
+    fun scaleTelemost(targetCount: Int): TaskAck {
+        val body = JSONObject().put("target_count", targetCount).toString()
+        return TaskAck.fromJson(JSONObject(doPost("/telemost/scale", body = body, auth = true)))
+    }
+
+    /** Replace the Yandex cookies + restart instances (session expired). Async. */
+    fun updateTelemostCookies(cookiesJson: String): TaskAck {
+        val body = JSONObject().put("cookies_json", cookiesJson).toString()
+        return TaskAck.fromJson(JSONObject(doPost("/telemost/cookies", body = body, auth = true)))
+    }
+
+    /** Provisioned rooms + per-instance live systemd state. Sync read. */
+    fun telemostRooms(): TelemostRooms {
+        return TelemostRooms.fromJson(JSONObject(doGet("/telemost/rooms", auth = true)))
+    }
+
+    /** Create + enable a swapfile so a low-RAM VPS survives Telemost peaks.
+     *  sizeMb 0 → agent default (512). Async. */
+    fun setupSwap(sizeMb: Int = 0): TaskAck {
+        val body = if (sizeMb > 0) JSONObject().put("size_mb", sizeMb).toString() else "{}"
+        return TaskAck.fromJson(JSONObject(doPost("/agent/swap-setup", body = body, auth = true)))
+    }
+
     fun task(id: String): TaskState {
         val resp = doGet("/tasks/$id", auth = true)
         return TaskState.fromJson(JSONObject(resp))
