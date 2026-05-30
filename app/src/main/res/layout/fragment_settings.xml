@@ -58,6 +58,13 @@
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
 
+        <CheckBox android:id="@+id/cb_expert_mode" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/expert_mode" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/expert_mode_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
         <CheckBox android:id="@+id/cb_connection_map" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:text="@string/show_connection_map" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"

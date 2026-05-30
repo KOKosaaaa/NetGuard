@@ -94,6 +94,12 @@ class MainActivity : AppCompatActivity() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
         bottomNav.setupWithNavController(navController)
 
+        // Simple/Expert: the Logs tab is developer-oriented, so hide it unless
+        // Expert mode is on (Settings → Expert mode). Read once at create —
+        // toggling Expert recreates MainActivity to re-apply (see SettingsFragment).
+        bottomNav.menu.findItem(R.id.nav_logs)?.isVisible =
+            (application as App).loadSettings().expertMode
+
         // fsociety boot-sequence: only on cold start (no savedInstanceState) so
         // it doesn't replay on every rotation / process restore. Lines type in
         // one by one for ~1.8s, then fade out.

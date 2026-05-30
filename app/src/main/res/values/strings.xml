@@ -419,6 +419,8 @@
 
     <!-- Features -->
     <string name="features">Features</string>
+    <string name="expert_mode">Expert mode</string>
+    <string name="expert_mode_desc">Show advanced features: logs, multi-hop chains, app triggers, manual ports/SNI. Leave off to keep things simple.</string>
     <string name="show_connection_map">Connection Map</string>
     <string name="connection_map_desc">Show animated map on home screen</string>
     <string name="show_speed_test">Speed Test</string>

@@ -46,7 +46,15 @@ data class AppSettings(
      * packageName starts with "ru." appends it to perAppList automatically,
      * matching the one-shot "Exclude all Russian apps" button.
      */
-    val autoBypassRuPackages: Boolean = false
+    val autoBypassRuPackages: Boolean = false,
+    /**
+     * Expert mode. Default OFF keeps the UI approachable for non-technical
+     * users: the Logs tab, multi-hop chains, trigger mode, manual port/SNI
+     * and other power features stay hidden until this is enabled
+     * (Settings → Expert mode). Gson defaults the missing field to false,
+     * so existing installs start in Simple mode.
+     */
+    val expertMode: Boolean = false
 )
 
 enum class RoutingMode {

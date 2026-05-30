@@ -273,6 +273,8 @@
     <string name="close">Закрыть</string>
     <!-- Features -->
     <string name="features">Функции</string>
+    <string name="expert_mode">Режим эксперта</string>
+    <string name="expert_mode_desc">Показать продвинутые функции: логи, цепочки серверов, триггеры приложений, ручные порты/SNI. Выключено - всё проще.</string>
     <string name="show_connection_map">Карта подключения</string>
     <string name="connection_map_desc">Анимированная карта на главном экране</string>
     <string name="show_speed_test">Тест скорости</string>

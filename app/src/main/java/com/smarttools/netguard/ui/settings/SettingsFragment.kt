@@ -351,8 +351,16 @@ class SettingsFragment : Fragment() {
 
     private fun setupFeatureToggles() {
         val s = viewModel.settings.value
+        binding.cbExpertMode.isChecked = s.expertMode
         binding.cbConnectionMap.isChecked = s.showConnectionMap
         binding.cbSpeedTest.isChecked = s.showSpeedTest
+
+        // Expert mode shows advanced features (Logs tab, etc.). recreate()
+        // re-applies MainActivity's nav gating right away.
+        binding.cbExpertMode.setOnCheckedChangeListener { _, checked ->
+            viewModel.updateSettings { it.copy(expertMode = checked) }
+            activity?.recreate()
+        }
 
         binding.cbConnectionMap.setOnCheckedChangeListener { _, checked ->
             viewModel.updateSettings { it.copy(showConnectionMap = checked) }
