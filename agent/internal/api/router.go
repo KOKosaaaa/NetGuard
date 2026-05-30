@@ -142,6 +142,10 @@ func Mount(d *Deps) http.Handler {
 			}
 			res, err := deploy.XrayAddProfile(d.DB, &req)
 			if err != nil {
+				if errors.Is(err, deploy.ErrPortInUse) {
+					writeError(w, http.StatusConflict, "E_PORT_BUSY", err.Error())
+					return
+				}
 				writeError(w, http.StatusBadRequest, "E_XRAY_ADD_PROFILE", err.Error())
 				return
 			}

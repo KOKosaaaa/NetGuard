@@ -66,10 +66,20 @@ func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult,
 	if !fileExists(XrayConfigPath) {
 		return nil, fmt.Errorf("xray config missing at %s", XrayConfigPath)
 	}
+	// Resolve + preflight the port first (improvements #1/#2): explicit
+	// busy port → ErrPortInUse (router maps to E_PORT_BUSY); auto port
+	// prefers a free 443 for Reality, else picks a free high port. This
+	// also stops a second profile from silently colliding with the first.
+	ctx := context.Background()
+	resolvedPort, err := resolveInboundPort(ctx, req.Port, req.ServerName != "")
+	if err != nil {
+		return nil, err
+	}
+
 	// Build the new inbound using the same helper as the initial deploy.
 	spec := &InboundSpec{
 		Protocol:   req.Protocol,
-		Port:       req.Port,
+		Port:       resolvedPort,
 		UUID:       req.UUID,
 		ServerName: req.ServerName,
 		Label:      req.Label,
@@ -136,17 +146,28 @@ func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult,
 	}
 
 	// Open firewall for the new port (idempotent — common.go skips dups).
-	ctx := context.Background()
 	_ = openFirewallPort(ctx, newInbound.Port)
+
+	// revert restores the pre-append config and restarts xray, so a failed
+	// add leaves the server in its previous working state instead of a
+	// crash-loop (improvement #3).
+	revert := func() {
+		_ = AtomicWrite(XrayConfigPath, cfgBytes, 0o600)
+		_, _ = exec.CommandContext(ctx, "systemctl", "restart", "xray").CombinedOutput()
+	}
 
 	// xray doesn't have a SIGHUP reload; restart is fastest.
 	// Brief downtime (~1s) — acceptable for an add operation. Profile
 	// removal goes through the same path.
 	if _, err := exec.CommandContext(ctx, "systemctl", "restart", "xray").CombinedOutput(); err != nil {
+		revert()
 		return nil, fmt.Errorf("systemctl restart xray: %w", err)
 	}
-	if err := WaitPortListening("127.0.0.1", newInbound.Port, 10); err != nil {
-		return nil, fmt.Errorf("new inbound port did not open: %w", err)
+	// Healthcheck the new inbound — xray must be active AND listening on
+	// the new port. On failure, revert so we don't leave xray broken.
+	if err := waitXrayHealthy(ctx, newInbound.Port); err != nil {
+		revert()
+		return nil, fmt.Errorf("new inbound failed healthcheck, reverted to previous config: %w", err)
 	}
 
 	if err := db.InsertXrayInbound(newInbound); err != nil {

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -20,6 +21,12 @@ import (
 	"github.com/KOKosaaaa/NetGuard/agent/internal/storage"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/tasks"
 )
+
+// ErrPortInUse is returned when an explicitly-requested inbound port is
+// already held by another listener. The API layer maps it to E_PORT_BUSY
+// so the app can tell the user to pick another port instead of silently
+// deploying an xray that crash-loops on `bind: address already in use`.
+var ErrPortInUse = errors.New("port in use")
 
 // Pinned Xray-core release. Update by bumping version tag + matching
 // sha256 per arch (from XTLS/Xray-core release page). Always pinned —
@@ -124,6 +131,24 @@ func XrayDeploy(db *storage.DB, req *DeployXrayRequest) tasks.Runner {
 					"POST /v1/xray/uninstall to wipe the existing setup "+
 					"before retrying, or remove xray manually.",
 				false /* non-retryable until the user resolves it */)
+		}
+
+		// --- 1b. resolve + preflight the inbound port (improvements #1/#2) ---
+		// Done before we download/install anything so a port conflict fails
+		// fast with a clear E_PORT_BUSY instead of crash-looping xray after
+		// a full install.
+		if req.FirstInbound != nil {
+			p, perr := resolveInboundPort(ctx, req.FirstInbound.Port, req.FirstInbound.ServerName != "")
+			if perr != nil {
+				if errors.Is(perr, ErrPortInUse) {
+					return h.Fail("E_PORT_BUSY", perr.Error(), false)
+				}
+				return h.Fail("E_PORT_PICK", perr.Error(), true)
+			}
+			if p != req.FirstInbound.Port {
+				h.LogF("inbound port resolved to %d (requested %d)", p, req.FirstInbound.Port)
+			}
+			req.FirstInbound.Port = p
 		}
 
 		// --- 2. install prerequisites (curl + unzip) ---
@@ -253,22 +278,19 @@ func XrayDeploy(db *storage.DB, req *DeployXrayRequest) tasks.Runner {
 			return h.FailRolledBack("E_SYSTEMCTL_START", err.Error(), true)
 		}
 
-		// --- 11. healthcheck: wait until xray binds the port (if we have one) ---
+		// --- 11. healthcheck: xray must be ACTIVE (not crash-looping) and,
+		//         if we made an inbound, actually listening on its port.
+		//         Checking is-active (improvement #3) avoids a false pass
+		//         when another service holds the port and xray is dying. ---
 		h.SetStep("healthcheck", 95)
+		hcPort := 0
 		if firstInbound != nil {
-			if err := WaitPortListening("127.0.0.1", firstInbound.Port, 15); err != nil {
-				h.LogF("rolling back: healthcheck failed: %v", err)
-				rollbackConfig(ctx, backupDir, alreadyRunning)
-				return h.FailRolledBack("E_HEALTHCHECK", err.Error(), true)
-			}
-		} else {
-			// No inbound to check — just confirm the unit thinks it's alive.
-			time.Sleep(2 * time.Second)
-			if !SystemctlIsActive(ctx, "xray") {
-				rollbackConfig(ctx, backupDir, alreadyRunning)
-				return h.FailRolledBack("E_NOT_ACTIVE",
-					"xray.service is not active after start", true)
-			}
+			hcPort = firstInbound.Port
+		}
+		if err := waitXrayHealthy(ctx, hcPort); err != nil {
+			h.LogF("rolling back: healthcheck failed: %v", err)
+			rollbackConfig(ctx, backupDir, alreadyRunning)
+			return h.FailRolledBack("E_HEALTHCHECK", err.Error(), true)
 		}
 
 		// --- 12. persist inbound row if we made one ---
@@ -602,6 +624,107 @@ func pickFreePort() (int, error) {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+// portInUse reports whether something already listens on 0.0.0.0:port.
+// Used as a preflight before we deploy an xray inbound there — binding a
+// port a co-located service (e.g. sing-box on :443) already owns makes
+// xray crash-loop on "address already in use" forever, which the old
+// port-listening healthcheck couldn't even detect (the other service was
+// answering on the port).
+func portInUse(port int) bool {
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	if err != nil {
+		return true
+	}
+	_ = l.Close()
+	return false
+}
+
+// portHolder is a best-effort lookup of the process name listening on
+// port (via `ss -ltnp`), purely to make the E_PORT_BUSY message
+// actionable ("...in use by sing-box"). Returns "" when unknown.
+func portHolder(ctx context.Context, port int) string {
+	out, err := exec.CommandContext(ctx, "ss", "-ltnp").Output()
+	if err != nil {
+		return ""
+	}
+	needle := fmt.Sprintf(":%d ", port)
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, needle) {
+			continue
+		}
+		// users:(("sing-box",pid=123,fd=7))
+		if i := strings.Index(line, `("`); i >= 0 {
+			rest := line[i+2:]
+			if j := strings.Index(rest, `"`); j >= 0 {
+				return rest[:j]
+			}
+		}
+	}
+	return ""
+}
+
+// resolveInboundPort decides the final listen port for a new inbound and
+// guarantees it is free at decision time. This is improvements #1 + #2:
+//
+//   - explicit port: returned as-is, or ErrPortInUse if occupied (so the
+//     app shows "pick another port" instead of a silent crash-loop).
+//   - port==0 (auto): Reality prefers 443 when free (believable
+//     masquerade); if 443 is taken (co-located sing-box etc.) we auto-pick
+//     a free high port instead of blindly using 443. Plain VLESS always
+//     auto-picks. The app therefore never has to know a free port up front.
+func resolveInboundPort(ctx context.Context, reqPort int, reality bool) (int, error) {
+	if reqPort != 0 {
+		if portInUse(reqPort) {
+			msg := fmt.Sprintf("port %d is already in use", reqPort)
+			if h := portHolder(ctx, reqPort); h != "" {
+				msg += " by " + h
+			}
+			return 0, fmt.Errorf("%w: %s - pick another port or stop that service", ErrPortInUse, msg)
+		}
+		return reqPort, nil
+	}
+	if reality && !portInUse(443) {
+		return 443, nil
+	}
+	return pickFreePort()
+}
+
+// waitXrayHealthy blocks until xray.service is active AND (when port>0) the
+// port is accepting connections, or until ~15s elapse. This is improvement
+// #3: checking is-active (not merely "something listens on the port")
+// catches the case where a DIFFERENT service holds the port and xray is
+// actually crash-looping behind it - the old WaitPortListening check would
+// false-pass because the other service answered.
+func waitXrayHealthy(ctx context.Context, port int) error {
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		active := SystemctlIsActive(ctx, "xray")
+		listening := true
+		if port > 0 {
+			c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
+			if err != nil {
+				listening = false
+			} else {
+				_ = c.Close()
+			}
+		}
+		if active && listening {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			if !active {
+				return fmt.Errorf("xray.service is not active (crash-looping?); check `journalctl -u xray -n 30`")
+			}
+			return fmt.Errorf("xray is active but port %d is not accepting connections", port)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
+	}
 }
 
 func newUUID() string {
