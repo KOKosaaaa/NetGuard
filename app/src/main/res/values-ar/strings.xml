@@ -12,7 +12,6 @@
 
     <!-- Connection -->
     <string name="connect">اتصال</string>
-    <string name="disconnect">قطع الاتصال</string>
     <string name="status_disconnected">غير متصل</string>
     <string name="status_connecting">جارٍ الاتصال…</string>
     <string name="status_connected">متصل</string>
@@ -25,9 +24,7 @@
     <string name="port">المنفذ</string>
     <string name="edit_profile">تعديل الملف الشخصي</string>
     <string name="no_profiles">لم تتم إضافة خوادم بعد</string>
-    <string name="import_profiles">استيراد</string>
     <string name="import_btn">استيراد</string>
-    <string name="manual">يدوي</string>
     <string name="profile_deleted">تم حذف الملف الشخصي</string>
     <string name="allow_insecure">السماح بـ TLS غير آمن</string>
     <string name="test_all">اختبار الكل</string>
@@ -40,7 +37,6 @@
     <string name="add">إضافة</string>
     <string name="undo">تراجع</string>
     <string name="copied">تم النسخ إلى الحافظة</string>
-    <string name="saved">تم الحفظ</string>
     <string name="clear">مسح</string>
     <string name="copy_all">نسخ الكل</string>
 
@@ -48,10 +44,7 @@
     <string name="add_subscription">إضافة اشتراك</string>
     <string name="no_subscriptions">لا توجد اشتراكات</string>
     <string name="update_all">تحديث الكل</string>
-    <string name="auto_update">تحديث تلقائي</string>
     <string name="auto_update_interval">فترة التحديث</string>
-    <string name="auto_update_disabled">معطّل</string>
-    <string name="auto_update_hours">كل %d ساعات</string>
     <string name="import_action">استيراد</string>
     <string name="importing_subscription">جارٍ استيراد الاشتراك…</string>
     <string name="import_success_format">تم استيراد %1$d ملف تعريف من «%2$s».\nأضف اشتراكًا آخر أو تابع.</string>
@@ -95,32 +88,21 @@
     <string name="backup_to_file">نسخ احتياطي إلى ملف</string>
     <string name="restore_from_file">استعادة من ملف</string>
     <string name="backup_success">تم حفظ النسخة الاحتياطية بنجاح</string>
-    <string name="restore_success">تمت استعادة %d ملفات شخصية</string>
-    <string name="restore_error">فشلت الاستعادة: %s</string>
-
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">الاتصال نشط</string>
     <string name="notif_text">خدمة الشبكة قيد التشغيل</string>
     <string name="notif_stop">إيقاف</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">لصق</string>
-    <string name="clipboard_empty">الحافظة فارغة</string>
-    <string name="clipboard_no_profile">لم يتم العثور على ملف شخصي صالح في الحافظة</string>
-
     <!-- Share QR -->
     <string name="share_qr">مشاركة QR</string>
     <string name="share_uri">نسخ URI</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">حظر الإنترنت عند انقطاع VPN</string>
     <string name="open_vpn_settings">فتح إعدادات VPN</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">إعادة الاتصال التلقائي</string>
-    <string name="auto_reconnect_desc">إعادة الاتصال عند تغيير الشبكة</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">استيراد الملف الشخصي؟</string>
     <string name="import_profile_confirm">إضافة ملف خادم من مصدر خارجي؟\n\n%1$s</string>
@@ -130,8 +112,6 @@
     <string name="backup_warning">تحتوي النسخة الاحتياطية على بيانات اعتماد الخادم. احفظها بأمان.</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">عنوان DNS غير صالح</string>
-
     <!-- Subscription validation -->
     <string name="subscription_https_only">يتم دعم روابط اشتراك HTTPS فقط</string>
 
@@ -140,27 +120,14 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">أفضل خادم</string>
-    <string name="auto_selecting">جارٍ اختبار الخوادم…</string>
-    <string name="best_server_found">الأفضل: %s (%dms)</string>
-    <string name="no_servers_reachable">لا يمكن الوصول إلى أي خادم</string>
-    <string name="no_servers">لم تتم إضافة خوادم</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">ترتيب حسب Ping</string>
 
     <!-- Logs -->
-    <string name="log_all">الكل</string>
-    <string name="log_info">معلومات</string>
-    <string name="log_warn">تحذير</string>
-    <string name="log_error">خطأ</string>
-
     <!-- Session stats -->
     <string name="stats_today">اليوم</string>
     <string name="stats_week">هذا الأسبوع</string>
     <string name="stats_total">كل الأوقات</string>
-    <string name="stats_reset">إعادة تعيين الإحصائيات</string>
-    <string name="stats_reset_confirm">إعادة تعيين جميع إحصائيات حركة المرور؟</string>
-
     <!-- Widget -->
     <string name="widget_description">زر اتصال/قطع اتصال سريع</string>
     <!-- Theme -->
@@ -182,7 +149,6 @@
     <string name="export_import_desc">نسخ الإعدادات إلى الحافظة للمشاركة</string>
     <string name="backup_restore_desc">حفظ الملفات الشخصية في ملف أو استعادتها من نسخة احتياطية</string>
     <!-- Server switching -->
-    <string name="switching_server">جارٍ تبديل الخادم\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">مسح QR</string>
     <string name="qr_scan_hint">وجّه الكاميرا نحو رمز QR لملف VPN</string>
@@ -197,10 +163,8 @@
     <string name="no_qr_found">لم يتم العثور على رمز QR في الصورة</string>
     <string name="theme_dynamic">ديناميكي</string>
     <string name="test_services">اختبار الخدمات</string>
-    <string name="sort_by_compat">ترتيب حسب التوافق</string>
     <string name="service_test_results">توفر الخدمات</string>
     <string name="service_score">النتيجة: %1$d/%2$d</string>
-    <string name="connect_first">اتصل بـ VPN أولاً</string>
     <string name="features">الميزات</string>
     <string name="show_connection_map">خريطة الاتصال</string>
     <string name="connection_map_desc">خريطة متحركة على الشاشة الرئيسية</string>
@@ -241,7 +205,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">اختر لغتك</string>
     <string name="onb_lang_subtitle">يمكنك تغييرها لاحقاً في الإعدادات</string>
-    <string name="onb_skip">تخطي</string>
     <string name="onb_next">التالي</string>
     <string name="onb_back">رجوع</string>
     <string name="onb_finish">إنهاء</string>
@@ -280,7 +243,6 @@
     <string name="onb_profile_paste">اللصق من الحافظة</string>
     <string name="onb_profile_hint">الصق رابط الاتصال…</string>
     <string name="onb_profile_import">استيراد</string>
-    <string name="onb_profile_added">تم استيراد %d خادم ✓</string>
     <string name="onb_profile_error">تعذر التحليل: %s</string>
     <string name="onb_profile_empty">الحافظة فارغة</string>
     <string name="onb_profile_skip">سأضيف خادماً لاحقاً</string>
@@ -329,11 +291,8 @@
     <string name="trigger_explainer">فقط التطبيقات التي تختارها تمر عبر الـ VPN. أمّا الأخرى (المصارف، الخرائط، متصفّحك المعتاد، إلخ) فتستخدم الاتصال العادي كأن لا VPN أبداً. التطبيقات المختارة لا تملك طريقاً آخر إلى الشبكة، فلا تكشف عنوانك الحقيقي ولو للحظة.</string>
     <string name="trigger_perapp_conflict">كان توجيه التطبيقات الفردية مفعّلاً - وضع المُحفّز يتولّى التوجيه بنفسه. تم تعطيل Per-App.</string>
     <string name="trigger_auto_stop">افصل النفق عندما يكون التطبيق في الخلفية (يوفّر البطارية)</string>
-    <string name="trigger_always_on_title">الاستمرار حتى لو أُغلق NetGuard</string>
-    <string name="trigger_always_on_desc">للحصول على موثوقية أكبر، في إعدادات VPN لنظام أندرويد فعّل فقط \"VPN دائماً قيد التشغيل\". لا تفعّل \"حظر الاتصالات بدون VPN\" - فذلك سيقطع الإنترنت عن التطبيقات العادية أيضاً. وضع المُحفّز يحجب التطبيقات المختارة بنفسه عندما يكون النفق مغلقاً.</string>
     <string name="trigger_open_vpn_settings">فتح إعدادات VPN في أندرويد</string>
     <string name="trigger_expand">إظهار المعلومات والخيارات</string>
-    <string name="trigger_collapse">إخفاء المعلومات</string>
     <string name="trigger_watcher_channel">مراقب تشغيل التطبيقات</string>
     <string name="trigger_watcher_channel_desc">يفعّل الاتصال عند فتح التطبيقات المحددة</string>
     <string name="trigger_watcher_title">مراقب تشغيل التطبيقات يعمل</string>

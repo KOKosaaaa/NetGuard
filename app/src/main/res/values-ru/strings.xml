@@ -11,7 +11,6 @@
     <string name="nav_settings">Настройки</string>
     <string name="nav_logs">Логи</string>
     <string name="connect">Подключить</string>
-    <string name="disconnect">Отключить</string>
     <string name="status_disconnected">Не подключено</string>
     <string name="status_connecting">Подключение…</string>
     <string name="status_connected">Подключено</string>
@@ -22,9 +21,7 @@
     <string name="port">Порт</string>
     <string name="edit_profile">Редактировать профиль</string>
     <string name="no_profiles">Серверы ещё не добавлены</string>
-    <string name="import_profiles">Импорт</string>
     <string name="import_btn">Импорт</string>
-    <string name="manual">Вручную</string>
     <string name="profile_deleted">Профиль удалён</string>
     <string name="allow_insecure">Разрешить небезопасный TLS</string>
     <string name="test_all">Проверить все</string>
@@ -35,7 +32,6 @@
     <string name="add">Добавить</string>
     <string name="undo">Отменить</string>
     <string name="copied">Скопировано в буфер</string>
-    <string name="saved">Сохранено</string>
     <string name="clear">Очистить</string>
     <string name="copy_all">Копировать всё</string>
     <string name="add_subscription">Добавить подписку</string>
@@ -45,10 +41,7 @@
     <string name="subscription_name_hint">Имя подписки</string>
     <string name="no_subscriptions">Нет подписок</string>
     <string name="update_all">Обновить все</string>
-    <string name="auto_update">Автообновление</string>
     <string name="auto_update_interval">Интервал обновления</string>
-    <string name="auto_update_disabled">Отключено</string>
-    <string name="auto_update_hours">Каждые %d ч.</string>
     <string name="import_action">Импорт</string>
     <string name="importing_subscription">Импорт подписки…</string>
     <string name="import_success_format">Импортировано %1$d профилей из «%2$s».\nДобавить ещё подписку или продолжить.</string>
@@ -94,28 +87,17 @@
     <string name="srv_disk">Диск</string>
     <string name="srv_uptime">Uptime</string>
     <string name="srv_services">Сервисы</string>
-    <string name="srv_active">активен</string>
-    <string name="srv_inactive">остановлен</string>
-    <string name="srv_no_profiles">Профилей пока нет</string>
-    <string name="srv_add_profile">Добавить VLESS inbound</string>
-    <string name="srv_profile_label_hint">Метка (необязательно)</string>
-    <string name="srv_profile_port_hint">Порт (пусто = авто)</string>
     <string name="srv_no_rules">Правил обхода нет</string>
     <string name="srv_upstreams">Кастомные upstream</string>
     <string name="srv_no_upstreams">Нет своих upstream</string>
     <string name="srv_add_upstream">Добавить upstream</string>
     <string name="srv_add_rule">Добавить правило</string>
     <string name="srv_upstream_tag_hint">Тег (например rf-vps)</string>
-    <string name="srv_upstream_type_hint">Тип</string>
     <string name="srv_upstream_host_hint">Хост</string>
     <string name="srv_upstream_port_hint">Порт</string>
     <string name="srv_upstream_user_hint">Пользователь (необязательно)</string>
     <string name="srv_upstream_pass_hint">Пароль (необязательно)</string>
-    <string name="srv_rule_kind_hint">Тип</string>
     <string name="srv_rule_value_hint">Значение (домен / cidr / geosite / geoip)</string>
-    <string name="srv_rule_action_hint">Действие</string>
-    <string name="srv_rule_via_hint">Через (если действие=через)</string>
-    <string name="srv_logs_service_hint">Сервис</string>
     <string name="srv_refresh">Обновить</string>
     <string name="routing">Маршрутизация</string>
     <string name="routing_global">Глобальный прокси</string>
@@ -149,8 +131,6 @@
     <string name="backup_to_file">Сохранить в файл</string>
     <string name="restore_from_file">Восстановить из файла</string>
     <string name="backup_success">Резервная копия сохранена</string>
-    <string name="restore_success">Восстановлено профилей: %d</string>
-    <string name="restore_error">Ошибка восстановления: %s</string>
     <string name="notif_title">Соединение активно</string>
     <string name="notif_title_connecting">Подключение…</string>
     <string name="notif_text">Сетевой сервис работает</string>
@@ -176,10 +156,7 @@
     <string name="trigger_grant_permission">Выдать разрешение</string>
     <string name="trigger_auto_stop">Отключать туннель когда приложение свёрнуто (экономия батареи)</string>
     <string name="trigger_no_profile">Сервер не выбран. Сначала выбери сервер.</string>
-    <string name="trigger_always_on_title">Защита от выключения NetGuard</string>
-    <string name="trigger_always_on_desc">Для надёжности: в системных настройках включи только Always-on VPN. НЕ включай «Блокировать соединения без VPN» - иначе все обычные приложения (Яндекс и т.д.) тоже потеряют интернет. Триггер-режим сам по себе блокирует выбранные приложения когда туннель не активен.</string>
     <string name="trigger_open_vpn_settings">Открыть настройки VPN Android</string>
-    <string name="trigger_collapse">Скрыть описание</string>
     <string name="trigger_expand">Показать описание и переключатели</string>
     <string name="trigger_options_card_title">Настройки триггера</string>
     <string name="trigger_options_summary_off">Выключено · тапни чтобы настроить</string>
@@ -199,7 +176,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">Выбери язык</string>
     <string name="onb_lang_subtitle">Можно поменять позже в настройках</string>
-    <string name="onb_skip">Пропустить</string>
     <string name="onb_next">Далее</string>
     <string name="onb_back">Назад</string>
     <string name="onb_finish">Готово</string>
@@ -239,7 +215,6 @@
     <string name="onb_profile_paste">Вставить из буфера</string>
     <string name="onb_profile_hint">Вставь ссылку на сервер…</string>
     <string name="onb_profile_import">Импортировать</string>
-    <string name="onb_profile_added">Импортировано %d серверов ✓</string>
     <string name="onb_profile_error">Не удалось распарсить: %s</string>
     <string name="onb_profile_empty">Буфер обмена пуст</string>
     <string name="onb_profile_skip">Добавлю сервер позже</string>
@@ -252,40 +227,23 @@
     <string name="onb_profile_body_more">Вставьте ещё одну ссылку или завершите настройку.</string>
     <string name="onb_profile_skip_more">Готово</string>
 
-    <string name="paste_from_clipboard">Вставить</string>
-    <string name="clipboard_empty">Буфер обмена пуст</string>
-    <string name="clipboard_no_profile">Профиль не найден в буфере</string>
     <string name="share_qr">QR-код</string>
     <string name="share_uri">Копировать URI</string>
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">Блокировать интернет при отключении VPN</string>
     <string name="open_vpn_settings">Открыть настройки VPN</string>
-    <string name="auto_reconnect">Автоподключение</string>
-    <string name="auto_reconnect_desc">Переподключение при смене сети</string>
     <string name="import_profile_question">Импортировать профиль?</string>
     <string name="import_profile_confirm">Добавить серверный профиль из внешнего источника?\n\n%1$s</string>
     <string name="export_warning">Конфиг содержит учётные данные. Буфер обмена доступен другим приложениям.</string>
     <string name="backup_warning">Резервная копия содержит учётные данные. Храните в безопасном месте.</string>
-    <string name="invalid_dns">Неверный DNS-адрес</string>
     <string name="invalid_values_rejected">Отклонены неверные значения: %1$s</string>
     <string name="subscription_https_only">Поддерживаются только HTTPS-подписки</string>
     <string name="status_error">Ошибка</string>
     <string name="auto_select">Лучший сервер</string>
-    <string name="auto_selecting">Тестирование серверов…</string>
-    <string name="best_server_found">Лучший: %s (%dмс)</string>
-    <string name="no_servers_reachable">Серверы недоступны</string>
-    <string name="no_servers">Серверы не добавлены</string>
     <string name="sort_by_ping">Сортировать по пингу</string>
     <string name="sort_by_subscription">Сортировать по подписке</string>
-    <string name="log_all">Все</string>
-    <string name="log_info">Инфо</string>
-    <string name="log_warn">Пред.</string>
-    <string name="log_error">Ошибки</string>
     <string name="stats_today">Сегодня</string>
     <string name="stats_week">За неделю</string>
     <string name="stats_total">Всего</string>
-    <string name="stats_reset">Сбросить статистику</string>
-    <string name="stats_reset_confirm">Сбросить всю статистику трафика?</string>
     <string name="widget_description">Быстрое подключение/отключение</string>
     <!-- Theme -->
     <string name="theme">Тема</string>
@@ -307,7 +265,6 @@
     <string name="export_import_desc">Копировать конфигурацию в буфер обмена для передачи</string>
     <string name="backup_restore_desc">Сохранить профили в файл или восстановить из резервной копии</string>
     <!-- Server switching -->
-    <string name="switching_server">Переключение сервера\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">Сканировать QR</string>
     <string name="qr_scan_hint">Наведите камеру на QR-код профиля VPN</string>
@@ -356,7 +313,6 @@
     <string name="bypass_too_broad_warning">Паттерн \"%1$s\" слишком широкий - почти весь трафик пойдёт мимо VPN</string>
     <string name="bypass_too_broad_toast">Некоторые правила обхода слишком широкие и фактически отключают VPN</string>
     <string name="theme_fsociety">fsociety</string>
-    <string name="connect_first">Сначала подключите VPN</string>
     <string name="created_by">Сделано KOKOS</string>
     <string name="gallery">Галерея</string>
     <string name="github_url">https://github.com/KOKosaaaa</string>
@@ -364,7 +320,6 @@
     <string name="qr_no_valid_data">QR-код не содержит данных VPN</string>
     <string name="service_score">Балл: %1$d/%2$d</string>
     <string name="service_test_results">Доступность сервисов</string>
-    <string name="sort_by_compat">По совместимости</string>
     <string name="subscription_added_qr">Подписка добавлена из QR</string>
     <string name="test_services">Проверить сервисы</string>
 
@@ -377,15 +332,11 @@
     <string name="chain_sni_hint">SNI для всех хопов (например www.cloudflare.com)</string>
     <string name="chain_label_hint">Название маршрута</string>
     <string name="chain_build">Создать маршрут</string>
-    <string name="chain_min_two">Добавь минимум 2 сервера</string>
-    <string name="chain_need_more_servers">Нужно как минимум 2 сервера. Добавь ещё через «+».</string>
     <string name="chain_building">Создаю маршрут…</string>
     <string name="chain_ready_title">Маршрут готов</string>
     <string name="chain_ready_body">Скопируй ссылку и вставь её как профиль в любой клиент NetGuard. Промежуточные хопы настраиваются автоматически.</string>
     <string name="chain_copy_uri">Скопировать ссылку</string>
     <string name="chain_failed">Не удалось создать маршрут</string>
-    <string name="chain_remove">Убрать</string>
-    <string name="chain_add">+ Добавить</string>
     <string name="srv_action_rename">Переименовать сервер</string>
     <string name="srv_rename_title">Переименовать сервер</string>
     <string name="srv_rename_hint">Новое имя</string>

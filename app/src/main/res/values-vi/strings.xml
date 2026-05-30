@@ -12,7 +12,6 @@
 
     <!-- Connection -->
     <string name="connect">Kết nối</string>
-    <string name="disconnect">Ngắt kết nối</string>
     <string name="status_disconnected">Chưa kết nối</string>
     <string name="status_connecting">Đang kết nối…</string>
     <string name="status_connected">Đã kết nối</string>
@@ -25,9 +24,7 @@
     <string name="port">Cổng</string>
     <string name="edit_profile">Chỉnh sửa hồ sơ</string>
     <string name="no_profiles">Chưa thêm máy chủ nào</string>
-    <string name="import_profiles">Nhập</string>
     <string name="import_btn">Nhập</string>
-    <string name="manual">Thủ công</string>
     <string name="profile_deleted">Đã xóa hồ sơ</string>
     <string name="allow_insecure">Cho phép TLS không an toàn</string>
     <string name="test_all">Kiểm tra tất cả</string>
@@ -40,7 +37,6 @@
     <string name="add">Thêm</string>
     <string name="undo">Hoàn tác</string>
     <string name="copied">Đã sao chép vào bộ nhớ tạm</string>
-    <string name="saved">Đã lưu</string>
     <string name="clear">Xóa</string>
     <string name="copy_all">Sao chép tất cả</string>
 
@@ -48,10 +44,7 @@
     <string name="add_subscription">Thêm đăng ký</string>
     <string name="no_subscriptions">Không có đăng ký</string>
     <string name="update_all">Cập nhật tất cả</string>
-    <string name="auto_update">Tự động cập nhật</string>
     <string name="auto_update_interval">Chu kỳ cập nhật</string>
-    <string name="auto_update_disabled">Đã tắt</string>
-    <string name="auto_update_hours">Mỗi %d giờ</string>
     <string name="import_action">Nhập</string>
     <string name="importing_subscription">Đang nhập đăng ký…</string>
     <string name="import_success_format">Đã nhập %1$d hồ sơ từ \"%2$s\".\nThêm đăng ký khác hoặc tiếp tục.</string>
@@ -95,32 +88,21 @@
     <string name="backup_to_file">Sao lưu ra tệp</string>
     <string name="restore_from_file">Khôi phục từ tệp</string>
     <string name="backup_success">Sao lưu thành công</string>
-    <string name="restore_success">Đã khôi phục %d hồ sơ</string>
-    <string name="restore_error">Khôi phục thất bại: %s</string>
-
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">Kết nối đang hoạt động</string>
     <string name="notif_text">Dịch vụ mạng đang chạy</string>
     <string name="notif_stop">Dừng</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">Dán</string>
-    <string name="clipboard_empty">Bộ nhớ tạm trống</string>
-    <string name="clipboard_no_profile">Không tìm thấy hồ sơ hợp lệ trong bộ nhớ tạm</string>
-
     <!-- Share QR -->
     <string name="share_qr">Chia sẻ QR</string>
     <string name="share_uri">Sao chép URI</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">Chặn internet nếu VPN bị ngắt</string>
     <string name="open_vpn_settings">Mở cài đặt VPN</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">Tự động kết nối lại</string>
-    <string name="auto_reconnect_desc">Kết nối lại khi mạng thay đổi</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">Nhập hồ sơ?</string>
     <string name="import_profile_confirm">Thêm hồ sơ máy chủ từ nguồn bên ngoài?\n\n%1$s</string>
@@ -130,8 +112,6 @@
     <string name="backup_warning">Bản sao lưu chứa thông tin đăng nhập máy chủ. Hãy lưu trữ an toàn.</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">Địa chỉ DNS không hợp lệ</string>
-
     <!-- Subscription validation -->
     <string name="subscription_https_only">Chỉ hỗ trợ URL đăng ký HTTPS</string>
 
@@ -140,27 +120,14 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">Máy chủ tốt nhất</string>
-    <string name="auto_selecting">Đang kiểm tra máy chủ…</string>
-    <string name="best_server_found">Tốt nhất: %s (%dms)</string>
-    <string name="no_servers_reachable">Không có máy chủ nào khả dụng</string>
-    <string name="no_servers">Chưa thêm máy chủ nào</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">Sắp xếp theo Ping</string>
 
     <!-- Logs -->
-    <string name="log_all">Tất cả</string>
-    <string name="log_info">Thông tin</string>
-    <string name="log_warn">Cảnh báo</string>
-    <string name="log_error">Lỗi</string>
-
     <!-- Session stats -->
     <string name="stats_today">Hôm nay</string>
     <string name="stats_week">Tuần này</string>
     <string name="stats_total">Toàn bộ</string>
-    <string name="stats_reset">Đặt lại thống kê</string>
-    <string name="stats_reset_confirm">Đặt lại tất cả thống kê lưu lượng?</string>
-
     <!-- Widget -->
     <string name="widget_description">Nút kết nối/ngắt kết nối nhanh</string>
     <!-- Theme -->
@@ -182,7 +149,6 @@
     <string name="export_import_desc">Sao chép cấu hình vào bộ nhớ tạm để chia sẻ</string>
     <string name="backup_restore_desc">Lưu hồ sơ vào tệp hoặc khôi phục từ bản sao lưu</string>
     <!-- Server switching -->
-    <string name="switching_server">Đang chuyển máy chủ\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">Quét QR</string>
     <string name="qr_scan_hint">Hướng camera vào mã QR cấu hình VPN</string>
@@ -197,10 +163,8 @@
     <string name="no_qr_found">Không tìm thấy mã QR trong hình ảnh</string>
     <string name="theme_dynamic">Động</string>
     <string name="test_services">Kiểm tra dịch vụ</string>
-    <string name="sort_by_compat">Sắp xếp theo tương thích</string>
     <string name="service_test_results">Khả dụng dịch vụ</string>
     <string name="service_score">Điểm: %1$d/%2$d</string>
-    <string name="connect_first">Kết nối VPN trước</string>
     <string name="features">Tính năng</string>
     <string name="show_connection_map">Bản đồ kết nối</string>
     <string name="connection_map_desc">Bản đồ hoạt hình trên màn hình chính</string>
@@ -241,7 +205,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">Chọn ngôn ngữ của bạn</string>
     <string name="onb_lang_subtitle">Có thể thay đổi sau trong Cài đặt</string>
-    <string name="onb_skip">Bỏ qua</string>
     <string name="onb_next">Tiếp theo</string>
     <string name="onb_back">Quay lại</string>
     <string name="onb_finish">Hoàn tất</string>
@@ -280,7 +243,6 @@
     <string name="onb_profile_paste">Dán từ bộ nhớ tạm</string>
     <string name="onb_profile_hint">Dán liên kết kết nối…</string>
     <string name="onb_profile_import">Nhập</string>
-    <string name="onb_profile_added">Đã nhập %d máy chủ ✓</string>
     <string name="onb_profile_error">Không thể phân tích: %s</string>
     <string name="onb_profile_empty">Bộ nhớ tạm trống</string>
     <string name="onb_profile_skip">Tôi sẽ thêm máy chủ sau</string>
@@ -329,11 +291,8 @@
     <string name="trigger_explainer">Chỉ các ứng dụng bạn chọn mới đi qua VPN. Tất cả ứng dụng còn lại (ngân hàng, bản đồ, trình duyệt thường, v.v.) dùng kết nối thường như chưa từng có VPN. Các ứng dụng đã chọn không có lối ra mạng nào khác - nên dù chỉ trong tích tắc, chúng không thấy IP thật của bạn.</string>
     <string name="trigger_perapp_conflict">Định tuyến Per-App đã được bật - chế độ trigger tự xử lý định tuyến. Per-App chuyển sang TẮT.</string>
     <string name="trigger_auto_stop">Ngắt đường hầm khi ứng dụng ở chế độ nền (tiết kiệm pin)</string>
-    <string name="trigger_always_on_title">Sống sót khi NetGuard bị tắt</string>
-    <string name="trigger_always_on_desc">Để đảm bảo độ tin cậy, trong cài đặt VPN của hệ thống Android, CHỈ bật \"VPN luôn bật\". KHÔNG bật \"Chặn các kết nối không qua VPN\" - tùy chọn đó cũng sẽ ngắt mạng của các ứng dụng thường. Chế độ trigger đã tự chặn các ứng dụng đã chọn khi đường hầm tắt.</string>
     <string name="trigger_open_vpn_settings">Mở cài đặt VPN của Android</string>
     <string name="trigger_expand">Hiện thông tin &amp; tùy chọn</string>
-    <string name="trigger_collapse">Ẩn thông tin</string>
     <string name="trigger_watcher_channel">Trình giám sát mở ứng dụng</string>
     <string name="trigger_watcher_channel_desc">Kích hoạt kết nối khi các ứng dụng đã chọn được mở</string>
     <string name="trigger_watcher_title">Trình giám sát mở ứng dụng đang hoạt động</string>

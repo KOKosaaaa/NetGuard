@@ -12,7 +12,6 @@
 
     <!-- Connection -->
     <string name="connect">Connecter</string>
-    <string name="disconnect">Déconnecter</string>
     <string name="status_disconnected">Non connecté</string>
     <string name="status_connecting">Connexion…</string>
     <string name="status_connected">Connecté</string>
@@ -25,9 +24,7 @@
     <string name="port">Port</string>
     <string name="edit_profile">Modifier le profil</string>
     <string name="no_profiles">Aucun serveur ajouté</string>
-    <string name="import_profiles">Importer</string>
     <string name="import_btn">Importer</string>
-    <string name="manual">Manuel</string>
     <string name="profile_deleted">Profil supprimé</string>
     <string name="allow_insecure">Autoriser TLS non sécurisé</string>
     <string name="test_all">Tout tester</string>
@@ -40,7 +37,6 @@
     <string name="add">Ajouter</string>
     <string name="undo">Annuler</string>
     <string name="copied">Copié dans le presse-papiers</string>
-    <string name="saved">Enregistré</string>
     <string name="clear">Effacer</string>
     <string name="copy_all">Tout copier</string>
 
@@ -48,10 +44,7 @@
     <string name="add_subscription">Ajouter un abonnement</string>
     <string name="no_subscriptions">Aucun abonnement</string>
     <string name="update_all">Tout mettre à jour</string>
-    <string name="auto_update">Mise à jour automatique</string>
     <string name="auto_update_interval">Intervalle de mise à jour</string>
-    <string name="auto_update_disabled">Désactivé</string>
-    <string name="auto_update_hours">Toutes les %d heures</string>
     <string name="import_action">Importer</string>
     <string name="importing_subscription">Importation de l\'abonnement…</string>
     <string name="import_success_format">%1$d profils importés depuis « %2$s ».\nAjoutez un autre abonnement ou continuez.</string>
@@ -95,32 +88,21 @@
     <string name="backup_to_file">Sauvegarder dans un fichier</string>
     <string name="restore_from_file">Restaurer depuis un fichier</string>
     <string name="backup_success">Sauvegarde enregistrée avec succès</string>
-    <string name="restore_success">%d profils restaurés</string>
-    <string name="restore_error">Échec de la restauration : %s</string>
-
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">Connexion active</string>
     <string name="notif_text">Le service réseau est en cours d\'exécution</string>
     <string name="notif_stop">Arrêter</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">Coller</string>
-    <string name="clipboard_empty">Le presse-papiers est vide</string>
-    <string name="clipboard_no_profile">Aucun profil valide trouvé dans le presse-papiers</string>
-
     <!-- Share QR -->
     <string name="share_qr">Partager QR</string>
     <string name="share_uri">Copier URI</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">Bloquer Internet si le VPN se déconnecte</string>
     <string name="open_vpn_settings">Ouvrir les paramètres VPN</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">Reconnexion automatique</string>
-    <string name="auto_reconnect_desc">Se reconnecter lors d\'un changement de réseau</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">Importer le profil ?</string>
     <string name="import_profile_confirm">Ajouter un profil serveur depuis une source externe ?\n\n%1$s</string>
@@ -130,8 +112,6 @@
     <string name="backup_warning">La sauvegarde contient des identifiants serveur. Conservez-la en lieu sûr.</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">Adresse DNS invalide</string>
-
     <!-- Subscription validation -->
     <string name="subscription_https_only">Seules les URLs d\'abonnement HTTPS sont prises en charge</string>
 
@@ -140,27 +120,14 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">Meilleur serveur</string>
-    <string name="auto_selecting">Test des serveurs…</string>
-    <string name="best_server_found">Meilleur : %s (%dms)</string>
-    <string name="no_servers_reachable">Aucun serveur accessible</string>
-    <string name="no_servers">Aucun serveur ajouté</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">Trier par Ping</string>
 
     <!-- Logs -->
-    <string name="log_all">Tout</string>
-    <string name="log_info">Info</string>
-    <string name="log_warn">Avertissement</string>
-    <string name="log_error">Erreur</string>
-
     <!-- Session stats -->
     <string name="stats_today">Aujourd\'hui</string>
     <string name="stats_week">Cette semaine</string>
     <string name="stats_total">Depuis toujours</string>
-    <string name="stats_reset">Réinitialiser les statistiques</string>
-    <string name="stats_reset_confirm">Réinitialiser toutes les statistiques de trafic ?</string>
-
     <!-- Widget -->
     <string name="widget_description">Bouton rapide connexion/déconnexion</string>
     <!-- Theme -->
@@ -182,7 +149,6 @@
     <string name="export_import_desc">Copier la configuration dans le presse-papiers pour le partage</string>
     <string name="backup_restore_desc">Enregistrer les profils dans un fichier ou restaurer depuis une sauvegarde</string>
     <!-- Server switching -->
-    <string name="switching_server">Changement de serveur\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">Scanner QR</string>
     <string name="qr_scan_hint">Pointez la caméra vers un QR code de profil VPN</string>
@@ -197,10 +163,8 @@
     <string name="no_qr_found">Aucun code QR trouvé dans l\'image</string>
     <string name="theme_dynamic">Dynamique</string>
     <string name="test_services">Tester les services</string>
-    <string name="sort_by_compat">Trier par compatibilité</string>
     <string name="service_test_results">Disponibilité des services</string>
     <string name="service_score">Score : %1$d/%2$d</string>
-    <string name="connect_first">Connectez-vous d\'abord au VPN</string>
     <string name="features">Fonctionnalités</string>
     <string name="show_connection_map">Carte de connexion</string>
     <string name="connection_map_desc">Carte animée sur l\'écran d\'accueil</string>
@@ -241,7 +205,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">Choisissez votre langue</string>
     <string name="onb_lang_subtitle">Modifiable plus tard dans Paramètres</string>
-    <string name="onb_skip">Passer</string>
     <string name="onb_next">Suivant</string>
     <string name="onb_back">Retour</string>
     <string name="onb_finish">Terminer</string>
@@ -280,7 +243,6 @@
     <string name="onb_profile_paste">Coller depuis le presse-papiers</string>
     <string name="onb_profile_hint">Collez un lien de connexion…</string>
     <string name="onb_profile_import">Importer</string>
-    <string name="onb_profile_added">%d serveur(s) importé(s) ✓</string>
     <string name="onb_profile_error">Impossible d\'analyser : %s</string>
     <string name="onb_profile_empty">Presse-papiers vide</string>
     <string name="onb_profile_skip">J\'ajouterai un serveur plus tard</string>
@@ -329,11 +291,8 @@
     <string name="trigger_explainer">Seules les applis que tu choisis passent par le VPN. Toutes les autres (banque, cartes, navigateur habituel, etc.) utilisent la connexion normale comme s\'il n\'y avait pas de VPN. Les applis choisies n\'ont aucun autre moyen d\'atteindre le réseau - elles ne voient donc jamais ta véritable IP, pas même un instant.</string>
     <string name="trigger_perapp_conflict">Le routage Per-App était actif - le mode trigger gère le routage lui-même. Per-App désactivé.</string>
     <string name="trigger_auto_stop">Couper le tunnel quand l\'appli est en arrière-plan (économise la batterie)</string>
-    <string name="trigger_always_on_title">Survivre à l\'arrêt de NetGuard</string>
-    <string name="trigger_always_on_desc">Pour plus de fiabilité, dans les paramètres VPN d\'Android, active UNIQUEMENT \"VPN permanent\". N\'active PAS \"Bloquer les connexions sans VPN\" - cela couperait aussi internet aux applis normales. Le mode trigger bloque déjà les applis choisies quand le tunnel est coupé.</string>
     <string name="trigger_open_vpn_settings">Ouvrir les paramètres VPN d\'Android</string>
     <string name="trigger_expand">Afficher infos &amp; options</string>
-    <string name="trigger_collapse">Masquer les infos</string>
     <string name="trigger_watcher_channel">Moniteur de lancement d\'applis</string>
     <string name="trigger_watcher_channel_desc">Active la connexion quand les applis sélectionnées s\'ouvrent</string>
     <string name="trigger_watcher_title">Moniteur d\'applis actif</string>

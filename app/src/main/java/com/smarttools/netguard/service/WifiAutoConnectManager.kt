@@ -255,18 +255,17 @@ class WifiAutoConnectManager(private val context: Context) {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-                val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    context.getString(R.string.wifi_security_channel),
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = context.getString(R.string.wifi_security_channel_desc)
-                }
-                nm.createNotificationChannel(channel)
+        // minSdk 26 (O): notification channels always exist.
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.wifi_security_channel),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.wifi_security_channel_desc)
             }
+            nm.createNotificationChannel(channel)
         }
     }
 

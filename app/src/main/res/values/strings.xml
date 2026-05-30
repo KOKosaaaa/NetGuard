@@ -15,7 +15,6 @@
 
     <!-- Connection -->
     <string name="connect">Connect</string>
-    <string name="disconnect">Disconnect</string>
     <string name="status_disconnected">Not connected</string>
     <string name="status_connecting">Connecting…</string>
     <string name="status_connected">Connected</string>
@@ -28,9 +27,7 @@
     <string name="port">Port</string>
     <string name="edit_profile">Edit Profile</string>
     <string name="no_profiles">No servers added yet</string>
-    <string name="import_profiles">Import</string>
     <string name="import_btn">Import</string>
-    <string name="manual">Manual</string>
     <string name="profile_deleted">Profile deleted</string>
     <string name="allow_insecure">Allow insecure TLS</string>
     <string name="test_all">Test All</string>
@@ -43,7 +40,6 @@
     <string name="add">Add</string>
     <string name="undo">Undo</string>
     <string name="copied">Copied to clipboard</string>
-    <string name="saved">Saved</string>
     <string name="clear">Clear</string>
     <string name="copy_all">Copy All</string>
 
@@ -55,10 +51,7 @@
     <string name="subscription_name_hint">Subscription name</string>
     <string name="no_subscriptions">No subscriptions</string>
     <string name="update_all">Update All</string>
-    <string name="auto_update">Auto-update</string>
     <string name="auto_update_interval">Update interval</string>
-    <string name="auto_update_disabled">Disabled</string>
-    <string name="auto_update_hours">Every %d hours</string>
     <string name="import_action">Import</string>
     <string name="importing_subscription">Importing subscription…</string>
     <string name="import_success_format">Imported %1$d profiles from “%2$s”.\nAdd another subscription or continue.</string>
@@ -99,15 +92,11 @@
     <string name="chain_sni_hint">SNI for all hops (e.g. www.cloudflare.com)</string>
     <string name="chain_label_hint">Route name</string>
     <string name="chain_build">Create route</string>
-    <string name="chain_min_two">Add at least 2 servers</string>
-    <string name="chain_need_more_servers">You need at least 2 servers. Add more via «+».</string>
     <string name="chain_building">Building route…</string>
     <string name="chain_ready_title">Route ready</string>
     <string name="chain_ready_body">Copy the link and paste it as a profile into any NetGuard client. Intermediate hops are wired up automatically.</string>
     <string name="chain_copy_uri">Copy link</string>
     <string name="chain_failed">Could not create route</string>
-    <string name="chain_remove">Remove</string>
-    <string name="chain_add">+ Add</string>
     <string name="srv_action_rename">Rename server</string>
     <string name="srv_rename_title">Rename server</string>
     <string name="srv_rename_hint">New name</string>
@@ -158,16 +147,6 @@
     <string name="chain_substep_healthcheck">verifying startup</string>
 
     <!-- Pair-via-URL (CF Tunnel mode) -->
-    <string name="pair_url_section_title">Already installed?</string>
-    <string name="pair_url_section_hint">If you used the install command on the server and got a pair token, paste it here. SSH not needed.</string>
-    <string name="pair_url_endpoint_hint">Endpoint URL (https://…)</string>
-    <string name="pair_url_token_hint">Pair token</string>
-    <string name="pair_url_button">Pair existing agent</string>
-    <string name="pair_url_endpoint_empty">Endpoint URL is required</string>
-    <string name="pair_url_token_empty">Pair token is required</string>
-    <string name="pair_url_endpoint_invalid">Endpoint must start with https://</string>
-    <string name="pair_url_success">Paired</string>
-
     <!-- Server Detail tabs -->
     <string name="srv_tab_overview">Overview</string>
     <string name="srv_tab_profiles">Profiles</string>
@@ -183,13 +162,7 @@
     <string name="srv_disk">Disk</string>
     <string name="srv_uptime">Uptime</string>
     <string name="srv_services">Services</string>
-    <string name="srv_active">active</string>
-    <string name="srv_inactive">inactive</string>
     <!-- Profiles tab -->
-    <string name="srv_no_profiles">Profiles will appear here</string>
-    <string name="srv_add_profile">Add VLESS inbound</string>
-    <string name="srv_profile_label_hint">Label (optional)</string>
-    <string name="srv_profile_port_hint">Port (blank = auto)</string>
     <string name="srv_create_profile">Создать профиль</string>
     <string name="srv_creating_profile">Создаю профиль…</string>
     <string name="srv_profiles_empty_title">Здесь будут твои VPN-профили</string>
@@ -204,7 +177,6 @@
     <string name="srv_proto_vless_desc">Маскирует трафик под обычное подключение к крупному сайту (ВК, Я.Музыка, и т.д.). Работает в РФ. Подходит для NetGuard, Hiddify, v2rayNG, Streisand.</string>
     <string name="srv_proto_telemost_title">Видеоконференции (Telemost)</string>
     <string name="srv_proto_telemost_desc">Прячет трафик внутри настоящей Telemost-конференции. Только NetGuard, видеозвонки и другие тяжёлые сценарии.</string>
-    <string name="srv_proto_soon">скоро</string>
     <string name="srv_sni_title">Под какой сайт маскироваться</string>
     <string name="srv_sni_help">Выбери крупный сайт, который точно не блокируется. Реалити-маска заставит провайдера думать, что ты подключаешься к нему.</string>
     <string name="srv_sni_help_geo">Если сервер за границей — лучше международный сайт (Cloudflare/Microsoft). Российский SNI на зарубежный VPS провайдер режет на лету.</string>
@@ -224,17 +196,12 @@
     <string name="srv_add_upstream">Add upstream</string>
     <string name="srv_add_rule">Add rule</string>
     <string name="srv_upstream_tag_hint">Tag (e.g. rf-vps)</string>
-    <string name="srv_upstream_type_hint">Type</string>
     <string name="srv_upstream_host_hint">Host</string>
     <string name="srv_upstream_port_hint">Port</string>
     <string name="srv_upstream_user_hint">Username (optional)</string>
     <string name="srv_upstream_pass_hint">Password (optional)</string>
-    <string name="srv_rule_kind_hint">Kind</string>
     <string name="srv_rule_value_hint">Value (domain / cidr / geosite name / geoip name)</string>
-    <string name="srv_rule_action_hint">Action</string>
-    <string name="srv_rule_via_hint">Via (when action=via)</string>
     <!-- Logs tab -->
-    <string name="srv_logs_service_hint">Service</string>
     <string name="srv_refresh">Refresh</string>
 
     <!-- Settings -->
@@ -274,9 +241,6 @@
     <string name="backup_to_file">Backup to File</string>
     <string name="restore_from_file">Restore from File</string>
     <string name="backup_success">Backup saved successfully</string>
-    <string name="restore_success">Restored %d profiles</string>
-    <string name="restore_error">Restore failed: %s</string>
-
     <!-- Notification - NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">Connection active</string>
     <string name="notif_title_connecting">Connecting…</string>
@@ -303,10 +267,7 @@
     <string name="trigger_grant_permission">Grant usage access</string>
     <string name="trigger_auto_stop">Disconnect tunnel when app is in background (saves battery)</string>
     <string name="trigger_no_profile">No selected server. Select a server first.</string>
-    <string name="trigger_always_on_title">Survive NetGuard being killed</string>
-    <string name="trigger_always_on_desc">For reliability, in Android system VPN settings enable ONLY \"Always-on VPN\". Do NOT enable \"Block connections without VPN\" - that would also kill normal apps\' internet. Trigger mode already blocks the picked apps whenever the tunnel is down.</string>
     <string name="trigger_open_vpn_settings">Open Android VPN settings</string>
-    <string name="trigger_collapse">Hide info</string>
     <string name="trigger_expand">Show info &amp; switches</string>
     <string name="trigger_options_card_title">Trigger options</string>
     <string name="trigger_options_summary_off">Disabled · tap to set up</string>
@@ -324,7 +285,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">Choose your language</string>
     <string name="onb_lang_subtitle">You can change this later in Settings</string>
-    <string name="onb_skip">Skip</string>
     <string name="onb_next">Next</string>
     <string name="onb_back">Back</string>
     <string name="onb_finish">Finish</string>
@@ -365,7 +325,6 @@
     <string name="onb_profile_paste">Paste from clipboard</string>
     <string name="onb_profile_hint">Paste a connection link…</string>
     <string name="onb_profile_import">Import</string>
-    <string name="onb_profile_added">Imported %d server(s) ✓</string>
     <string name="onb_profile_error">Couldn\'t parse: %s</string>
     <string name="onb_profile_empty">Clipboard is empty</string>
     <string name="onb_profile_skip">I\'ll add a server later</string>
@@ -379,23 +338,15 @@
     <string name="onb_profile_skip_more">I\'m done</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">Paste</string>
-    <string name="clipboard_empty">Clipboard is empty</string>
-    <string name="clipboard_no_profile">No valid profile found in clipboard</string>
-
     <!-- Share QR -->
     <string name="share_qr">Share QR</string>
     <string name="share_uri">Copy URI</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">Block internet if VPN disconnects</string>
     <string name="open_vpn_settings">Open VPN Settings</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">Auto-reconnect</string>
-    <string name="auto_reconnect_desc">Reconnect on network change</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">Import profile?</string>
     <string name="import_profile_confirm">Add server profile from external source?\n\n%1$s</string>
@@ -406,7 +357,6 @@
     <string name="backup_warning">Backup contains server credentials. Store securely.</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">Invalid DNS address</string>
     <string name="invalid_values_rejected">Invalid values rejected: %1$s</string>
 
     <!-- Subscription validation -->
@@ -417,28 +367,15 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">Best Server</string>
-    <string name="auto_selecting">Testing servers…</string>
-    <string name="best_server_found">Best: %s (%dms)</string>
-    <string name="no_servers_reachable">No servers reachable</string>
-    <string name="no_servers">No servers added</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">Sort by Ping</string>
     <string name="sort_by_subscription">Sort by Subscription</string>
 
     <!-- Logs -->
-    <string name="log_all">All</string>
-    <string name="log_info">Info</string>
-    <string name="log_warn">Warn</string>
-    <string name="log_error">Error</string>
-
     <!-- Session stats -->
     <string name="stats_today">Today</string>
     <string name="stats_week">This week</string>
     <string name="stats_total">All time</string>
-    <string name="stats_reset">Reset Statistics</string>
-    <string name="stats_reset_confirm">Reset all traffic statistics?</string>
-
     <!-- Widget -->
     <string name="widget_description">Quick connect/disconnect toggle</string>
 
@@ -465,15 +402,10 @@
     <string name="backup_restore_desc">Save profiles to file or restore from backup</string>
 
     <!-- Server switching -->
-    <string name="switching_server">Switching server\u2026</string>
-
     <!-- Service compatibility test -->
     <string name="test_services">Test Services</string>
-    <string name="sort_by_compat">Sort by Compatibility</string>
     <string name="service_test_results">Service Availability</string>
     <string name="service_score">Score: %1$d/%2$d</string>
-    <string name="connect_first">Connect to VPN first</string>
-
     <!-- QR Scanner -->
     <string name="scan_qr">Scan QR</string>
     <string name="qr_scan_hint">Point camera at a QR code</string>

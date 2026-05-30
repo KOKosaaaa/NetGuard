@@ -27,18 +27,17 @@ object NotificationHelper {
 
     fun createChannel(context: Context) {
         if (channelCreated) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Background service status"
-                setShowBadge(false)
-            }
-            val nm = context.getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+        // minSdk 26 (O): notification channels always exist.
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Background service status"
+            setShowBadge(false)
         }
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(channel)
         channelCreated = true
     }
 

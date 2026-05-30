@@ -12,7 +12,6 @@
 
     <!-- Connection -->
     <string name="connect">接続</string>
-    <string name="disconnect">切断</string>
     <string name="status_disconnected">未接続</string>
     <string name="status_connecting">接続中…</string>
     <string name="status_connected">接続済み</string>
@@ -25,9 +24,7 @@
     <string name="port">ポート</string>
     <string name="edit_profile">プロファイルを編集</string>
     <string name="no_profiles">サーバーがまだ追加されていません</string>
-    <string name="import_profiles">インポート</string>
     <string name="import_btn">インポート</string>
-    <string name="manual">手動</string>
     <string name="profile_deleted">プロファイルを削除しました</string>
     <string name="allow_insecure">安全でない TLS を許可</string>
     <string name="test_all">すべてテスト</string>
@@ -40,7 +37,6 @@
     <string name="add">追加</string>
     <string name="undo">元に戻す</string>
     <string name="copied">クリップボードにコピーしました</string>
-    <string name="saved">保存しました</string>
     <string name="clear">クリア</string>
     <string name="copy_all">すべてコピー</string>
 
@@ -48,10 +44,7 @@
     <string name="add_subscription">購読を追加</string>
     <string name="no_subscriptions">購読がありません</string>
     <string name="update_all">すべて更新</string>
-    <string name="auto_update">自動更新</string>
     <string name="auto_update_interval">更新間隔</string>
-    <string name="auto_update_disabled">無効</string>
-    <string name="auto_update_hours">%d 時間ごと</string>
     <string name="import_action">インポート</string>
     <string name="importing_subscription">サブスクリプションをインポート中…</string>
     <string name="import_success_format">「%2$s」から %1$d 件のプロファイルをインポートしました。\n別のサブスクリプションを追加するか、続行してください。</string>
@@ -95,32 +88,21 @@
     <string name="backup_to_file">ファイルにバックアップ</string>
     <string name="restore_from_file">ファイルから復元</string>
     <string name="backup_success">バックアップを保存しました</string>
-    <string name="restore_success">%d 件のプロファイルを復元しました</string>
-    <string name="restore_error">復元に失敗しました：%s</string>
-
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">接続中</string>
     <string name="notif_text">ネットワークサービスが実行中です</string>
     <string name="notif_stop">停止</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">貼り付け</string>
-    <string name="clipboard_empty">クリップボードが空です</string>
-    <string name="clipboard_no_profile">クリップボードに有効なプロファイルがありません</string>
-
     <!-- Share QR -->
     <string name="share_qr">QR を共有</string>
     <string name="share_uri">URI をコピー</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">VPN 切断時にインターネットをブロック</string>
     <string name="open_vpn_settings">VPN 設定を開く</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">自動再接続</string>
-    <string name="auto_reconnect_desc">ネットワーク変更時に再接続</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">プロファイルをインポートしますか？</string>
     <string name="import_profile_confirm">外部ソースからサーバープロファイルを追加しますか？\n\n%1$s</string>
@@ -130,8 +112,6 @@
     <string name="backup_warning">バックアップにはサーバーの認証情報が含まれています。安全に保管してください。</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">無効な DNS アドレス</string>
-
     <!-- Subscription validation -->
     <string name="subscription_https_only">HTTPS の購読 URL のみサポートされています</string>
 
@@ -140,27 +120,14 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">最適なサーバー</string>
-    <string name="auto_selecting">サーバーをテスト中…</string>
-    <string name="best_server_found">最適：%s（%dms）</string>
-    <string name="no_servers_reachable">到達可能なサーバーがありません</string>
-    <string name="no_servers">サーバーが追加されていません</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">Ping で並び替え</string>
 
     <!-- Logs -->
-    <string name="log_all">すべて</string>
-    <string name="log_info">情報</string>
-    <string name="log_warn">警告</string>
-    <string name="log_error">エラー</string>
-
     <!-- Session stats -->
     <string name="stats_today">今日</string>
     <string name="stats_week">今週</string>
     <string name="stats_total">全期間</string>
-    <string name="stats_reset">統計をリセット</string>
-    <string name="stats_reset_confirm">すべてのトラフィック統計をリセットしますか？</string>
-
     <!-- Widget -->
     <string name="widget_description">接続/切断のクイック切り替え</string>
     <!-- Theme -->
@@ -182,7 +149,6 @@
     <string name="export_import_desc">共有用に設定をクリップボードにコピー</string>
     <string name="backup_restore_desc">プロファイルをファイルに保存またはバックアップから復元</string>
     <!-- Server switching -->
-    <string name="switching_server">サーバーを切り替え中\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">QRスキャン</string>
     <string name="qr_scan_hint">VPNプロファイルのQRコードにカメラを向けてください</string>
@@ -197,10 +163,8 @@
     <string name="no_qr_found">画像にQRコードが見つかりません</string>
     <string name="theme_dynamic">ダイナミック</string>
     <string name="test_services">サービステスト</string>
-    <string name="sort_by_compat">互換性で並べ替え</string>
     <string name="service_test_results">サービス可用性</string>
     <string name="service_score">スコア: %1$d/%2$d</string>
-    <string name="connect_first">先にVPNに接続してください</string>
     <string name="features">機能</string>
     <string name="show_connection_map">接続マップ</string>
     <string name="connection_map_desc">ホーム画面にアニメーションマップを表示</string>
@@ -241,7 +205,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">言語を選択</string>
     <string name="onb_lang_subtitle">後で設定から変更できます</string>
-    <string name="onb_skip">スキップ</string>
     <string name="onb_next">次へ</string>
     <string name="onb_back">戻る</string>
     <string name="onb_finish">完了</string>
@@ -280,7 +243,6 @@
     <string name="onb_profile_paste">クリップボードから貼り付け</string>
     <string name="onb_profile_hint">接続リンクを貼り付け…</string>
     <string name="onb_profile_import">インポート</string>
-    <string name="onb_profile_added">%d 個のサーバーをインポートしました ✓</string>
     <string name="onb_profile_error">解析できませんでした: %s</string>
     <string name="onb_profile_empty">クリップボードが空です</string>
     <string name="onb_profile_skip">後でサーバーを追加します</string>
@@ -329,11 +291,8 @@
     <string name="trigger_explainer">選択したアプリだけが VPN を通ります。それ以外(銀行、地図、普段のブラウザなど)は VPN が無いかのように通常接続を使います。選択したアプリにはネットへ出る他の経路がないため、たとえ一瞬でも本物の IP は決して見えません。</string>
     <string name="trigger_perapp_conflict">Per-App ルーティングが有効でした。トリガーモードが自前でルーティングします。Per-App は無効に切り替えました。</string>
     <string name="trigger_auto_stop">アプリがバックグラウンドのときトンネルを切断(電池節約)</string>
-    <string name="trigger_always_on_title">NetGuard が終了しても動作させる</string>
-    <string name="trigger_always_on_desc">信頼性のため、Android のシステム VPN 設定では「常時接続 VPN」だけを有効にしてください。「VPN なしで接続をブロック」は有効にしないでください - 通常のアプリのネットも切れてしまいます。トリガーモードはトンネルが切れている間、選択したアプリを自動で遮断します。</string>
     <string name="trigger_open_vpn_settings">Android の VPN 設定を開く</string>
     <string name="trigger_expand">情報と設定を表示</string>
-    <string name="trigger_collapse">情報を隠す</string>
     <string name="trigger_watcher_channel">アプリ起動モニター</string>
     <string name="trigger_watcher_channel_desc">選択したアプリが起動したときに接続を作動させます</string>
     <string name="trigger_watcher_title">アプリ起動モニター作動中</string>

@@ -7,7 +7,6 @@
     <string name="nav_settings">Einstellungen</string>
     <string name="nav_logs">Protokoll</string>
     <string name="connect">Verbinden</string>
-    <string name="disconnect">Trennen</string>
     <string name="status_disconnected">Nicht verbunden</string>
     <string name="status_connecting">Verbinde…</string>
     <string name="status_connected">Verbunden</string>
@@ -18,9 +17,7 @@
     <string name="port">Port</string>
     <string name="edit_profile">Profil bearbeiten</string>
     <string name="no_profiles">Noch keine Server hinzugefügt</string>
-    <string name="import_profiles">Importieren</string>
     <string name="import_btn">Importieren</string>
-    <string name="manual">Manuell</string>
     <string name="profile_deleted">Profil gelöscht</string>
     <string name="allow_insecure">Unsicheres TLS erlauben</string>
     <string name="test_all">Alle testen</string>
@@ -31,16 +28,12 @@
     <string name="add">Hinzufügen</string>
     <string name="undo">Rückgängig</string>
     <string name="copied">In Zwischenablage kopiert</string>
-    <string name="saved">Gespeichert</string>
     <string name="clear">Löschen</string>
     <string name="copy_all">Alles kopieren</string>
     <string name="add_subscription">Abo hinzufügen</string>
     <string name="no_subscriptions">Keine Abos</string>
     <string name="update_all">Alle aktualisieren</string>
-    <string name="auto_update">Auto-Update</string>
     <string name="auto_update_interval">Update-Intervall</string>
-    <string name="auto_update_disabled">Deaktiviert</string>
-    <string name="auto_update_hours">Alle %d Stunden</string>
     <string name="import_action">Importieren</string>
     <string name="importing_subscription">Abo wird importiert…</string>
     <string name="import_success_format">%1$d Profile aus „%2$s“ importiert.\nWeiteres Abo hinzufügen oder fortfahren.</string>
@@ -78,43 +71,24 @@
     <string name="backup_to_file">In Datei sichern</string>
     <string name="restore_from_file">Aus Datei wiederherstellen</string>
     <string name="backup_success">Sicherung erfolgreich gespeichert</string>
-    <string name="restore_success">%d Profile wiederhergestellt</string>
-    <string name="restore_error">Wiederherstellung fehlgeschlagen: %s</string>
     <string name="notif_title">Verbindung aktiv</string>
     <string name="notif_text">Netzwerkdienst läuft</string>
     <string name="notif_stop">Stopp</string>
-    <string name="paste_from_clipboard">Einfügen</string>
-    <string name="clipboard_empty">Zwischenablage ist leer</string>
-    <string name="clipboard_no_profile">Kein gültiges Profil in der Zwischenablage</string>
     <string name="share_qr">QR teilen</string>
     <string name="share_uri">URI kopieren</string>
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">Internet blockieren bei VPN-Trennung</string>
     <string name="open_vpn_settings">VPN-Einstellungen öffnen</string>
-    <string name="auto_reconnect">Auto-Reconnect</string>
-    <string name="auto_reconnect_desc">Bei Netzwechsel neu verbinden</string>
     <string name="import_profile_question">Profil importieren?</string>
     <string name="import_profile_confirm">Serverprofil aus externer Quelle hinzufügen?\n\n%1$s</string>
     <string name="export_warning">Konfiguration enthält Zugangsdaten. Zwischenablage ist für andere Apps zugänglich.</string>
     <string name="backup_warning">Sicherung enthält Zugangsdaten. Sicher aufbewahren.</string>
-    <string name="invalid_dns">Ungültige DNS-Adresse</string>
     <string name="subscription_https_only">Nur HTTPS-Abonnement-URLs werden unterstützt</string>
     <string name="status_error">Fehler</string>
     <string name="auto_select">Bester Server</string>
-    <string name="auto_selecting">Server werden getestet…</string>
-    <string name="best_server_found">Bester: %s (%dms)</string>
-    <string name="no_servers_reachable">Keine Server erreichbar</string>
-    <string name="no_servers">Keine Server hinzugefügt</string>
     <string name="sort_by_ping">Nach Ping sortieren</string>
-    <string name="log_all">Alle</string>
-    <string name="log_info">Info</string>
-    <string name="log_warn">Warnung</string>
-    <string name="log_error">Fehler</string>
     <string name="stats_today">Heute</string>
     <string name="stats_week">Diese Woche</string>
     <string name="stats_total">Gesamt</string>
-    <string name="stats_reset">Statistik zurücksetzen</string>
-    <string name="stats_reset_confirm">Alle Verkehrsstatistiken zurücksetzen?</string>
     <string name="widget_description">Schnell verbinden/trennen</string>
     <!-- Theme -->
     <string name="theme">Design</string>
@@ -135,7 +109,6 @@
     <string name="export_import_desc">Konfiguration zum Teilen in die Zwischenablage kopieren</string>
     <string name="backup_restore_desc">Profile in Datei speichern oder aus Sicherung wiederherstellen</string>
     <!-- Server switching -->
-    <string name="switching_server">Server wird gewechselt\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">QR scannen</string>
     <string name="qr_scan_hint">Kamera auf einen VPN-Profil-QR-Code richten</string>
@@ -150,10 +123,8 @@
     <string name="no_qr_found">Kein QR-Code im Bild gefunden</string>
     <string name="theme_dynamic">Dynamisch</string>
     <string name="test_services">Dienste testen</string>
-    <string name="sort_by_compat">Nach Kompatibilität sortieren</string>
     <string name="service_test_results">Dienstverfügbarkeit</string>
     <string name="service_score">Ergebnis: %1$d/%2$d</string>
-    <string name="connect_first">Zuerst VPN verbinden</string>
     <string name="features">Funktionen</string>
     <string name="show_connection_map">Verbindungskarte</string>
     <string name="connection_map_desc">Animierte Karte auf dem Startbildschirm</string>
@@ -194,7 +165,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">Sprache auswählen</string>
     <string name="onb_lang_subtitle">Lässt sich später in den Einstellungen ändern</string>
-    <string name="onb_skip">Überspringen</string>
     <string name="onb_next">Weiter</string>
     <string name="onb_back">Zurück</string>
     <string name="onb_finish">Fertig</string>
@@ -233,7 +203,6 @@
     <string name="onb_profile_paste">Aus Zwischenablage einfügen</string>
     <string name="onb_profile_hint">Verbindungslink einfügen…</string>
     <string name="onb_profile_import">Importieren</string>
-    <string name="onb_profile_added">%d Server importiert ✓</string>
     <string name="onb_profile_error">Konnte nicht analysiert werden: %s</string>
     <string name="onb_profile_empty">Zwischenablage ist leer</string>
     <string name="onb_profile_skip">Server später hinzufügen</string>
@@ -282,11 +251,8 @@
     <string name="trigger_explainer">Nur die Apps, die du auswählst, gehen durch das VPN. Alle anderen (Banking, Maps, dein üblicher Browser usw.) laufen über die normale Verbindung, als gäbe es kein VPN. Die ausgewählten Apps haben keinen anderen Weg ins Netz - sie sehen also niemals deine echte IP, nicht einmal kurz.</string>
     <string name="trigger_perapp_conflict">Per-App-Routing war aktiv - Trigger-Modus übernimmt das Routing selbst. Per-App auf AUS gesetzt.</string>
     <string name="trigger_auto_stop">Tunnel trennen, wenn die App im Hintergrund ist (spart Akku)</string>
-    <string name="trigger_always_on_title">NetGuard übersteht das Beenden</string>
-    <string name="trigger_always_on_desc">Aktiviere in den Android-VPN-Systemeinstellungen NUR „Always-on VPN”. „Verbindungen ohne VPN blockieren“ NICHT aktivieren - das würde auch das Internet normaler Apps abschneiden. Der Trigger-Modus blockiert die ausgewählten Apps ohnehin, sobald der Tunnel aus ist.</string>
     <string name="trigger_open_vpn_settings">Android-VPN-Einstellungen öffnen</string>
     <string name="trigger_expand">Infos &amp; Schalter anzeigen</string>
-    <string name="trigger_collapse">Info ausblenden</string>
     <string name="trigger_watcher_channel">App-Start-Monitor</string>
     <string name="trigger_watcher_channel_desc">Aktiviert die Verbindung, wenn ausgewählte Apps geöffnet werden</string>
     <string name="trigger_watcher_title">App-Start-Monitor aktiv</string>

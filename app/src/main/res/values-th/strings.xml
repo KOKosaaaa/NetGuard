@@ -12,7 +12,6 @@
 
     <!-- Connection -->
     <string name="connect">เชื่อมต่อ</string>
-    <string name="disconnect">ยกเลิกการเชื่อมต่อ</string>
     <string name="status_disconnected">ไม่ได้เชื่อมต่อ</string>
     <string name="status_connecting">กำลังเชื่อมต่อ…</string>
     <string name="status_connected">เชื่อมต่อแล้ว</string>
@@ -25,9 +24,7 @@
     <string name="port">พอร์ต</string>
     <string name="edit_profile">แก้ไขโปรไฟล์</string>
     <string name="no_profiles">ยังไม่มีเซิร์ฟเวอร์</string>
-    <string name="import_profiles">นำเข้า</string>
     <string name="import_btn">นำเข้า</string>
-    <string name="manual">ด้วยตนเอง</string>
     <string name="profile_deleted">ลบโปรไฟล์แล้ว</string>
     <string name="allow_insecure">อนุญาต TLS ที่ไม่ปลอดภัย</string>
     <string name="test_all">ทดสอบทั้งหมด</string>
@@ -40,7 +37,6 @@
     <string name="add">เพิ่ม</string>
     <string name="undo">เลิกทำ</string>
     <string name="copied">คัดลอกไปยังคลิปบอร์ดแล้ว</string>
-    <string name="saved">บันทึกแล้ว</string>
     <string name="clear">ล้าง</string>
     <string name="copy_all">คัดลอกทั้งหมด</string>
 
@@ -48,10 +44,7 @@
     <string name="add_subscription">เพิ่มการสมัครสมาชิก</string>
     <string name="no_subscriptions">ไม่มีการสมัครสมาชิก</string>
     <string name="update_all">อัปเดตทั้งหมด</string>
-    <string name="auto_update">อัปเดตอัตโนมัติ</string>
     <string name="auto_update_interval">ช่วงเวลาอัปเดต</string>
-    <string name="auto_update_disabled">ปิดใช้งาน</string>
-    <string name="auto_update_hours">ทุก %d ชั่วโมง</string>
     <string name="import_action">นำเข้า</string>
     <string name="importing_subscription">กำลังนำเข้าการสมัครสมาชิก…</string>
     <string name="import_success_format">นำเข้า %1$d โปรไฟล์จาก «%2$s» แล้ว\nเพิ่มการสมัครอื่นหรือดำเนินการต่อ</string>
@@ -95,32 +88,21 @@
     <string name="backup_to_file">สำรองไปยังไฟล์</string>
     <string name="restore_from_file">กู้คืนจากไฟล์</string>
     <string name="backup_success">สำรองข้อมูลสำเร็จ</string>
-    <string name="restore_success">กู้คืน %d โปรไฟล์แล้ว</string>
-    <string name="restore_error">กู้คืนล้มเหลว: %s</string>
-
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">การเชื่อมต่อใช้งานอยู่</string>
     <string name="notif_text">บริการเครือข่ายกำลังทำงาน</string>
     <string name="notif_stop">หยุด</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">วาง</string>
-    <string name="clipboard_empty">คลิปบอร์ดว่างเปล่า</string>
-    <string name="clipboard_no_profile">ไม่พบโปรไฟล์ที่ถูกต้องในคลิปบอร์ด</string>
-
     <!-- Share QR -->
     <string name="share_qr">แชร์ QR</string>
     <string name="share_uri">คัดลอก URI</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">บล็อกอินเทอร์เน็ตหาก VPN ถูกตัด</string>
     <string name="open_vpn_settings">เปิดการตั้งค่า VPN</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">เชื่อมต่อใหม่อัตโนมัติ</string>
-    <string name="auto_reconnect_desc">เชื่อมต่อใหม่เมื่อเครือข่ายเปลี่ยน</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">นำเข้าโปรไฟล์?</string>
     <string name="import_profile_confirm">เพิ่มโปรไฟล์เซิร์ฟเวอร์จากแหล่งภายนอก?\n\n%1$s</string>
@@ -130,8 +112,6 @@
     <string name="backup_warning">ข้อมูลสำรองมีข้อมูลรับรองเซิร์ฟเวอร์ กรุณาเก็บรักษาอย่างปลอดภัย</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">ที่อยู่ DNS ไม่ถูกต้อง</string>
-
     <!-- Subscription validation -->
     <string name="subscription_https_only">รองรับเฉพาะ URL สมัครสมาชิก HTTPS เท่านั้น</string>
 
@@ -140,27 +120,14 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">เซิร์ฟเวอร์ที่ดีที่สุด</string>
-    <string name="auto_selecting">กำลังทดสอบเซิร์ฟเวอร์…</string>
-    <string name="best_server_found">ดีที่สุด: %s (%dms)</string>
-    <string name="no_servers_reachable">ไม่มีเซิร์ฟเวอร์ที่เข้าถึงได้</string>
-    <string name="no_servers">ยังไม่มีเซิร์ฟเวอร์</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">เรียงตาม Ping</string>
 
     <!-- Logs -->
-    <string name="log_all">ทั้งหมด</string>
-    <string name="log_info">ข้อมูล</string>
-    <string name="log_warn">คำเตือน</string>
-    <string name="log_error">ข้อผิดพลาด</string>
-
     <!-- Session stats -->
     <string name="stats_today">วันนี้</string>
     <string name="stats_week">สัปดาห์นี้</string>
     <string name="stats_total">ทั้งหมด</string>
-    <string name="stats_reset">รีเซ็ตสถิติ</string>
-    <string name="stats_reset_confirm">รีเซ็ตสถิติการรับส่งข้อมูลทั้งหมด?</string>
-
     <!-- Widget -->
     <string name="widget_description">ปุ่มเชื่อมต่อ/ตัดการเชื่อมต่อด่วน</string>
     <!-- Theme -->
@@ -182,7 +149,6 @@
     <string name="export_import_desc">คัดลอกการตั้งค่าไปยังคลิปบอร์ดเพื่อแชร์</string>
     <string name="backup_restore_desc">บันทึกโปรไฟล์ลงไฟล์หรือกู้คืนจากข้อมูลสำรอง</string>
     <!-- Server switching -->
-    <string name="switching_server">กำลังเปลี่ยนเซิร์ฟเวอร์\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">สแกน QR</string>
     <string name="qr_scan_hint">ชี้กล้องไปที่ QR โค้ดโปรไฟล์ VPN</string>
@@ -197,10 +163,8 @@
     <string name="no_qr_found">ไม่พบรหัส QR ในรูปภาพ</string>
     <string name="theme_dynamic">ไดนามิก</string>
     <string name="test_services">ทดสอบบริการ</string>
-    <string name="sort_by_compat">เรียงตามความเข้ากันได้</string>
     <string name="service_test_results">ความพร้อมใช้งานบริการ</string>
     <string name="service_score">คะแนน: %1$d/%2$d</string>
-    <string name="connect_first">เชื่อมต่อ VPN ก่อน</string>
     <string name="features">คุณสมบัติ</string>
     <string name="show_connection_map">แผนที่การเชื่อมต่อ</string>
     <string name="connection_map_desc">แผนที่เคลื่อนไหวบนหน้าจอหลัก</string>
@@ -241,7 +205,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">เลือกภาษาของคุณ</string>
     <string name="onb_lang_subtitle">สามารถเปลี่ยนได้ภายหลังในการตั้งค่า</string>
-    <string name="onb_skip">ข้าม</string>
     <string name="onb_next">ถัดไป</string>
     <string name="onb_back">ย้อนกลับ</string>
     <string name="onb_finish">เสร็จสิ้น</string>
@@ -280,7 +243,6 @@
     <string name="onb_profile_paste">วางจากคลิปบอร์ด</string>
     <string name="onb_profile_hint">วางลิงก์การเชื่อมต่อ…</string>
     <string name="onb_profile_import">นำเข้า</string>
-    <string name="onb_profile_added">นำเข้า %d เซิร์ฟเวอร์ ✓</string>
     <string name="onb_profile_error">ไม่สามารถวิเคราะห์: %s</string>
     <string name="onb_profile_empty">คลิปบอร์ดว่างเปล่า</string>
     <string name="onb_profile_skip">ฉันจะเพิ่มเซิร์ฟเวอร์ภายหลัง</string>
@@ -329,11 +291,8 @@
     <string name="trigger_explainer">เฉพาะแอปที่คุณเลือกเท่านั้นที่จะผ่าน VPN ส่วนแอปอื่นๆ (ธนาคาร แผนที่ เบราว์เซอร์ปกติ ฯลฯ) ใช้การเชื่อมต่อปกติเหมือนไม่มี VPN แอปที่เลือกไม่มีทางออกสู่เครือข่ายอื่น จึงไม่เห็น IP จริงของคุณแม้แต่เสี้ยววินาที</string>
     <string name="trigger_perapp_conflict">การกำหนดเส้นทางแบบ Per-App เปิดอยู่ - โหมด Trigger จัดการเส้นทางเอง Per-App ถูกปิดแล้ว</string>
     <string name="trigger_auto_stop">ตัดอุโมงค์เมื่อแอปอยู่เบื้องหลัง (ประหยัดแบตเตอรี่)</string>
-    <string name="trigger_always_on_title">ทำงานต่อแม้ NetGuard ถูกปิด</string>
-    <string name="trigger_always_on_desc">เพื่อความน่าเชื่อถือ ในการตั้งค่า VPN ของระบบ Android ให้เปิดเฉพาะ \"VPN ที่เปิดตลอด\" เท่านั้น อย่าเปิด \"บล็อกการเชื่อมต่อที่ไม่มี VPN\" - เพราะจะทำให้แอปทั่วไปก็ไม่มีอินเทอร์เน็ตด้วย โหมด Trigger จะบล็อกแอปที่เลือกอยู่แล้วเมื่ออุโมงค์ปิด</string>
     <string name="trigger_open_vpn_settings">เปิดการตั้งค่า VPN ของ Android</string>
     <string name="trigger_expand">แสดงข้อมูลและสวิตช์</string>
-    <string name="trigger_collapse">ซ่อนข้อมูล</string>
     <string name="trigger_watcher_channel">มอนิเตอร์การเปิดแอป</string>
     <string name="trigger_watcher_channel_desc">เปิดการเชื่อมต่อเมื่อแอปที่เลือกถูกเปิด</string>
     <string name="trigger_watcher_title">มอนิเตอร์การเปิดแอปกำลังทำงาน</string>

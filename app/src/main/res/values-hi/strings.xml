@@ -12,7 +12,6 @@
 
     <!-- Connection -->
     <string name="connect">कनेक्ट करें</string>
-    <string name="disconnect">डिस्कनेक्ट करें</string>
     <string name="status_disconnected">कनेक्ट नहीं है</string>
     <string name="status_connecting">कनेक्ट हो रहा है…</string>
     <string name="status_connected">कनेक्ट है</string>
@@ -25,9 +24,7 @@
     <string name="port">पोर्ट</string>
     <string name="edit_profile">प्रोफ़ाइल संपादित करें</string>
     <string name="no_profiles">अभी तक कोई सर्वर नहीं जोड़ा गया</string>
-    <string name="import_profiles">आयात</string>
     <string name="import_btn">आयात</string>
-    <string name="manual">मैनुअल</string>
     <string name="profile_deleted">प्रोफ़ाइल हटा दी गई</string>
     <string name="allow_insecure">असुरक्षित TLS की अनुमति दें</string>
     <string name="test_all">सभी का परीक्षण</string>
@@ -40,7 +37,6 @@
     <string name="add">जोड़ें</string>
     <string name="undo">पूर्ववत करें</string>
     <string name="copied">क्लिपबोर्ड पर कॉपी किया गया</string>
-    <string name="saved">सहेजा गया</string>
     <string name="clear">साफ़ करें</string>
     <string name="copy_all">सभी कॉपी करें</string>
 
@@ -48,10 +44,7 @@
     <string name="add_subscription">सदस्यता जोड़ें</string>
     <string name="no_subscriptions">कोई सदस्यता नहीं</string>
     <string name="update_all">सभी अपडेट करें</string>
-    <string name="auto_update">स्वतः अपडेट</string>
     <string name="auto_update_interval">अपडेट अंतराल</string>
-    <string name="auto_update_disabled">अक्षम</string>
-    <string name="auto_update_hours">हर %d घंटे</string>
     <string name="import_action">आयात करें</string>
     <string name="importing_subscription">सदस्यता आयात की जा रही है…</string>
     <string name="import_success_format">«%2$s» से %1$d प्रोफ़ाइल आयात की गईं।\nएक और सदस्यता जोड़ें या जारी रखें।</string>
@@ -95,32 +88,21 @@
     <string name="backup_to_file">फ़ाइल में बैकअप</string>
     <string name="restore_from_file">फ़ाइल से रीस्टोर</string>
     <string name="backup_success">बैकअप सफलतापूर्वक सहेजा गया</string>
-    <string name="restore_success">%d प्रोफ़ाइल रीस्टोर की गईं</string>
-    <string name="restore_error">रीस्टोर विफल: %s</string>
-
     <!-- Notification — NEUTRAL text, no VPN/proxy mentions -->
     <string name="notif_title">कनेक्शन सक्रिय</string>
     <string name="notif_text">नेटवर्क सेवा चल रही है</string>
     <string name="notif_stop">रोकें</string>
 
     <!-- Clipboard -->
-    <string name="paste_from_clipboard">चिपकाएँ</string>
-    <string name="clipboard_empty">क्लिपबोर्ड खाली है</string>
-    <string name="clipboard_no_profile">क्लिपबोर्ड में कोई मान्य प्रोफ़ाइल नहीं मिली</string>
-
     <!-- Share QR -->
     <string name="share_qr">QR साझा करें</string>
     <string name="share_uri">URI कॉपी करें</string>
 
     <!-- Kill Switch -->
     <string name="kill_switch">Kill Switch</string>
-    <string name="kill_switch_desc">VPN डिस्कनेक्ट होने पर इंटरनेट ब्लॉक करें</string>
     <string name="open_vpn_settings">VPN सेटिंग्स खोलें</string>
 
     <!-- Auto-reconnect -->
-    <string name="auto_reconnect">स्वतः पुनः कनेक्ट</string>
-    <string name="auto_reconnect_desc">नेटवर्क बदलने पर पुनः कनेक्ट करें</string>
-
     <!-- Deep link confirmation -->
     <string name="import_profile_question">प्रोफ़ाइल आयात करें?</string>
     <string name="import_profile_confirm">बाहरी स्रोत से सर्वर प्रोफ़ाइल जोड़ें?\n\n%1$s</string>
@@ -130,8 +112,6 @@
     <string name="backup_warning">बैकअप में सर्वर क्रेडेंशियल हैं। सुरक्षित रूप से संग्रहीत करें।</string>
 
     <!-- DNS validation -->
-    <string name="invalid_dns">अमान्य DNS पता</string>
-
     <!-- Subscription validation -->
     <string name="subscription_https_only">केवल HTTPS सदस्यता URL समर्थित हैं</string>
 
@@ -140,27 +120,14 @@
 
     <!-- Auto-select best server -->
     <string name="auto_select">सर्वश्रेष्ठ सर्वर</string>
-    <string name="auto_selecting">सर्वर का परीक्षण हो रहा है…</string>
-    <string name="best_server_found">सर्वश्रेष्ठ: %s (%dms)</string>
-    <string name="no_servers_reachable">कोई सर्वर उपलब्ध नहीं</string>
-    <string name="no_servers">कोई सर्वर नहीं जोड़ा गया</string>
-
     <!-- Sort -->
     <string name="sort_by_ping">Ping के अनुसार क्रमबद्ध</string>
 
     <!-- Logs -->
-    <string name="log_all">सभी</string>
-    <string name="log_info">जानकारी</string>
-    <string name="log_warn">चेतावनी</string>
-    <string name="log_error">त्रुटि</string>
-
     <!-- Session stats -->
     <string name="stats_today">आज</string>
     <string name="stats_week">इस सप्ताह</string>
     <string name="stats_total">कुल समय</string>
-    <string name="stats_reset">आँकड़े रीसेट करें</string>
-    <string name="stats_reset_confirm">सभी ट्रैफ़िक आँकड़े रीसेट करें?</string>
-
     <!-- Widget -->
     <string name="widget_description">त्वरित कनेक्ट/डिस्कनेक्ट टॉगल</string>
     <!-- Theme -->
@@ -182,7 +149,6 @@
     <string name="export_import_desc">साझा करने के लिए कॉन्फ़िग को क्लिपबोर्ड पर कॉपी करें</string>
     <string name="backup_restore_desc">प्रोफ़ाइल को फ़ाइल में सहेजें या बैकअप से रीस्टोर करें</string>
     <!-- Server switching -->
-    <string name="switching_server">सर्वर बदल रहा है\u2026</string>
     <!-- QR Scanner -->
     <string name="scan_qr">QR स्कैन करें</string>
     <string name="qr_scan_hint">कैमरा VPN प्रोफ़ाइल QR कोड पर रखें</string>
@@ -197,10 +163,8 @@
     <string name="no_qr_found">छवि में कोई QR कोड नहीं मिला</string>
     <string name="theme_dynamic">डायनामिक</string>
     <string name="test_services">सेवाएँ जाँचें</string>
-    <string name="sort_by_compat">संगतता के अनुसार क्रमबद्ध</string>
     <string name="service_test_results">सेवा उपलब्धता</string>
     <string name="service_score">स्कोर: %1$d/%2$d</string>
-    <string name="connect_first">पहले VPN से कनेक्ट करें</string>
     <string name="features">सुविधाएँ</string>
     <string name="show_connection_map">कनेक्शन मैप</string>
     <string name="connection_map_desc">होम स्क्रीन पर एनिमेटेड मैप</string>
@@ -241,7 +205,6 @@
     <!-- Onboarding -->
     <string name="onb_lang_title">अपनी भाषा चुनें</string>
     <string name="onb_lang_subtitle">इसे बाद में सेटिंग्स में बदला जा सकता है</string>
-    <string name="onb_skip">छोड़ें</string>
     <string name="onb_next">अगला</string>
     <string name="onb_back">वापस</string>
     <string name="onb_finish">पूर्ण</string>
@@ -280,7 +243,6 @@
     <string name="onb_profile_paste">क्लिपबोर्ड से चिपकाएँ</string>
     <string name="onb_profile_hint">कनेक्शन लिंक चिपकाएँ…</string>
     <string name="onb_profile_import">आयात</string>
-    <string name="onb_profile_added">%d सर्वर आयात किए गए ✓</string>
     <string name="onb_profile_error">पार्स नहीं किया जा सका: %s</string>
     <string name="onb_profile_empty">क्लिपबोर्ड खाली है</string>
     <string name="onb_profile_skip">मैं बाद में सर्वर जोड़ूंगा</string>
@@ -329,11 +291,8 @@
     <string name="trigger_explainer">केवल आपके चुने हुए ऐप्स ही VPN से होकर जाते हैं। बाकी सभी (बैंकिंग, मैप्स, आपका सामान्य ब्राउज़र वगैरह) सामान्य कनेक्शन पर चलते हैं जैसे VPN है ही नहीं। चुने हुए ऐप्स के पास नेटवर्क तक पहुँचने का और कोई रास्ता नहीं होता - इसलिए वे आपका असली IP एक पल के लिए भी नहीं देख पाते।</string>
     <string name="trigger_perapp_conflict">Per-App रूटिंग सक्षम थी - ट्रिगर मोड स्वयं रूटिंग करता है। Per-App को अक्षम कर दिया गया।</string>
     <string name="trigger_auto_stop">जब ऐप पृष्ठभूमि में हो तब टनल बंद करें (बैटरी बचाएँ)</string>
-    <string name="trigger_always_on_title">NetGuard बंद होने पर भी कार्यरत</string>
-    <string name="trigger_always_on_desc">विश्वसनीयता के लिए, Android की सिस्टम VPN सेटिंग्स में केवल \"हमेशा-चालू VPN\" को ही ऑन करें। \"बिना VPN के कनेक्शन ब्लॉक करें\" को चालू न करें - यह सामान्य ऐप्स का इंटरनेट भी काट देगा। टनल बंद होने पर ट्रिगर मोड पहले से ही चुने हुए ऐप्स को ब्लॉक कर देता है।</string>
     <string name="trigger_open_vpn_settings">Android VPN सेटिंग्स खोलें</string>
     <string name="trigger_expand">जानकारी और स्विच दिखाएँ</string>
-    <string name="trigger_collapse">जानकारी छिपाएँ</string>
     <string name="trigger_watcher_channel">ऐप-लॉन्च मॉनिटर</string>
     <string name="trigger_watcher_channel_desc">चुने हुए ऐप्स खुलने पर कनेक्शन सक्रिय करता है</string>
     <string name="trigger_watcher_title">ऐप-लॉन्च मॉनिटर सक्रिय</string>

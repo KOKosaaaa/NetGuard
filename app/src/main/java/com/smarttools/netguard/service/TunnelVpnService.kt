@@ -64,11 +64,8 @@ class TunnelVpnService : VpnService() {
                 action = ACTION_START
                 putExtra(EXTRA_PROFILE_ID, profileId)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // minSdk 26 (O): foreground service is always the right path.
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
@@ -89,11 +86,8 @@ class TunnelVpnService : VpnService() {
                 putExtra(EXTRA_PROFILE_ID, profileId)
                 putExtra(EXTRA_TRIGGER_PACKAGE, triggerPackage)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // minSdk 26 (O): foreground service is always the right path.
+            context.startForegroundService(intent)
         }
 
         /**
@@ -105,11 +99,8 @@ class TunnelVpnService : VpnService() {
             val intent = Intent(context, TunnelVpnService::class.java).apply {
                 action = ACTION_START_QUARANTINE
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // minSdk 26 (O): foreground service is always the right path.
+            context.startForegroundService(intent)
         }
 
         /** Pre-warm: full tunnel up with allowed=triggerApps. No activation delay. */
@@ -118,11 +109,8 @@ class TunnelVpnService : VpnService() {
                 action = ACTION_START_TRIGGER_PREWARM
                 putExtra(EXTRA_PROFILE_ID, profileId)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // minSdk 26 (O): foreground service is always the right path.
+            context.startForegroundService(intent)
         }
 
         fun activateTrigger(context: Context) {

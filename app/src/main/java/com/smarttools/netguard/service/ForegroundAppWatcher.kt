@@ -61,11 +61,7 @@ class TriggerWatcherService : Service() {
 
         fun start(ctx: Context) {
             val intent = Intent(ctx, TriggerWatcherService::class.java).apply { action = ACTION_START }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ctx.startForegroundService(intent)
-            } else {
-                ctx.startService(intent)
-            }
+            ctx.startForegroundService(intent)
         }
 
         fun stop(ctx: Context) {
@@ -116,7 +112,6 @@ class TriggerWatcherService : Service() {
     }
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(android.app.NotificationManager::class.java) ?: return
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         val ch = android.app.NotificationChannel(
