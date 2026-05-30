@@ -355,11 +355,12 @@ class SettingsFragment : Fragment() {
         binding.cbConnectionMap.isChecked = s.showConnectionMap
         binding.cbSpeedTest.isChecked = s.showSpeedTest
 
-        // Expert mode shows advanced features (Logs tab, etc.). recreate()
-        // re-applies MainActivity's nav gating right away.
+        // Expert mode shows advanced features (Logs tab, etc.). Update the
+        // bottom-nav in place — recreate() scrambled the selected-tab
+        // highlight when the Logs item appeared/disappeared.
         binding.cbExpertMode.setOnCheckedChangeListener { _, checked ->
             viewModel.updateSettings { it.copy(expertMode = checked) }
-            activity?.recreate()
+            (activity as? com.smarttools.netguard.MainActivity)?.applyExpertVisibility()
         }
 
         binding.cbConnectionMap.setOnCheckedChangeListener { _, checked ->

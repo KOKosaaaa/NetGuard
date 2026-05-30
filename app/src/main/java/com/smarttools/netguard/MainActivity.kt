@@ -95,10 +95,10 @@ class MainActivity : AppCompatActivity() {
         bottomNav.setupWithNavController(navController)
 
         // Simple/Expert: the Logs tab is developer-oriented, so hide it unless
-        // Expert mode is on (Settings → Expert mode). Read once at create —
-        // toggling Expert recreates MainActivity to re-apply (see SettingsFragment).
-        bottomNav.menu.findItem(R.id.nav_logs)?.isVisible =
-            (application as App).loadSettings().expertMode
+        // Expert mode is on (Settings → Expert mode). SettingsFragment calls
+        // applyExpertVisibility() on toggle — no recreate() (that scrambled the
+        // bottom-nav highlight when the menu item count changed).
+        applyExpertVisibility()
 
         // fsociety boot-sequence: only on cold start (no savedInstanceState) so
         // it doesn't replay on every rotation / process restore. Lines type in
@@ -157,6 +157,18 @@ class MainActivity : AppCompatActivity() {
             // the trigger settings screen out of nowhere.
             intent?.removeExtra(OnboardingActivity.EXTRA_OPEN_TRIGGER)
         }
+    }
+
+    /**
+     * Show/hide the developer-oriented Logs tab based on Expert mode.
+     * Called at create and live from SettingsFragment when the toggle
+     * flips — done in-place (no recreate) so the bottom-nav selection
+     * highlight isn't disturbed.
+     */
+    fun applyExpertVisibility() {
+        val expert = (application as App).loadSettings().expertMode
+        findViewById<BottomNavigationView>(R.id.bottom_nav)
+            ?.menu?.findItem(R.id.nav_logs)?.isVisible = expert
     }
 
     private fun playFsocietyBootSequence() {
