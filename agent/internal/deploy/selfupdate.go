@@ -10,10 +10,14 @@ package deploy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/KOKosaaaa/NetGuard/agent/internal/storage"
@@ -32,6 +36,53 @@ const AgentBinaryPath = "/usr/local/bin/netguard-agent"
 type UpdateAgentRequest struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
+}
+
+// ApplyUploadedAgent installs a new agent binary the app uploaded over
+// HTTPS (no external download / hosting needed). It verifies the sha256,
+// smoke-tests that the binary actually runs on this host (`--version`) so a
+// wrong-arch or corrupt upload can't brick the live agent, backs up the
+// current binary, then atomically swaps it in. Caller restarts the service
+// afterwards via [ScheduleAgentRestart].
+func ApplyUploadedAgent(data []byte, wantSha string) error {
+	sum := sha256.Sum256(data)
+	got := hex.EncodeToString(sum[:])
+	if wantSha != "" && !strings.EqualFold(got, wantSha) {
+		return fmt.Errorf("sha256 mismatch: got %s want %s", got, wantSha)
+	}
+	if len(data) < 1_000_000 {
+		return fmt.Errorf("uploaded binary suspiciously small (%d bytes)", len(data))
+	}
+	tmp := AgentBinaryPath + ".new"
+	if err := os.WriteFile(tmp, data, 0o755); err != nil {
+		return fmt.Errorf("write temp: %w", err)
+	}
+	// Smoke-test: the new binary must execute here. `--version` prints and
+	// exits 0; a wrong-arch / corrupt binary fails, so we bail before
+	// touching the live one.
+	if out, err := exec.Command(tmp, "--version").CombinedOutput(); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("uploaded binary won't run here (wrong arch / corrupt): %v (%s)",
+			err, strings.TrimSpace(string(out)))
+	}
+	_ = os.Rename(AgentBinaryPath, AgentBinaryPath+".bak")
+	if err := os.Rename(tmp, AgentBinaryPath); err != nil {
+		_ = os.Rename(AgentBinaryPath+".bak", AgentBinaryPath) // best-effort restore
+		_ = os.Remove(tmp)
+		return fmt.Errorf("swap binary: %w", err)
+	}
+	return nil
+}
+
+// ScheduleAgentRestart restarts the service ~1s later, so the caller's HTTP
+// response is flushed first. `systemctl restart` picks up the swapped binary
+// regardless of the unit's Restart= policy.
+func ScheduleAgentRestart() {
+	go func() {
+		time.Sleep(1 * time.Second)
+		log.Print("self-update: restarting via systemctl")
+		_ = exec.Command("systemctl", "restart", "netguard-agent").Run()
+	}()
 }
 
 // AgentUpdate is a tasks.Runner. Downloads → verifies → installs →

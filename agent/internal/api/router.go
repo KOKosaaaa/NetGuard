@@ -19,6 +19,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -492,6 +493,30 @@ func Mount(d *Deps) http.Handler {
 				"task_id": id,
 				"status":  tasks.StatusPending,
 			})
+		},
+	)))
+
+	// Upload-based self-update: the app streams the new agent binary (raw
+	// body) + ?sha256=. No external hosting needed. The agent verifies +
+	// smoke-tests it, swaps it in, then restarts.
+	mux.Handle("POST /v1/agent/update-upload", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			sha := r.URL.Query().Get("sha256")
+			r.Body = http.MaxBytesReader(w, r.Body, 64<<20) // 64 MB cap
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "E_READ_BODY", err.Error())
+				return
+			}
+			if err := deploy.ApplyUploadedAgent(data, sha); err != nil {
+				writeError(w, http.StatusBadRequest, "E_AGENT_UPDATE", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"ok":   true,
+				"note": "agent restarts in ~1s; poll /v1/health for the new version",
+			})
+			deploy.ScheduleAgentRestart()
 		},
 	)))
 

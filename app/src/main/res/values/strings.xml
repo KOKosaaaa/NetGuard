@@ -170,11 +170,14 @@
     <string name="srv_telemost_summary">%1$d active rooms</string>
     <string name="srv_telemost_change_count">Change room count</string>
     <string name="srv_action_update_agent">Update agent</string>
+    <string name="srv_update_agent_confirm">Update the agent program on the server to the version bundled in this app? The server will be unreachable for a few seconds while it restarts.</string>
+    <string name="srv_update_agent_progress">Updating agent…</string>
     <string name="srv_action_uninstall_xray">Uninstall xray</string>
     <string name="srv_action_remove_server">Remove server</string>
     <!-- Overview -->
     <string name="srv_load_avg">Load avg</string>
     <string name="srv_memory">Memory</string>
+    <string name="srv_swap_suffix"> + %1$d MB swap</string>
     <string name="srv_disk">Disk</string>
     <string name="srv_uptime">Uptime</string>
     <string name="srv_services">Services</string>
@@ -208,6 +211,8 @@
     <!-- Rules tab -->
     <string name="srv_no_rules">No bypass rules</string>
     <string name="srv_upstreams">Upstream proxies</string>
+    <string name="srv_upstreams_desc">Extra proxies/servers a rule can send traffic through (e.g. another VPN). Only needed for advanced setups — most people can ignore this.</string>
+    <string name="srv_rules_desc">Rules decide what happens to traffic by domain, IP or app: go direct, through the VPN, or via an upstream. With no rules, everything goes through the VPN.</string>
     <string name="srv_no_upstreams">No custom upstreams</string>
     <string name="srv_add_upstream">Add upstream</string>
     <string name="srv_add_rule">Add rule</string>

@@ -43,12 +43,8 @@ class ManagedServerListFragment : Fragment() {
 
         binding.toolbar.setNavigationOnClickListener { findNavController().navigateUp() }
         binding.toolbar.inflateMenu(com.smarttools.netguard.R.menu.menu_managed_server_list)
-        // Multi-hop chains are an Expert-only feature — hide the entry points
-        // in Simple mode so a new user isn't faced with "routes" they don't need.
-        val expert = (requireActivity().application as com.smarttools.netguard.App)
-            .loadSettings().expertMode
-        binding.toolbar.menu
-            .findItem(com.smarttools.netguard.R.id.action_show_chains)?.isVisible = expert
+        // Routes (multi-hop chains) are available to everyone now — the UI
+        // is self-explanatory enough.
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 com.smarttools.netguard.R.id.action_show_chains -> {
@@ -87,9 +83,9 @@ class ManagedServerListFragment : Fragment() {
                         if (list.isEmpty()) View.GONE else View.VISIBLE
                     // Chain wizard needs ≥2 servers — anything less and
                     // the button just causes a frustrating "need more
-                    // servers" dialog, so we hide it instead. Expert-only.
+                    // servers" dialog, so we hide it instead.
                     binding.fabNewChain.visibility =
-                        if (expert && list.size >= 2) View.VISIBLE else View.GONE
+                        if (list.size >= 2) View.VISIBLE else View.GONE
                     adapter.submitList(list)
                 }
             }

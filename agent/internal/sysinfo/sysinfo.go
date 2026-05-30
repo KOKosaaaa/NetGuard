@@ -28,6 +28,9 @@ type AgentInfo struct {
 	Version  string `json:"version"`
 	Uptime   int64  `json:"uptime_s"`
 	StartedAt time.Time `json:"started_at"`
+	// Arch is the agent binary's GOARCH ("amd64"/"arm64"). The app reads it
+	// to pick the matching binary for an upload-based self-update.
+	Arch string `json:"arch"`
 }
 
 type HostInfo struct {
@@ -39,9 +42,10 @@ type HostInfo struct {
 }
 
 type Memory struct {
-	TotalMB uint64 `json:"total_mb"`
-	UsedMB  uint64 `json:"used_mb"`
-	FreeMB  uint64 `json:"free_mb"`
+	TotalMB     uint64 `json:"total_mb"`
+	UsedMB      uint64 `json:"used_mb"`
+	FreeMB      uint64 `json:"free_mb"`
+	SwapTotalMB uint64 `json:"swap_total_mb"`
 }
 
 type Disk struct {
@@ -65,6 +69,7 @@ func Gather(agentVersion string, agentStarted time.Time, knownServices []string)
 			Version:   agentVersion,
 			Uptime:    int64(time.Since(agentStarted).Seconds()),
 			StartedAt: agentStarted,
+			Arch:      runtime.GOARCH,
 		},
 		Host: HostInfo{
 			LoadAvg:  readLoadAvg(),
@@ -99,7 +104,7 @@ func readMemory() Memory {
 		return Memory{}
 	}
 	defer f.Close()
-	var total, free, available uint64
+	var total, free, available, swapTotal uint64
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := sc.Text()
@@ -110,6 +115,8 @@ func readMemory() Memory {
 			free = parseKB(line)
 		case strings.HasPrefix(line, "MemAvailable:"):
 			available = parseKB(line)
+		case strings.HasPrefix(line, "SwapTotal:"):
+			swapTotal = parseKB(line)
 		}
 	}
 	// Used = total - available is closer to what `free` reports than
@@ -119,9 +126,10 @@ func readMemory() Memory {
 		used = total - available
 	}
 	return Memory{
-		TotalMB: total / 1024,
-		UsedMB:  used / 1024,
-		FreeMB:  free / 1024,
+		TotalMB:     total / 1024,
+		UsedMB:      used / 1024,
+		FreeMB:      free / 1024,
+		SwapTotalMB: swapTotal / 1024,
 	}
 }
 

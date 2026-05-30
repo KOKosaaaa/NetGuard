@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -31,7 +32,15 @@ func main() {
 	listen := flag.String("listen", ":9443", "address to serve HTTPS on")
 	stateDir := flag.String("state", "/var/lib/netguard-agent",
 		"directory for state.db, TLS material, pair-token file")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	// --version is the smoke-test the upload self-update runs on a freshly
+	// uploaded binary before swapping it in (verifies it executes here).
+	if *showVersion {
+		fmt.Println(agentVersion)
+		return
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	log.Printf("netguard-agent %s starting (listen=%s state=%s)",

@@ -74,6 +74,8 @@ data class RotateResponse(
 data class StatusResponse(
     val agentVersion: String,
     val agentUptimeS: Long,
+    val agentArch: String,
+    val swapTotalMb: Int,
     val loadAvg: List<Float>,
     val cpuCount: Int,
     val memTotalMb: Int,
@@ -107,6 +109,8 @@ data class StatusResponse(
             return StatusResponse(
                 agentVersion = agent.getString("version"),
                 agentUptimeS = agent.getLong("uptime_s"),
+                agentArch = agent.optString("arch"),
+                swapTotalMb = mem.optInt("swap_total_mb"),
                 loadAvg = load,
                 cpuCount = host.getInt("cpu_count"),
                 memTotalMb = mem.getInt("total_mb"),

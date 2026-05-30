@@ -161,8 +161,34 @@ class ManagedServerDetailFragment : Fragment() {
             true
         }
         R.id.action_update_agent -> {
-            Toast.makeText(requireContext(),
-                "Update handler: TODO follow-up", Toast.LENGTH_SHORT).show()
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.srv_action_update_agent)
+                .setMessage(R.string.srv_update_agent_confirm)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    val row = android.widget.LinearLayout(requireContext()).apply {
+                        orientation = android.widget.LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        setPadding(64, 48, 64, 48)
+                        addView(android.widget.ProgressBar(requireContext()))
+                        addView(android.widget.TextView(requireContext()).apply {
+                            text = getString(R.string.srv_update_agent_progress)
+                            setPadding(40, 0, 0, 0)
+                        })
+                    }
+                    val progress = MaterialAlertDialogBuilder(requireContext())
+                        .setView(row).setCancelable(false).show()
+                    viewModel.updateAgent { ok, msg ->
+                        if (!isAdded) return@updateAgent
+                        runCatching { progress.dismiss() }
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                            .setMessage(msg)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
             true
         }
         else -> false

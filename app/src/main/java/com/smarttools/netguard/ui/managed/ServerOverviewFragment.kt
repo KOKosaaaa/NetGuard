@@ -58,7 +58,8 @@ class ServerOverviewFragment : Fragment() {
         b.tvStatusSummary.text = buildString {
             appendLine(getString(R.string.srv_load_avg) + ": " + load)
             appendLine(getString(R.string.srv_memory) + ": " +
-                "${s.memUsedMb}/${s.memTotalMb} MB ($ramPct%)")
+                "${s.memUsedMb}/${s.memTotalMb} MB ($ramPct%)" +
+                if (s.swapTotalMb > 0) getString(R.string.srv_swap_suffix, s.swapTotalMb) else "")
             appendLine(getString(R.string.srv_disk) + ": " +
                 "${s.diskUsedGb}/${s.diskTotalGb} GB ($diskPct%)")
             append(getString(R.string.srv_uptime) + ": " + formatUptime(s.hostUptimeS))

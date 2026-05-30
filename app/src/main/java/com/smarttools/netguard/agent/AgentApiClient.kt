@@ -127,6 +127,19 @@ class AgentApiClient(
         return TaskAck.fromJson(JSONObject(doPost("/telemost/uninstall", body = "{}", auth = true)))
     }
 
+    /** Upload a new agent binary (raw body) for an in-place self-update.
+     *  The agent verifies the sha256, smoke-tests it, swaps it in and
+     *  restarts. Returns immediately; caller polls /v1/health for the new
+     *  version. Sync/blocking. */
+    fun uploadAgentBinary(binary: ByteArray, sha256: String): String {
+        val req = Request.Builder()
+            .url("$baseUrl/agent/update-upload?sha256=$sha256")
+            .post(binary.toRequestBody("application/octet-stream".toMediaType()))
+            .applyAuth(true)
+            .build()
+        return execute(req)
+    }
+
     /** Create + enable a swapfile so a low-RAM VPS survives Telemost peaks.
      *  sizeMb 0 → agent default (512). Async. */
     fun setupSwap(sizeMb: Int = 0): TaskAck {

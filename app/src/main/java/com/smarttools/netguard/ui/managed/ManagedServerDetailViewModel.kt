@@ -396,6 +396,43 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
      * under 180s for xray-deploy.
      */
     /**
+     * Update the agent binary in place: pick the bundled binary matching the
+     * server's arch (reported by /status), upload it over HTTPS, then poll
+     * /health until the restarted agent answers. No public hosting needed.
+     */
+    fun updateAgent(onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    val arch = client.status().agentArch.ifEmpty { "amd64" }
+                    val bytes = getApplication<App>().assets
+                        .open("agent/netguard-agent-$arch").use { it.readBytes() }
+                    val sha = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(bytes).joinToString("") { "%02x".format(it) }
+                    client.uploadAgentBinary(bytes, sha)
+                    // Agent restarts ~1s later (same TLS cert, so the pin still
+                    // matches). Wait until /health answers again (up to ~30s).
+                    val deadline = System.currentTimeMillis() + 30_000
+                    var back = false
+                    while (System.currentTimeMillis() < deadline) {
+                        kotlinx.coroutines.delay(2000)
+                        if (runCatching { client.health() }.getOrNull() != null) { back = true; break }
+                    }
+                    _status.value = runCatching { client.status() }.getOrNull() ?: _status.value
+                    if (!back) throw IllegalStateException("агент не ответил после обновления")
+                }
+                onDone(true, "Агент обновлён и перезапущен.")
+            } catch (e: Exception) {
+                Log.w(TAG, "updateAgent failed", e)
+                onDone(false, AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /**
      * Rebuild the imported Telemost profile on the Servers tab to match the
      * current room set after a scale change — same composite URI shape as
      * the initial deploy (base64url of newline-joined room URLs + a
