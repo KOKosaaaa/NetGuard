@@ -195,6 +195,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     waitForTask(ack.taskId, timeoutSec = 120)
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
+                    _telemost.value?.let { updateImportedTelemostProfile(it) }
                 }
                 onDone(true, "Готово.")
             } catch (e: Exception) {
@@ -262,6 +263,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     waitForTask(ack.taskId, timeoutSec = 120)
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
+                    _telemost.value?.let { updateImportedTelemostProfile(it) }
                 }
                 post(if (targetCount == 0) "Telemost остановлен" else "Потоков Telemost: $targetCount")
             } catch (e: Exception) {
@@ -393,6 +395,35 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
      * pace the UI feels alive at and the agent caps task lifetime well
      * under 180s for xray-deploy.
      */
+    /**
+     * Rebuild the imported Telemost profile on the Servers tab to match the
+     * current room set after a scale change — same composite URI shape as
+     * the initial deploy (base64url of newline-joined room URLs + a
+     * "Telemost-xN" tag). Keeps the existing row's id so it stays put.
+     */
+    private suspend fun updateImportedTelemostProfile(rooms: com.smarttools.netguard.agent.TelemostRooms) {
+        val urls = rooms.instances.filter { it.active }.map { it.room }
+        if (urls.isEmpty()) return
+        val b64 = android.util.Base64.encodeToString(
+            urls.joinToString("\n").toByteArray(Charsets.UTF_8),
+            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
+        )
+        val shortName = if (urls.size > 1) "Telemost-x${urls.size}" else "Telemost"
+        val parsed = com.smarttools.netguard.core.ProfileParser
+            .parseSingleUri("telemost://$b64#$shortName") ?: return
+        val fullName = "${server.name} · $shortName"
+        val app = getApplication<App>()
+        val existing = app.profileRepository.getAll().firstOrNull {
+            it.protocol == com.smarttools.netguard.model.Protocol.TELEMOST &&
+                it.name.startsWith(server.name)
+        }
+        if (existing != null) {
+            app.profileRepository.update(parsed.copy(id = existing.id, name = fullName))
+        } else {
+            app.profileRepository.insert(parsed.copy(name = fullName))
+        }
+    }
+
     private suspend fun waitForTask(
         taskId: String,
         timeoutSec: Int,

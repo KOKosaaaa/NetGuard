@@ -287,9 +287,36 @@ class ServerProfilesFragment : Fragment() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.srv_telemost_change_count)
             .setView(slider)
-            .setPositiveButton(android.R.string.ok) { _, _ -> vm.scaleTelemost(slider.value.toInt()) }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val n = slider.value.toInt()
+                showApplying { cb -> vm.scaleTelemost(n, cb) }
+            }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    // Spinner dialog while an operation runs, then a clear result — used for
+    // "change room count" so it doesn't feel like nothing happened.
+    private fun showApplying(run: ((ok: Boolean, msg: String) -> Unit) -> Unit) {
+        val row = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+            addView(android.widget.ProgressBar(requireContext()))
+            addView(android.widget.TextView(requireContext()).apply {
+                setPadding(dp(20), 0, 0, 0); text = "Применяю изменения…"
+            })
+        }
+        val dlg = MaterialAlertDialogBuilder(requireContext())
+            .setView(row).setCancelable(false).show()
+        run { ok, msg ->
+            dlg.dismiss()
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                .setMessage(msg)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
     }
 
     // Staged progress while a restart runs: cycles through plausible stages
