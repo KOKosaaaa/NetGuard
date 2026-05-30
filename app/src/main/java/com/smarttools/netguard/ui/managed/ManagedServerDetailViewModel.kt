@@ -167,8 +167,13 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         }
     }
 
-    /** Create + enable a swapfile (helps Telemost survive on low-RAM VPS). */
-    fun setupSwap() {
+    /**
+     * Create + enable a swapfile (helps Telemost survive on low-RAM VPS).
+     * Reports completion through [onDone] (ok, message) on the main thread so
+     * the UI can show a progress dialog → clear success/failure dialog
+     * (a silent toast left users unsure whether it actually worked).
+     */
+    fun setupSwap(onDone: (ok: Boolean, msg: String) -> Unit) {
         viewModelScope.launch {
             _busy.value = true
             try {
@@ -177,10 +182,10 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     waitForTask(ack.taskId, timeoutSec = 90)
                     _status.value = client.status()
                 }
-                post("Файл подкачки включён")
+                onDone(true, "Файл подкачки включён. Теперь сервер выдержит больше потоков Telemost.")
             } catch (e: Exception) {
                 Log.w(TAG, "setupSwap failed", e)
-                post(AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e).body)
             } finally {
                 _busy.value = false
             }

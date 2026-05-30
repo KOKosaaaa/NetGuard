@@ -85,6 +85,9 @@
     <string name="srv_scale_hint">Больше потоков - быстрее, но выше нагрузка. 0 - остановить Telemost.</string>
     <string name="srv_swap_title">Добавить файл подкачки?</string>
     <string name="srv_swap_message">Создаст swap-файл 512 МБ, чтобы Telemost работал на серверах с малым объёмом RAM. Безопасно и обратимо.</string>
+    <string name="srv_swap_progress">Включаю файл подкачки…</string>
+    <string name="srv_swap_done">Готово</string>
+    <string name="srv_swap_failed">Не получилось</string>
     <string name="srv_action_update_agent">Обновить агент</string>
     <string name="srv_action_uninstall_xray">Удалить xray</string>
     <string name="srv_action_remove_server">Удалить сервер</string>

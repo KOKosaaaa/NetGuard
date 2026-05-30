@@ -129,7 +129,32 @@ class ManagedServerDetailFragment : Fragment() {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.srv_swap_title)
                 .setMessage(R.string.srv_swap_message)
-                .setPositiveButton(android.R.string.ok) { _, _ -> viewModel.setupSwap() }
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    // Spinner while the agent works, then a clear success/fail
+                    // dialog — a silent toast left users unsure it ran.
+                    val row = android.widget.LinearLayout(requireContext()).apply {
+                        orientation = android.widget.LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        setPadding(64, 48, 64, 48)
+                        addView(android.widget.ProgressBar(requireContext()))
+                        addView(android.widget.TextView(requireContext()).apply {
+                            text = getString(R.string.srv_swap_progress)
+                            setPadding(40, 0, 0, 0)
+                        })
+                    }
+                    val progress = MaterialAlertDialogBuilder(requireContext())
+                        .setView(row)
+                        .setCancelable(false)
+                        .show()
+                    viewModel.setupSwap { ok, msg ->
+                        progress.dismiss()
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                            .setMessage(msg)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
             true

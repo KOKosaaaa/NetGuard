@@ -159,6 +159,9 @@
     <string name="srv_scale_hint">More streams = faster, but more load. 0 stops Telemost.</string>
     <string name="srv_swap_title">Add swap file?</string>
     <string name="srv_swap_message">Creates a 512 MB swap file so Telemost survives on low-RAM servers. Safe and reversible.</string>
+    <string name="srv_swap_progress">Enabling swap file…</string>
+    <string name="srv_swap_done">Done</string>
+    <string name="srv_swap_failed">Didn\'t work</string>
     <string name="srv_action_update_agent">Update agent</string>
     <string name="srv_action_uninstall_xray">Uninstall xray</string>
     <string name="srv_action_remove_server">Remove server</string>
