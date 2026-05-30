@@ -428,19 +428,55 @@ func Mount(d *Deps) http.Handler {
 			})
 		},
 	)))
-	// scale / cookies / rooms — task #33, follow-up
-	for _, p := range []string{
-		"POST /v1/telemost/scale",
-		"POST /v1/telemost/cookies",
-		"GET /v1/telemost/rooms",
-	} {
-		mux.Handle(p, authenticated(d, http.HandlerFunc(
-			func(w http.ResponseWriter, r *http.Request) {
-				writeError(w, http.StatusNotImplemented, "E_TELEMOST_PENDING",
-					"This endpoint lands in the next iteration. POST /v1/telemost/deploy works.")
-			},
-		)))
-	}
+	// GET rooms — sync read of provisioned rooms + live systemd state.
+	mux.Handle("GET /v1/telemost/rooms", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			res, err := deploy.TelemostRooms(r.Context())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_TELEMOST_ROOMS", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, res)
+		},
+	)))
+
+	// POST scale — async; change number of running instances (0..12).
+	mux.Handle("POST /v1/telemost/scale", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.ScaleTelemostRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			id, err := d.Tasks.Spawn("telemost.scale", deploy.ScaleTelemost(&req))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
+
+	// POST cookies — async; refresh the Yandex session + restart instances.
+	mux.Handle("POST /v1/telemost/cookies", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.UpdateCookiesRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			id, err := d.Tasks.Spawn("telemost.cookies", deploy.UpdateTelemostCookies(&req))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
 
 	// --- agent self-update ---
 	mux.Handle("POST /v1/agent/update", authenticated(d, http.HandlerFunc(
@@ -458,6 +494,28 @@ func Mount(d *Deps) http.Handler {
 				"task_id": id,
 				"status":  tasks.StatusPending,
 				"note":    "agent will exit briefly when update completes; poll /v1/health to confirm reboot",
+			})
+		},
+	)))
+
+	// --- swap setup (low-RAM VPS helper for Telemost) ---
+	mux.Handle("POST /v1/agent/swap-setup", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.SwapSetupRequest
+			// Body is optional (size_mb defaults to 512); tolerate an empty POST.
+			if r.ContentLength != 0 {
+				if !decodeJSON(w, r, &req) {
+					return
+				}
+			}
+			id, err := d.Tasks.Spawn("agent.swap_setup", deploy.SwapSetup(&req))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
 			})
 		},
 	)))
