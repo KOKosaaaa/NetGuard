@@ -264,6 +264,7 @@ class ServerProfilesFragment : Fragment() {
             dialog?.dismiss()
             confirmPermanentDelete {
                 vm.uninstallTelemost { ok, msg ->
+                    if (!isAdded) return@uninstallTelemost
                     MaterialAlertDialogBuilder(requireContext())
                         .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
                         .setMessage(msg)
@@ -310,7 +311,8 @@ class ServerProfilesFragment : Fragment() {
         val dlg = MaterialAlertDialogBuilder(requireContext())
             .setView(row).setCancelable(false).show()
         run { ok, msg ->
-            dlg.dismiss()
+            if (!isAdded) return@run
+            runCatching { dlg.dismiss() }
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
                 .setMessage(msg)
@@ -348,7 +350,8 @@ class ServerProfilesFragment : Fragment() {
         handler.postDelayed(ticker, 700)
         run { ok, msg ->
             handler.removeCallbacks(ticker)
-            dlg.dismiss()
+            if (!isAdded) return@run // navigated away mid-op — nothing to show
+            runCatching { dlg.dismiss() }
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
                 .setMessage(msg)

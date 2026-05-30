@@ -55,9 +55,10 @@ class ServerLogsFragment : Fragment() {
             }
         }
         // Auto-refresh the selected service's log every few seconds while this
-        // tab is visible, so new lines show up without tapping Refresh.
+        // tab is actually on-screen (RESUMED, not STARTED — ViewPager keeps
+        // the neighbour tab STARTED, and we don't want to poll then).
         viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
                     vm.refreshLogs(b.spService.selectedItem as? String ?: "xray")
                     kotlinx.coroutines.delay(4000)

@@ -418,7 +418,15 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                 it.name.startsWith(server.name)
         }
         if (existing != null) {
-            app.profileRepository.update(parsed.copy(id = existing.id, name = fullName))
+            // Preserve the row's identity + user state so a scale change
+            // doesn't deselect a connected profile or drop its favorite flag.
+            app.profileRepository.update(parsed.copy(
+                id = existing.id,
+                name = fullName,
+                isSelected = existing.isSelected,
+                isFavorite = existing.isFavorite,
+                sortOrder = existing.sortOrder,
+            ))
         } else {
             app.profileRepository.insert(parsed.copy(name = fullName))
         }

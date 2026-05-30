@@ -125,7 +125,8 @@ class ManagedServerDetailFragment : Fragment() {
                         .setCancelable(false)
                         .show()
                     viewModel.setupSwap { ok, msg ->
-                        progress.dismiss()
+                        if (!isAdded) return@setupSwap
+                        runCatching { progress.dismiss() }
                         MaterialAlertDialogBuilder(requireContext())
                             .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
                             .setMessage(msg)
