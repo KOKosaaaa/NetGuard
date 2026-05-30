@@ -82,45 +82,51 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
             intlChips.forEach {
                 b.root.findViewById<View>(it).visibility = if (russian) View.GONE else View.VISIBLE
             }
+            // If the currently-selected chip just got hidden, fall back to the
+            // always-visible universal default so a hidden chip can't stay picked.
+            val hidden = if (russian) intlChips else rfChips
+            if (b.cgSni.checkedChipIds.firstOrNull() in hidden) {
+                b.cgSni.check(R.id.chip_cloudflare)
+            }
         }
 
-        // Simple mode hides the SNI picker entirely and uses the universal
-        // Cloudflare default — picking a masquerade domain is meaningless to a
-        // non-technical user. Expert mode shows the picker, pre-filtered to the
-        // server's country: RF sites for a Russian server, international
-        // otherwise. We default to international while the geo lookup runs.
-        val expert = (requireActivity().application as com.smarttools.netguard.App)
-            .loadSettings().expertMode
-        if (expert) {
-            b.blockSni.visibility = View.VISIBLE
-            showSniGroup(russian = false)
+        // Pick the country-appropriate chip set. The server's country is
+        // resolved once at bootstrap and stored on the server (instant +
+        // reliable, so an RF server never offers apple.com); fall back to a
+        // live lookup for older servers added before this was stored.
+        val storedCc = vm.serverOrNull?.countryCode
+        if (!storedCc.isNullOrEmpty()) {
+            showSniGroup(russian = storedCc == "RU")
+        } else {
+            showSniGroup(russian = false) // safe default while detecting
             vm.serverOrNull?.host?.let { host ->
                 viewLifecycleOwner.lifecycleScope.launch {
                     val cc = withContext(Dispatchers.IO) { GeoLookup.countryFromIp(host) }
                     if (_b != null && cc == "RU") showSniGroup(russian = true)
                 }
             }
-        } else {
-            b.blockSni.visibility = View.GONE
         }
 
-        b.cgSni.setOnCheckedStateChangeListener { _, ids ->
-            val id = ids.firstOrNull()
-            b.tilCustomSni.visibility =
-                if (id == R.id.chip_custom) View.VISIBLE else View.GONE
+        // Simple mode = pick from the country-filtered suggestions (no typing).
+        // Expert mode = type any domain yourself (chips hidden, free text shown).
+        val expert = (requireActivity().application as com.smarttools.netguard.App)
+            .loadSettings().expertMode
+        b.blockSni.visibility = View.VISIBLE
+        if (expert) {
+            b.cgSni.visibility = View.GONE
+            b.tilCustomSni.visibility = View.VISIBLE
+            if (b.etCustomSni.text.isNullOrEmpty()) b.etCustomSni.setText("www.cloudflare.com")
+        } else {
+            b.cgSni.visibility = View.VISIBLE
+            b.tilCustomSni.visibility = View.GONE
+            b.root.findViewById<View>(R.id.chip_custom).visibility = View.GONE
         }
 
         b.btnCreate.setOnClickListener {
-            val sni = if (!expert) {
-                "www.cloudflare.com" // Simple mode default
+            val sni = if (expert) {
+                b.etCustomSni.text?.toString()?.trim().orEmpty()
             } else {
-                val checkedId = b.cgSni.checkedChipIds.firstOrNull()
-                when {
-                    checkedId == R.id.chip_custom ->
-                        b.etCustomSni.text?.toString()?.trim().orEmpty()
-                    checkedId != null -> sniByChipId[checkedId].orEmpty()
-                    else -> ""
-                }
+                b.cgSni.checkedChipIds.firstOrNull()?.let { sniByChipId[it] }.orEmpty()
             }
             if (sni.isEmpty() || sni.contains('/') || sni.contains(' ')) {
                 b.tilCustomSni.error = "Введи корректный домен"

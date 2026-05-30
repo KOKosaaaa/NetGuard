@@ -54,4 +54,11 @@ data class ManagedServer(
      * RotateWindow constant.
      */
     val bearerExpiresAt: Long = 0L,
+    /**
+     * ISO country code of the server (e.g. "RU"), resolved once during
+     * bootstrap. Pre-filters the Reality SNI list — Russian-site SNIs only
+     * pass RF DPI when the server physically sits in Russia, so an RF server
+     * never gets offered apple.com etc.
+     */
+    val countryCode: String = "",
 )

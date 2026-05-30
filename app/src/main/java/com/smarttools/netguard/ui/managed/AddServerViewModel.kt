@@ -149,6 +149,12 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                         appVersion = BuildConfig.VERSION_NAME,
                     )
                     val expiresAt = parseIso(pairResp.expiresAt)
+                    // Resolve the server's country once, now, so the Reality
+                    // SNI picker is always correct (an RF server never gets
+                    // offered apple.com etc.). Best-effort — blank on failure.
+                    val country = runCatching {
+                        com.smarttools.netguard.util.GeoLookup.countryFromIp(host.trim())
+                    }.getOrNull().orEmpty()
                     val final = ManagedServer(
                         name = name.trim().ifEmpty { host },
                         host = host.trim(),
@@ -156,6 +162,7 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                         bearer = pairResp.bearer,
                         spkiPin = livePin,
                         bearerExpiresAt = expiresAt,
+                        countryCode = country,
                     )
                     val id = repo.add(final)
                     final.copy(id = id)

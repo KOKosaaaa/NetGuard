@@ -34,7 +34,11 @@ class ServerOverviewFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        adapter = ServicesAdapter { svcName -> vm.restartService(svcName) }
+        // Simple mode shows only service status (active/inactive); the
+        // Restart button is an Expert-only control.
+        val expert = (requireActivity().application as com.smarttools.netguard.App)
+            .loadSettings().expertMode
+        adapter = ServicesAdapter(expert) { svcName -> vm.restartService(svcName) }
         b.rvServices.layoutManager = LinearLayoutManager(requireContext())
         b.rvServices.adapter = adapter
 
@@ -74,6 +78,7 @@ class ServerOverviewFragment : Fragment() {
     }
 
     private class ServicesAdapter(
+        private val expert: Boolean,
         private val onRestart: (String) -> Unit,
     ) : ListAdapter<ServiceState, ServicesAdapter.VH>(DIFF) {
         inner class VH(val b: ItemServiceRowBinding) : RecyclerView.ViewHolder(b.root)
@@ -87,6 +92,7 @@ class ServerOverviewFragment : Fragment() {
                     val pid = s.pid?.let { "pid $it" } ?: ""
                     "active · $pid"
                 } else "inactive"
+                btnRestart.visibility = if (expert) View.VISIBLE else View.GONE
                 btnRestart.isEnabled = s.active
                 btnRestart.setOnClickListener { onRestart(s.name) }
             }
