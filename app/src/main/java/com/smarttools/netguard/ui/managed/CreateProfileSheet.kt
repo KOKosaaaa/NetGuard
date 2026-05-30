@@ -37,6 +37,17 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
         return b.root
     }
 
+    // Open fully expanded + skip the collapsed (peek) state so the whole
+    // form is reachable and the NestedScrollView scrolls properly — the
+    // default half-height peek cut the content off.
+    override fun onStart() {
+        super.onStart()
+        (dialog as? com.google.android.material.bottomsheet.BottomSheetDialog)?.behavior?.apply {
+            state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+            skipCollapsed = true
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
