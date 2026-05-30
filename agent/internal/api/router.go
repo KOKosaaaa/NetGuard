@@ -520,6 +520,23 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	// Full self-destruct: wipe every deployed service (xray, sing-box,
+	// Telemost) AND the agent itself, then leave the box clean. Launches
+	// a detached script and returns immediately; the agent stops answering
+	// a few seconds later. The app confirms by polling /v1/health.
+	mux.Handle("POST /v1/agent/purge", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if err := deploy.PurgeAll(); err != nil {
+				writeError(w, http.StatusInternalServerError, "E_PURGE", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"ok":   true,
+				"note": "agent + all deployed services are being wiped; /v1/health stops answering shortly",
+			})
+		},
+	)))
+
 	// --- agent self-update ---
 	mux.Handle("POST /v1/agent/update", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {

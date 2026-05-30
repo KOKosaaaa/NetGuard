@@ -159,10 +159,25 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         _logs.value = client.serviceLogs(service, lines).log
     }
 
-    fun restartService(name: String) = api {
-        client.restartService(name)
-        post("Restarted $name")
-        _status.value = client.status() // reflect fresh pid + since
+    fun restartService(name: String) {
+        // Own coroutine (not api{}) so a systemctl failure surfaces the
+        // friendly explanation instead of the raw "E_SERVICE_FAILED:
+        // systemctl returned non-zero exit" text.
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    client.restartService(name)
+                    _status.value = client.status() // reflect fresh pid + since
+                }
+                post("$name перезапущен")
+            } catch (e: Exception) {
+                Log.w(TAG, "restartService failed", e)
+                post(AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
     }
 
     /** Restart a service + report completion via callback (for the staged
@@ -512,6 +527,28 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     }
 
     fun deleteProfile(inboundId: String) = api {
+        doDeleteProfile(inboundId)
+        post("Профиль удалён")
+    }
+
+    /** Delete a VLESS profile + report completion via callback, so the UI
+     *  can show the same progress dialog Telemost delete gets. */
+    fun deleteProfile(inboundId: String, onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) { doDeleteProfile(inboundId) }
+                onDone(true, "Профиль удалён с сервера.")
+            } catch (e: Exception) {
+                Log.w(TAG, "deleteProfile(cb) failed", e)
+                onDone(false, AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    private suspend fun doDeleteProfile(inboundId: String) {
         val port = _profiles.value.firstOrNull { it.inboundId == inboundId }?.port
         client.deleteProfile(inboundId)
         _profiles.value = client.inbounds()
@@ -523,7 +560,6 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                 .filter { it.address == server.host && it.port == port }
                 .forEach { app.profileRepository.delete(it) }
         }
-        post("Profile deleted")
     }
 
     fun addUpstream(req: AddBypassOutboundRequest) = api {
@@ -550,25 +586,83 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         post("Rule deleted")
     }
 
-    fun uninstallXray(onDone: () -> Unit) = api {
-        val ack = client.uninstallXray()
-        // Poll task until it terminates so the UI knows xray is gone
-        // before we navigate away. Backoff is fixed 1s since this is a
-        // short operation.
-        repeat(60) {
+    /** Uninstall xray + report completion via callback so the UI can show a
+     *  progress dialog and a clear Done/Failed result (a silent toast left
+     *  users unsure it actually removed anything). */
+    fun uninstallXray(onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
             try {
-                val t = client.task(ack.taskId)
-                if (t.isTerminal) {
-                    _profiles.value = client.inbounds() // should be empty now
+                withContext(Dispatchers.IO) {
+                    val ack = client.uninstallXray()
+                    waitForTask(ack.taskId, timeoutSec = 90)
+                    _profiles.value = client.inbounds() // empty now
                     _status.value = client.status()
-                    post(if (t.status == "done") "xray uninstalled" else "uninstall: ${t.status}")
-                    withContext(Dispatchers.Main) { onDone() }
-                    return@api
                 }
-            } catch (_: Exception) { /* tolerate transient errors */ }
-            kotlinx.coroutines.delay(1000)
+                onDone(true, "xray и его настройки удалены с сервера.")
+            } catch (e: Exception) {
+                Log.w(TAG, "uninstallXray failed", e)
+                onDone(false, AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
         }
-        post("uninstall task timed out")
+    }
+
+    /**
+     * Full server cleanup: tell the agent to wipe every deployed service
+     * (xray, sing-box, Telemost) AND itself, wait until /health stops
+     * answering (confirmation the box is gone), then drop the server +
+     * all its imported profiles from the app. If the agent is too old to
+     * have the purge endpoint, the call throws (404) and we report it so
+     * the user knows to update the agent first.
+     */
+    fun purgeServer(onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val gone = withContext(Dispatchers.IO) {
+                    client.purgeAgent() // throws on old agent (no endpoint)
+                    // Agent stops answering once the script disables it.
+                    val deadline = System.currentTimeMillis() + 45_000
+                    var down = false
+                    while (System.currentTimeMillis() < deadline) {
+                        kotlinx.coroutines.delay(2500)
+                        if (runCatching { client.health() }.getOrNull() == null) {
+                            down = true; break
+                        }
+                    }
+                    // Purge was accepted, so remove the app-side state either way:
+                    // imported VLESS/Telemost profiles for this server + the row.
+                    val app = getApplication<App>()
+                    app.profileRepository.getAll()
+                        .filter {
+                            it.address == server.host ||
+                                (it.protocol == com.smarttools.netguard.model.Protocol.TELEMOST &&
+                                    it.name.startsWith(server.name))
+                        }
+                        .forEach { app.profileRepository.delete(it) }
+                    repo.remove(server)
+                    down
+                }
+                onDone(true, if (gone)
+                    "Сервер полностью очищен и удалён из приложения."
+                else
+                    "Команда на очистку отправлена. Сервер удалён из приложения; " +
+                        "очистка завершится на сервере в течение минуты.")
+            } catch (e: Exception) {
+                Log.w(TAG, "purgeServer failed", e)
+                // Old agents (pre-0.3.0) lack /agent/purge → 404. Nudge the
+                // user to update the agent first instead of a vague error.
+                val msg = if (e is AgentApiError && e.httpCode == 404)
+                    "Агент на сервере слишком старый и не умеет очищать сам себя. " +
+                        "Сначала обнови агента (меню -> «Обновить агента»), потом повтори."
+                else AgentErrorMessages.explain(e).body
+                onDone(false, msg)
+            } finally {
+                _busy.value = false
+            }
+        }
     }
 
     /** Update only the user-facing name. No network call. */

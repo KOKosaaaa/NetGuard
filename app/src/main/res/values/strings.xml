@@ -172,8 +172,15 @@
     <string name="srv_action_update_agent">Update agent</string>
     <string name="srv_update_agent_confirm">Update the agent program on the server to the version bundled in this app? The server will be unreachable for a few seconds while it restarts.</string>
     <string name="srv_update_agent_progress">Updating agent…</string>
+    <string name="srv_deleting_profile">Deleting profile…</string>
     <string name="srv_action_uninstall_xray">Uninstall xray</string>
+    <string name="srv_uninstall_xray_confirm">Remove xray and its config from this server? VPN profiles on this server will stop working.</string>
+    <string name="srv_uninstall_xray_progress">Removing xray…</string>
     <string name="srv_action_remove_server">Remove server</string>
+    <string name="srv_action_purge">Wipe agent + everything</string>
+    <string name="srv_purge_confirm">This wipes EVERYTHING the app set up on this server: the agent, xray, sing-box and Telemost, plus their configs and the wlb user. The server is left clean and is removed from the app. This can\'t be undone.</string>
+    <string name="srv_purge_confirm_btn">Wipe everything</string>
+    <string name="srv_purge_progress">Wiping the server…</string>
     <!-- Overview -->
     <string name="srv_load_avg">Load avg</string>
     <string name="srv_memory">Memory</string>

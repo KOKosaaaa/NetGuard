@@ -187,6 +187,18 @@ class AgentApiClient(
         return TaskAck.fromJson(JSONObject(resp))
     }
 
+    /**
+     * Full self-destruct: the agent wipes every deployed service (xray,
+     * sing-box, Telemost) AND itself, then leaves the box clean. Returns
+     * as soon as the agent launches the detached purge script; the agent
+     * stops answering a few seconds later, so callers confirm by polling
+     * /v1/health until it fails. Throws AgentApiError (404) on old agents
+     * that don't have this endpoint — update the agent first.
+     */
+    fun purgeAgent() {
+        doPost("/agent/purge", body = "{}", auth = true)
+    }
+
     // --- bypass rules -----------------------------------------------------
 
     fun listBypassRules(): List<BypassRule> {

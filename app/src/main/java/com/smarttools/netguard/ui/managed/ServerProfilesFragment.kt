@@ -233,7 +233,11 @@ class ServerProfilesFragment : Fragment() {
         })
         box.addView(redDeleteBtn {
             dialog?.dismiss()
-            confirmPermanentDelete { vm.deleteProfile(row.inboundId) }
+            confirmPermanentDelete {
+                showApplying(getString(R.string.srv_deleting_profile)) { cb ->
+                    vm.deleteProfile(row.inboundId, cb)
+                }
+            }
         })
         dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle("${row.protocol.uppercase()} : ${row.port}")
@@ -298,14 +302,17 @@ class ServerProfilesFragment : Fragment() {
 
     // Spinner dialog while an operation runs, then a clear result — used for
     // "change room count" so it doesn't feel like nothing happened.
-    private fun showApplying(run: ((ok: Boolean, msg: String) -> Unit) -> Unit) {
+    private fun showApplying(
+        message: String = "Применяю изменения…",
+        run: ((ok: Boolean, msg: String) -> Unit) -> Unit,
+    ) {
         val row = android.widget.LinearLayout(requireContext()).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(dp(24), dp(24), dp(24), dp(24))
             addView(android.widget.ProgressBar(requireContext()))
             addView(android.widget.TextView(requireContext()).apply {
-                setPadding(dp(20), 0, 0, 0); text = "Применяю изменения…"
+                setPadding(dp(20), 0, 0, 0); text = message
             })
         }
         val dlg = MaterialAlertDialogBuilder(requireContext())

@@ -33,7 +33,7 @@
         style="?attr/materialButtonOutlinedStyle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/srv_action_restart_xray"
+        android:text="@string/srv_restart"
         android:textSize="12sp" />
 
 </LinearLayout>

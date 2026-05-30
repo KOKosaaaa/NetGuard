@@ -88,7 +88,7 @@ class ServerOverviewFragment : Fragment() {
         override fun onBindViewHolder(h: VH, pos: Int) {
             val s = getItem(pos)
             with(h.b) {
-                tvSvcName.text = s.name
+                tvSvcName.text = friendlyServiceName(s.name)
                 tvSvcMeta.text = if (s.active) {
                     val pid = s.pid?.let { "pid $it" } ?: ""
                     "active · $pid"
@@ -102,6 +102,15 @@ class ServerOverviewFragment : Fragment() {
             val DIFF = object : DiffUtil.ItemCallback<ServiceState>() {
                 override fun areItemsTheSame(a: ServiceState, b: ServiceState) = a.name == b.name
                 override fun areContentsTheSame(a: ServiceState, b: ServiceState) = a == b
+            }
+
+            // systemd unit name -> human label. The Telemost worker's unit is
+            // "headless-telemost-creator", which is meaningless to the user.
+            private fun friendlyServiceName(unit: String): String = when (unit) {
+                "headless-telemost-creator" -> "Telemost"
+                "xray" -> "xray (VPN)"
+                "sing-box" -> "sing-box (VPN)"
+                else -> unit
             }
         }
     }

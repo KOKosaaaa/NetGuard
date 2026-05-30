@@ -98,8 +98,15 @@
     <string name="srv_action_update_agent">Обновить агент</string>
     <string name="srv_update_agent_confirm">Обновить программу-агент на сервере до версии из приложения? Сервер будет недоступен несколько секунд при перезапуске.</string>
     <string name="srv_update_agent_progress">Обновляю агента…</string>
+    <string name="srv_deleting_profile">Удаляю профиль…</string>
     <string name="srv_action_uninstall_xray">Удалить xray</string>
+    <string name="srv_uninstall_xray_confirm">Удалить xray и его настройки с этого сервера? VPN-профили на этом сервере перестанут работать.</string>
+    <string name="srv_uninstall_xray_progress">Удаляю xray…</string>
     <string name="srv_action_remove_server">Удалить сервер</string>
+    <string name="srv_action_purge">Снести агента и всё с сервера</string>
+    <string name="srv_purge_confirm">Будет удалено ВСЁ, что приложение поставило на этот сервер: сам агент, xray, sing-box и Telemost, их настройки и пользователь wlb. Сервер останется чистым и будет убран из приложения. Отменить нельзя.</string>
+    <string name="srv_purge_confirm_btn">Снести всё</string>
+    <string name="srv_purge_progress">Очищаю сервер…</string>
     <string name="srv_load_avg">Нагрузка</string>
     <string name="srv_memory">Память</string>
     <string name="srv_swap_suffix"> + %1$d МБ подкачки</string>

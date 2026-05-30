@@ -100,7 +100,6 @@ class ManagedServerDetailFragment : Fragment() {
             promptRename()
             true
         }
-        R.id.action_restart_xray -> { viewModel.restartService("xray"); true }
         // Telemost stream count moved into the profile management screen
         // (Profiles tab → Telemost → Change room count).
         R.id.action_swap_setup -> {
@@ -110,20 +109,7 @@ class ManagedServerDetailFragment : Fragment() {
                 .setPositiveButton(android.R.string.ok) { _, _ ->
                     // Spinner while the agent works, then a clear success/fail
                     // dialog — a silent toast left users unsure it ran.
-                    val row = android.widget.LinearLayout(requireContext()).apply {
-                        orientation = android.widget.LinearLayout.HORIZONTAL
-                        gravity = android.view.Gravity.CENTER_VERTICAL
-                        setPadding(64, 48, 64, 48)
-                        addView(android.widget.ProgressBar(requireContext()))
-                        addView(android.widget.TextView(requireContext()).apply {
-                            text = getString(R.string.srv_swap_progress)
-                            setPadding(40, 0, 0, 0)
-                        })
-                    }
-                    val progress = MaterialAlertDialogBuilder(requireContext())
-                        .setView(row)
-                        .setCancelable(false)
-                        .show()
+                    val progress = showProgress(getString(R.string.srv_swap_progress))
                     viewModel.setupSwap { ok, msg ->
                         if (!isAdded) return@setupSwap
                         runCatching { progress.dismiss() }
@@ -141,9 +127,43 @@ class ManagedServerDetailFragment : Fragment() {
         R.id.action_uninstall_xray -> {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.srv_action_uninstall_xray)
-                .setMessage("Wipe xray + config on this server?")
+                .setMessage(R.string.srv_uninstall_xray_confirm)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
-                    viewModel.uninstallXray { /* stay on screen */ }
+                    val progress = showProgress(getString(R.string.srv_uninstall_xray_progress))
+                    viewModel.uninstallXray { ok, msg ->
+                        if (!isAdded) return@uninstallXray
+                        runCatching { progress.dismiss() }
+                        MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                            .setMessage(msg)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            true
+        }
+        R.id.action_purge -> {
+            // Destructive + outward-facing (changes the remote box): confirm
+            // with explicit wording about what gets wiped before firing.
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.srv_action_purge)
+                .setMessage(R.string.srv_purge_confirm)
+                .setPositiveButton(R.string.srv_purge_confirm_btn) { _, _ ->
+                    val progress = showProgress(getString(R.string.srv_purge_progress))
+                    viewModel.purgeServer { ok, msg ->
+                        if (!isAdded) return@purgeServer
+                        runCatching { progress.dismiss() }
+                        val dlg = MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                            .setMessage(msg)
+                            .setPositiveButton(android.R.string.ok) { _, _ ->
+                                if (ok) findNavController().navigateUp()
+                            }
+                        if (ok) dlg.setCancelable(false)
+                        dlg.show()
+                    }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
@@ -165,18 +185,7 @@ class ManagedServerDetailFragment : Fragment() {
                 .setTitle(R.string.srv_action_update_agent)
                 .setMessage(R.string.srv_update_agent_confirm)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
-                    val row = android.widget.LinearLayout(requireContext()).apply {
-                        orientation = android.widget.LinearLayout.HORIZONTAL
-                        gravity = android.view.Gravity.CENTER_VERTICAL
-                        setPadding(64, 48, 64, 48)
-                        addView(android.widget.ProgressBar(requireContext()))
-                        addView(android.widget.TextView(requireContext()).apply {
-                            text = getString(R.string.srv_update_agent_progress)
-                            setPadding(40, 0, 0, 0)
-                        })
-                    }
-                    val progress = MaterialAlertDialogBuilder(requireContext())
-                        .setView(row).setCancelable(false).show()
+                    val progress = showProgress(getString(R.string.srv_update_agent_progress))
                     viewModel.updateAgent { ok, msg ->
                         if (!isAdded) return@updateAgent
                         runCatching { progress.dismiss() }
@@ -192,6 +201,22 @@ class ManagedServerDetailFragment : Fragment() {
             true
         }
         else -> false
+    }
+
+    /** A non-cancelable spinner+label dialog shown while a server op runs. */
+    private fun showProgress(message: String): androidx.appcompat.app.AlertDialog {
+        val row = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(64, 48, 64, 48)
+            addView(android.widget.ProgressBar(requireContext()))
+            addView(android.widget.TextView(requireContext()).apply {
+                text = message
+                setPadding(40, 0, 0, 0)
+            })
+        }
+        return MaterialAlertDialogBuilder(requireContext())
+            .setView(row).setCancelable(false).show()
     }
 
     /** Modal text-input dialog that calls [viewModel.rename] on OK. */
