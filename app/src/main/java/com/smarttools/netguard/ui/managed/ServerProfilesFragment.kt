@@ -91,6 +91,15 @@ class ServerProfilesFragment : Fragment() {
                 }
             }
         }
+        // Show the current deploy stage in the overlay (fresh-server install)
+        // so the user sees what's happening, not a static "creating…".
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.createStep.collect { step ->
+                    b.tvBusyMsg.text = step ?: getString(R.string.srv_creating_profile)
+                }
+            }
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 vm.lastCreatedUri.collect { uri ->
@@ -219,7 +228,8 @@ class ServerProfilesFragment : Fragment() {
             else getString(R.string.srv_status_inactive)
         })
         box.addView(actionBtn(getString(R.string.srv_restart)) {
-            vm.restartService("xray"); dialog?.dismiss()
+            dialog?.dismiss()
+            showRestartProgress { cb -> vm.restartService("xray", cb) }
         })
         box.addView(redDeleteBtn {
             dialog?.dismiss()
@@ -244,7 +254,8 @@ class ServerProfilesFragment : Fragment() {
         // everything is down (transient crash).
         val currentCount = if (rooms.activeCount > 0) rooms.activeCount else rooms.installed
         box.addView(actionBtn(getString(R.string.srv_restart)) {
-            vm.scaleTelemost(currentCount); dialog?.dismiss()
+            dialog?.dismiss()
+            showRestartProgress { cb -> vm.scaleTelemost(currentCount, cb) }
         })
         box.addView(actionBtn(getString(R.string.srv_telemost_change_count)) {
             dialog?.dismiss(); showRoomCountDialog(rooms.installed)
@@ -279,6 +290,44 @@ class ServerProfilesFragment : Fragment() {
             .setPositiveButton(android.R.string.ok) { _, _ -> vm.scaleTelemost(slider.value.toInt()) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    // Staged progress while a restart runs: cycles through plausible stages
+    // (stop → check → system → start) on a timer, then shows the real result
+    // from [run]'s callback. The agent restart is one operation, so the
+    // intermediate stages are indicative, not literal — but the user sees it
+    // working and gets a clear Done/Error instead of a silent toast.
+    private fun showRestartProgress(run: ((ok: Boolean, msg: String) -> Unit) -> Unit) {
+        val stages = listOf("Остановка…", "Проверка остановки…", "Проверка системы…", "Запуск…")
+        val tv = android.widget.TextView(requireContext()).apply {
+            setPadding(dp(20), 0, 0, 0); text = stages[0]
+        }
+        val rowView = android.widget.LinearLayout(requireContext()).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+            addView(android.widget.ProgressBar(requireContext()))
+            addView(tv)
+        }
+        val dlg = MaterialAlertDialogBuilder(requireContext())
+            .setView(rowView).setCancelable(false).show()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var i = 0
+        val ticker = object : Runnable {
+            override fun run() {
+                if (i < stages.size - 1) { i++; tv.text = stages[i]; handler.postDelayed(this, 700) }
+            }
+        }
+        handler.postDelayed(ticker, 700)
+        run { ok, msg ->
+            handler.removeCallbacks(ticker)
+            dlg.dismiss()
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                .setMessage(msg)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
     }
 
     private fun confirmPermanentDelete(onConfirm: () -> Unit) {

@@ -87,6 +87,24 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private val _creating = MutableStateFlow(false)
     val creating: StateFlow<Boolean> = _creating.asStateFlow()
 
+    // Current deploy step (translated) for the "creating profile" overlay, so
+    // a fresh-server install shows what's happening instead of a static label.
+    private val _createStep = MutableStateFlow<String?>(null)
+    val createStep: StateFlow<String?> = _createStep.asStateFlow()
+
+    private fun translateStep(step: String): String = when (step) {
+        "detect" -> "Проверка сервера…"
+        "prereqs" -> "Установка зависимостей…"
+        "download_xray" -> "Загрузка xray…"
+        "extract_xray" -> "Распаковка…"
+        "geo_dat" -> "Загрузка гео-данных…"
+        "write_config" -> "Запись конфигурации…"
+        "systemd_unit", "systemd_start" -> "Запуск службы…"
+        "sysctl", "firewall" -> "Настройка системы…"
+        "healthcheck" -> "Проверка соединения…"
+        else -> "Настройка…"
+    }
+
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
@@ -147,6 +165,47 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         _status.value = client.status() // reflect fresh pid + since
     }
 
+    /** Restart a service + report completion via callback (for the staged
+     *  progress UI on the profile management screen). */
+    fun restartService(name: String, onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    client.restartService(name)
+                    _status.value = client.status()
+                }
+                onDone(true, "Сервис перезапущен.")
+            } catch (e: Exception) {
+                Log.w(TAG, "restartService failed", e)
+                onDone(false, AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /** Scale Telemost + report completion via callback (staged progress UI). */
+    fun scaleTelemost(targetCount: Int, onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    val ack = client.scaleTelemost(targetCount)
+                    waitForTask(ack.taskId, timeoutSec = 120)
+                    _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
+                    _status.value = client.status()
+                }
+                onDone(true, "Готово.")
+            } catch (e: Exception) {
+                Log.w(TAG, "scaleTelemost(cb) failed", e)
+                onDone(false, AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     /** Refresh Telemost deployment state. Silent — null on failure / old
      *  agent / not deployed, so no error toast for the common "no Telemost" case. */
     fun refreshTelemost() {
@@ -168,6 +227,15 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     waitForTask(ack.taskId, timeoutSec = 60)
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
+                    // Remove the imported Telemost profile(s) from the Servers
+                    // tab — they're named "<server> · Telemost-xN".
+                    val app = getApplication<App>()
+                    app.profileRepository.getAll()
+                        .filter {
+                            it.protocol == com.smarttools.netguard.model.Protocol.TELEMOST &&
+                                it.name.startsWith(server.name)
+                        }
+                        .forEach { app.profileRepository.delete(it) }
                 }
                 onDone(true, "Профиль Telemost удалён с сервера.")
             } catch (e: Exception) {
@@ -250,6 +318,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                 )
             } finally {
                 _creating.value = false
+                _createStep.value = null
                 _busy.value = false
             }
         }
@@ -279,7 +348,9 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     ),
                 ),
             )
-            waitForTask(ack.taskId, timeoutSec = 180)
+            waitForTask(ack.taskId, timeoutSec = 180) { step ->
+                _createStep.value = translateStep(step)
+            }
             // After deploy, the first inbound is already in xray — pick
             // it out of the inbound list by the port we asked for, fall
             // back to whichever single row is present.
@@ -322,10 +393,15 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
      * pace the UI feels alive at and the agent caps task lifetime well
      * under 180s for xray-deploy.
      */
-    private suspend fun waitForTask(taskId: String, timeoutSec: Int) {
+    private suspend fun waitForTask(
+        taskId: String,
+        timeoutSec: Int,
+        onStep: ((String) -> Unit)? = null,
+    ) {
         val deadline = System.currentTimeMillis() + timeoutSec * 1000L
         while (System.currentTimeMillis() < deadline) {
             val t = try { client.task(taskId) } catch (_: Exception) { null }
+            if (t != null) onStep?.invoke(t.step)
             if (t != null && t.isTerminal) {
                 if (t.status != "done") {
                     val msg = t.error?.message ?: t.status
@@ -360,8 +436,17 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     }
 
     fun deleteProfile(inboundId: String) = api {
+        val port = _profiles.value.firstOrNull { it.inboundId == inboundId }?.port
         client.deleteProfile(inboundId)
         _profiles.value = client.inbounds()
+        // Also remove the imported profile from the Servers tab (it was added
+        // pointing at server.host:port when the profile was created).
+        if (port != null) {
+            val app = getApplication<App>()
+            app.profileRepository.getAll()
+                .filter { it.address == server.host && it.port == port }
+                .forEach { app.profileRepository.delete(it) }
+        }
         post("Profile deleted")
     }
 
