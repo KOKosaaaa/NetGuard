@@ -1,5 +1,6 @@
 package com.smarttools.netguard.core
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -14,6 +15,9 @@ object DatabaseKeyManager {
     private const val PASSPHRASE_LENGTH = 64
     private const val CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
+    // commit() (not apply()) is deliberate — see the comment at the write site;
+    // suppress lint's ApplySharedPref so it isn't "fixed" into a data-loss bug.
+    @SuppressLint("ApplySharedPref")
     fun getPassphrase(context: Context): ByteArray {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)

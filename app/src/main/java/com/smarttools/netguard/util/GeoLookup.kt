@@ -1,5 +1,6 @@
 package com.smarttools.netguard.util
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -283,7 +284,11 @@ object GeoLookup {
     private var cachedUserLocation: LatLon? = null
     @Volatile
     private var cachedTimestamp: Long = 0L
+    // Application context only (see init: context.applicationContext) — lives
+    // for the whole process, so this is not the Activity/View leak lint warns
+    // about. Suppress the false positive rather than thread ctx through every call.
     @Volatile
+    @SuppressLint("StaticFieldLeak")
     private var appCtx: Context? = null
 
     private const val REFRESH_INTERVAL_MS = 7L * 24 * 60 * 60 * 1000 // 7 days

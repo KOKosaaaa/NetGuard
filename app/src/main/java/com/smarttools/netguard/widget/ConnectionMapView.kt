@@ -85,6 +85,17 @@ class ConnectionMapView @JvmOverloads constructor(
         strokeWidth = 0.5f
     }
 
+    // Reusable geometry — preallocated so onDraw() never allocates per frame
+    // (lint: DrawAllocation). The view animates at 60fps while connected, so
+    // a `new Path()`/`RectF()` per draw would churn the GC.
+    private val reuseRect = RectF()
+    private val clipPath = Path()
+    private val arcPath = Path()
+    private val labelRect = RectF()
+    private val bmpSrc = Rect()
+    private val bmpDst = RectF()
+    private val dashIntervals = floatArrayOf(5f * dp, 3f * dp)
+
     // Optional map image (from drawable resource)
     private var mapBitmap: Bitmap? = null
     private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
@@ -173,7 +184,9 @@ class ConnectionMapView @JvmOverloads constructor(
 
         // Background + clip to rounded rect
         bgPaint.color = oceanColor
-        val clipPath = Path().apply { addRoundRect(RectF(0f, 0f, w, h), cr, cr, Path.Direction.CW) }
+        clipPath.rewind()
+        reuseRect.set(0f, 0f, w, h)
+        clipPath.addRoundRect(reuseRect, cr, cr, Path.Direction.CW)
         canvas.save()
         canvas.clipPath(clipPath)
         canvas.drawRect(0f, 0f, w, h, bgPaint)
@@ -209,7 +222,7 @@ class ConnectionMapView @JvmOverloads constructor(
             val (sx, sy) = serverXY
 
             // Arc path — limit height so it stays within the map
-            val path = Path()
+            arcPath.rewind()
             val steps = 50
             val maxI = (steps * lineProgress).toInt()
             val midY = (uy + sy) / 2f
@@ -222,21 +235,23 @@ class ConnectionMapView @JvmOverloads constructor(
                 val t = i.toFloat() / steps
                 val px = ux + (sx - ux) * t
                 val py = uy + (sy - uy) * t + arcHeight * 4f * t * (1f - t)
-                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                if (i == 0) arcPath.moveTo(px, py) else arcPath.lineTo(px, py)
             }
 
             // Glow arc
             arcGlowPaint.color = primaryColor
             arcGlowPaint.alpha = (30 * lineProgress).toInt()
             arcGlowPaint.strokeWidth = 8f * dp
-            canvas.drawPath(path, arcGlowPaint)
+            canvas.drawPath(arcPath, arcGlowPaint)
 
-            // Main arc (dashed)
+            // Main arc (dashed). DashPathEffect is immutable, so an animated
+            // phase needs a fresh instance per frame; the intervals array is
+            // preallocated to keep the per-frame allocation to that minimum.
             arcPaint.color = primaryColor
             arcPaint.alpha = (230 * lineProgress).toInt()
             arcPaint.strokeWidth = 1.5f * dp
-            arcPaint.pathEffect = DashPathEffect(floatArrayOf(5f * dp, 3f * dp), dashPhase)
-            canvas.drawPath(path, arcPaint)
+            arcPaint.pathEffect = DashPathEffect(dashIntervals, dashPhase)
+            canvas.drawPath(arcPath, arcPaint)
 
             // User dot (small)
             dotPaint.color = primaryColor
@@ -260,7 +275,7 @@ class ConnectionMapView @JvmOverloads constructor(
 
             // Server label
             serverLabel?.let { label ->
-                val cleanLabel = label.replace(Regex("^[\\p{So}\\p{Cn}\\s]+"), "").trim()
+                val cleanLabel = label.replace(LABEL_PREFIX_RE, "").trim()
                 if (cleanLabel.isEmpty()) return@let
                 labelPaint.textSize = 10f * dp
                 labelPaint.color = Color.WHITE
@@ -270,8 +285,8 @@ class ConnectionMapView @JvmOverloads constructor(
 
                 labelBgPaint.color = Color.BLACK
                 labelBgPaint.alpha = 160
-                val pr = RectF(lx - textW / 2 - 5 * dp, ly - 9 * dp, lx + textW / 2 + 5 * dp, ly + 3 * dp)
-                canvas.drawRoundRect(pr, 3 * dp, 3 * dp, labelBgPaint)
+                labelRect.set(lx - textW / 2 - 5 * dp, ly - 9 * dp, lx + textW / 2 + 5 * dp, ly + 3 * dp)
+                canvas.drawRoundRect(labelRect, 3 * dp, 3 * dp, labelBgPaint)
 
                 labelPaint.alpha = (255 * lineProgress).toInt()
                 canvas.drawText(cleanLabel, lx, ly, labelPaint)
@@ -298,9 +313,9 @@ class ConnectionMapView @JvmOverloads constructor(
 
     private fun drawMapBitmap(canvas: Canvas, pad: Float, mapW: Float, mapH: Float) {
         val bmp = mapBitmap ?: return
-        val src = Rect(0, 0, bmp.width, bmp.height)
-        val dst = RectF(pad, pad, pad + mapW, pad + mapH)
-        canvas.drawBitmap(bmp, src, dst, bitmapPaint)
+        bmpSrc.set(0, 0, bmp.width, bmp.height)
+        bmpDst.set(pad, pad, pad + mapW, pad + mapH)
+        canvas.drawBitmap(bmp, bmpSrc, bmpDst, bitmapPaint)
     }
 
     private fun toXY(loc: GeoLookup.LatLon, pad: Float, mapW: Float, mapH: Float): Pair<Float, Float> {
@@ -316,6 +331,10 @@ class ConnectionMapView @JvmOverloads constructor(
         // Calibrated via least-squares fit on 6 reference geographic features
         private const val MAP_LAT_NORTH = 91.75
         private const val MAP_LAT_SOUTH = -58.22
+
+        // Strips leading emoji/flag/symbol chars from a server label before
+        // drawing. Precompiled — was recompiled on every onDraw().
+        private val LABEL_PREFIX_RE = Regex("^[\\p{So}\\p{Cn}\\s]+")
     }
 
     /** Build continent Path objects from polygon-like shapes. Cached until size changes. */
