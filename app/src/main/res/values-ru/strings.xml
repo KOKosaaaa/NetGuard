@@ -93,7 +93,7 @@
     <string name="srv_restart">Перезапустить</string>
     <string name="srv_delete_profile">Удалить профиль</string>
     <string name="srv_delete_confirm">Профиль будет безвозвратно удалён с сервера. Отменить будет нельзя.</string>
-    <string name="srv_telemost_summary">Активно %1$d из %2$d комнат</string>
+    <string name="srv_telemost_summary">Активно комнат: %1$d</string>
     <string name="srv_telemost_change_count">Изменить число комнат</string>
     <string name="srv_action_update_agent">Обновить агент</string>
     <string name="srv_action_uninstall_xray">Удалить xray</string>

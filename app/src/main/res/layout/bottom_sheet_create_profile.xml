@@ -295,14 +295,12 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_create"
-                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
                 android:text="@string/srv_create_profile"
-                android:textColor="@color/create_green"
-                app:strokeColor="@color/create_green"
-                app:rippleColor="@color/create_green" />
+                android:textColor="?attr/colorSurface"
+                app:backgroundTint="@color/create_green" />
         </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -151,6 +151,9 @@ class CreateTelemostSheet : BottomSheetDialogFragment() {
                 b.btnCreate.isEnabled = true
                 b.btnCreate.text = getString(R.string.telemost_create)
                 showSuccess(st.count, st.telemostUri)
+                // Refresh the shared detail VM so the Telemost profile card
+                // shows up on the Profiles tab immediately, not on next visit.
+                srvVm.refreshTelemost()
                 vm.resetIdle()
                 dismiss()
             }

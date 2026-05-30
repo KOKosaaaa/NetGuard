@@ -77,7 +77,7 @@ class ServerProfilesFragment : Fragment() {
                     b.telemostCard.visibility = if (deployed) View.VISIBLE else View.GONE
                     if (deployed) {
                         b.tvTelemostSummary.text = getString(
-                            R.string.srv_telemost_summary, rooms!!.activeCount, rooms.installed)
+                            R.string.srv_telemost_summary, rooms!!.activeCount)
                         b.telemostCard.setOnClickListener { showTelemostManage(rooms) }
                     }
                     updateEmpty()
@@ -236,12 +236,15 @@ class ServerProfilesFragment : Fragment() {
         val box = manageBox()
         var dialog: androidx.appcompat.app.AlertDialog? = null
         box.addView(android.widget.TextView(requireContext()).apply {
-            text = getString(R.string.srv_telemost_summary, rooms.activeCount, rooms.installed)
+            text = getString(R.string.srv_telemost_summary, rooms.activeCount)
         })
-        // "Restart" re-applies the current count, which re-enables any rooms
-        // that fell inactive.
+        // "Restart" re-applies the CURRENT room count (the number running now),
+        // not the provisioned capacity — otherwise restarting after a scale-
+        // down would bring the old rooms back. Falls back to capacity only if
+        // everything is down (transient crash).
+        val currentCount = if (rooms.activeCount > 0) rooms.activeCount else rooms.installed
         box.addView(actionBtn(getString(R.string.srv_restart)) {
-            vm.scaleTelemost(rooms.installed); dialog?.dismiss()
+            vm.scaleTelemost(currentCount); dialog?.dismiss()
         })
         box.addView(actionBtn(getString(R.string.srv_telemost_change_count)) {
             dialog?.dismiss(); showRoomCountDialog(rooms.installed)
@@ -267,8 +270,8 @@ class ServerProfilesFragment : Fragment() {
 
     private fun showRoomCountDialog(current: Int) {
         val slider = com.google.android.material.slider.Slider(requireContext()).apply {
-            valueFrom = 0f; valueTo = 12f; stepSize = 1f
-            value = current.coerceIn(0, 12).toFloat()
+            valueFrom = 1f; valueTo = 12f; stepSize = 1f
+            value = current.coerceIn(1, 12).toFloat()
         }
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.srv_telemost_change_count)
@@ -285,6 +288,14 @@ class ServerProfilesFragment : Fragment() {
             .setPositiveButton(R.string.delete) { _, _ -> onConfirm() }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-pull so a profile created elsewhere (or just now) shows up
+        // without leaving and re-entering the tab.
+        vm.refreshProfiles()
+        vm.refreshTelemost()
     }
 
     override fun onDestroyView() { _b = null; super.onDestroyView() }

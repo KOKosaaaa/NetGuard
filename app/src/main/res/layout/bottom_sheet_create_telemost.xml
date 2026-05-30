@@ -137,7 +137,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:text="@string/telemost_create"
-            android:textColor="@android:color/white"
-            app:backgroundTint="@color/status_connected" />
+            android:textColor="?attr/colorSurface"
+            app:backgroundTint="@color/create_green" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -167,7 +167,7 @@
     <string name="srv_restart">Restart</string>
     <string name="srv_delete_profile">Delete profile</string>
     <string name="srv_delete_confirm">The profile will be permanently deleted from the server. This can\'t be undone.</string>
-    <string name="srv_telemost_summary">%1$d of %2$d rooms active</string>
+    <string name="srv_telemost_summary">%1$d active rooms</string>
     <string name="srv_telemost_change_count">Change room count</string>
     <string name="srv_action_update_agent">Update agent</string>
     <string name="srv_action_uninstall_xray">Uninstall xray</string>

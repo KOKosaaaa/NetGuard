@@ -41,12 +41,27 @@ class ServerLogsFragment : Fragment() {
         b.btnRefresh.setOnClickListener {
             vm.refreshLogs(b.spService.selectedItem as String)
         }
-        // Initial pull for xray, which is what most users care about.
-        vm.refreshLogs("xray")
+        // Switching the service immediately pulls its log.
+        b.spService.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                vm.refreshLogs(services[pos])
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 vm.logs.collect { text -> b.tvLog.text = text }
+            }
+        }
+        // Auto-refresh the selected service's log every few seconds while this
+        // tab is visible, so new lines show up without tapping Refresh.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    vm.refreshLogs(b.spService.selectedItem as? String ?: "xray")
+                    kotlinx.coroutines.delay(4000)
+                }
             }
         }
     }
