@@ -403,32 +403,39 @@
         <View android:layout_width="match_parent" android:layout_height="1dp"
             android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
 
-        <!-- ===== TRIGGER (app-launch auto-VPN) ===== -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/trigger_title"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="2dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/trigger_subtitle"
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:layout_marginBottom="8dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_open_trigger"
+        <!-- ===== TRIGGER (app-launch auto-VPN) — Expert only ===== -->
+        <LinearLayout
+            android:id="@+id/section_trigger"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/trigger_pick_apps"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
+            android:orientation="vertical">
 
-        <View android:layout_width="match_parent" android:layout_height="1dp"
-            android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/trigger_title"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="2dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/trigger_subtitle"
+                android:textSize="12sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_open_trigger"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/trigger_pick_apps"
+                style="@style/Widget.Material3.Button.OutlinedButton" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />
+        </LinearLayout>
 
         <!-- ===== SECURITY TEST ===== -->
         <TextView

@@ -45,6 +45,13 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
             dismiss()
         }
 
+        // Simple mode hides the SNI picker entirely and uses a safe default
+        // (Cloudflare works in both directions). Choosing a masquerade domain
+        // is meaningless to a non-technical user.
+        val expert = (requireActivity().application as com.smarttools.netguard.App)
+            .loadSettings().expertMode
+        b.blockSni.visibility = if (expert) View.VISIBLE else View.GONE
+
         // Chip → SNI mapping. The "custom" chip toggles the EditText
         // beneath the group; everything else hides it.
         // International SNIs at the top — they work in BOTH directions
@@ -70,12 +77,16 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
         }
 
         b.btnCreate.setOnClickListener {
-            val checkedId = b.cgSni.checkedChipIds.firstOrNull()
-            val sni = when {
-                checkedId == R.id.chip_custom ->
-                    b.etCustomSni.text?.toString()?.trim().orEmpty()
-                checkedId != null -> sniByChipId[checkedId].orEmpty()
-                else -> ""
+            val sni = if (!expert) {
+                "www.cloudflare.com" // Simple mode default
+            } else {
+                val checkedId = b.cgSni.checkedChipIds.firstOrNull()
+                when {
+                    checkedId == R.id.chip_custom ->
+                        b.etCustomSni.text?.toString()?.trim().orEmpty()
+                    checkedId != null -> sniByChipId[checkedId].orEmpty()
+                    else -> ""
+                }
             }
             if (sni.isEmpty() || sni.contains('/') || sni.contains(' ')) {
                 b.tilCustomSni.error = "Введи корректный домен"

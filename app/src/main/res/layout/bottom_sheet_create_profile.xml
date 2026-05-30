@@ -137,6 +137,13 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- SNI picker — Expert only; Simple mode uses a safe default -->
+            <LinearLayout
+                android:id="@+id/block_sni"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -248,6 +255,7 @@
                     android:layout_height="wrap_content"
                     android:inputType="textUri" />
             </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout><!-- /block_sni -->
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
