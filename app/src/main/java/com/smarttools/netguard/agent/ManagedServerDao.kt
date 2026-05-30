@@ -60,4 +60,8 @@ interface ManagedServerDao {
     /** Rotation swaps the bearer + new expiry, called after /v1/auth/rotate. */
     @Query("UPDATE managed_servers SET bearer = :bearer, bearerExpiresAt = :expiresAt WHERE id = :id")
     suspend fun updateBearer(id: Long, bearer: String, expiresAt: Long)
+
+    /** Used by the "Rename server" menu action — name-only, no telemetry touch. */
+    @Query("UPDATE managed_servers SET name = :name WHERE id = :id")
+    suspend fun updateName(id: Long, name: String)
 }

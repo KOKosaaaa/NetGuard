@@ -156,6 +156,45 @@ func AtomicWrite(path string, data []byte, mode os.FileMode) error {
 	return os.Rename(tmp, path)
 }
 
+// CacheDir holds release archives the agent has fetched, so a follow-up
+// deploy can skip the GitHub round-trip. Survives upgrades because it
+// lives under /var/cache instead of /var/lib (which the uninstall path
+// would wipe).
+const CacheDir = "/var/cache/netguard-agent"
+
+// EnsureCachedDownload is the cache-aware twin of DownloadAndVerify:
+// it returns immediately if `dst` already exists with a matching sha256,
+// otherwise it downloads via [DownloadAndVerify] (which will create the
+// parent dir, atomic-rename on success, etc).
+//
+// Use this from any deploy path that knows the URL + pinned SHA — e.g.
+// XrayDeploy's xray.zip fetch or the warmup runner.
+func EnsureCachedDownload(ctx context.Context, url, dst, wantSha string) error {
+	if existingShaMatches(dst, wantSha) {
+		return nil
+	}
+	return DownloadAndVerify(ctx, url, dst, wantSha)
+}
+
+// existingShaMatches returns true iff `path` already exists and its
+// sha256 equals wantSha (case-insensitive). On any read error we
+// pessimistically return false so the caller re-downloads.
+func existingShaMatches(path, wantSha string) bool {
+	if wantSha == "" {
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return false
+	}
+	return strings.EqualFold(hex.EncodeToString(h.Sum(nil)), wantSha)
+}
+
 // DownloadAndVerify GETs url, writes to dst, and checks sha256.
 // Lets the caller pass an empty wantSha to skip verification — only
 // acceptable for trusted internal mirrors. For pinned releases ALWAYS
@@ -217,12 +256,27 @@ func WaitPortListening(host string, port int, maxAttempts int) error {
 
 // EnsureBinaryInstalled checks if `which name` resolves; otherwise installs
 // via apt. Use for prerequisites like curl/tar/iptables on fresh servers.
+//
+// On a freshly provisioned VPS the apt cache is empty — `apt-get install`
+// then errors with "E: Unable to locate package". We retry once with an
+// `apt-get update` in front to absorb that case without forcing every
+// caller to remember to update first.
 func EnsureBinaryInstalled(ctx context.Context, name, pkg string) error {
 	if WhichExists(name) {
 		return nil
 	}
-	_, err := AptInstall(ctx, pkg)
-	return err
+	if _, err := AptInstall(ctx, pkg); err != nil {
+		if !strings.Contains(err.Error(), "Unable to locate package") {
+			return err
+		}
+		if _, updErr := AptUpdate(ctx); updErr != nil {
+			return fmt.Errorf("apt-get update (after %v): %w", err, updErr)
+		}
+		if _, err2 := AptInstall(ctx, pkg); err2 != nil {
+			return err2
+		}
+	}
+	return nil
 }
 
 // SysctlSet writes a key=value to /etc/sysctl.d/99-netguard-agent.conf

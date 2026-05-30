@@ -7,8 +7,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -47,42 +45,109 @@ class ServerProfilesFragment : Fragment() {
         b.rvProfiles.layoutManager = LinearLayoutManager(requireContext())
         b.rvProfiles.adapter = adapter
 
-        b.fabAdd.setOnClickListener { showAddDialog() }
+        b.fabAdd.setOnClickListener { showWizard() }
+        b.btnEmptyCreate.setOnClickListener { showWizard() }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 vm.profiles.collect { list ->
                     adapter.submitList(list)
-                    b.tvEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                    val empty = list.isEmpty()
+                    b.emptyState.visibility = if (empty) View.VISIBLE else View.GONE
+                    // FAB hides on empty so the centered CTA is the only
+                    // call-to-action — avoids the "two + buttons" confusion.
+                    b.fabAdd.visibility = if (empty) View.GONE else View.VISIBLE
+                    b.rvProfiles.visibility = if (empty) View.GONE else View.VISIBLE
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.creating.collect { creating ->
+                    b.busyOverlay.visibility = if (creating) View.VISIBLE else View.GONE
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.lastCreatedUri.collect { uri ->
+                    if (uri != null) {
+                        showProfileReadyDialog(uri)
+                        vm.consumeLastCreatedUri()
+                    }
+                }
+            }
+        }
+        // Profile-creation failures land here as a structured friendly
+        // error. We surface them as a dialog (not a toast) so the user
+        // actually has time to read it + can hit Retry.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.lastProfileError.collect { failure ->
+                    if (failure != null) {
+                        showProfileErrorDialog(failure)
+                        vm.consumeLastProfileError()
+                    }
                 }
             }
         }
     }
 
-    private fun showAddDialog() {
-        val ctx = requireContext()
-        val container = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 32, 48, 0)
-        }
-        val etLabel = EditText(ctx).apply {
-            hint = getString(R.string.srv_profile_label_hint)
-            container.addView(this)
-        }
-        val etPort = EditText(ctx).apply {
-            hint = getString(R.string.srv_profile_port_hint)
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            container.addView(this)
-        }
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle(R.string.srv_add_profile)
-            .setView(container)
-            .setPositiveButton(R.string.add) { _, _ ->
-                val label = etLabel.text.toString().trim()
-                val port = etPort.text.toString().toIntOrNull() ?: 0
-                vm.addProfile(label, port)
+    private fun showProfileErrorDialog(
+        failure: ManagedServerDetailViewModel.ProfileFailure,
+    ) {
+        val err = failure.error
+        val builder = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(err.title)
+            .setMessage(err.body)
+        if (err.retryable) {
+            builder.setPositiveButton(R.string.retry) { _, _ ->
+                vm.retryLastProfile()
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            builder.setNegativeButton(R.string.add_server_show_log) { _, _ ->
+                showRawDetails(err)
+            }
+            builder.setNeutralButton(android.R.string.cancel, null)
+        } else {
+            builder.setPositiveButton(android.R.string.ok, null)
+            builder.setNeutralButton(R.string.add_server_show_log) { _, _ ->
+                showRawDetails(err)
+            }
+        }
+        builder.show()
+    }
+
+    private fun showRawDetails(err: com.smarttools.netguard.agent.FriendlyError) {
+        val tv = android.widget.TextView(requireContext()).apply {
+            text = err.rawDetails.ifBlank { "(нет деталей)" }
+            textSize = 11f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setPadding(32, 24, 32, 24)
+            setTextIsSelectable(true)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.add_server_show_log)
+            .setView(android.widget.ScrollView(requireContext()).apply { addView(tv) })
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun showWizard() {
+        CreateProfileSheet().show(parentFragmentManager, CreateProfileSheet.TAG)
+    }
+
+    private fun showProfileReadyDialog(uri: String) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.srv_profile_ready_title)
+            .setMessage(getString(R.string.srv_profile_ready_body))
+            .setPositiveButton(R.string.srv_profile_ready_copy) { _, _ ->
+                val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE)
+                    as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("vless", uri))
+                Toast.makeText(requireContext(),
+                    R.string.copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.srv_profile_ready_close, null)
             .show()
     }
 

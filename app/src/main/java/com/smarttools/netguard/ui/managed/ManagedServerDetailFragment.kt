@@ -96,6 +96,10 @@ class ManagedServerDetailFragment : Fragment() {
     }
 
     private fun onMenu(item: android.view.MenuItem): Boolean = when (item.itemId) {
+        R.id.action_rename -> {
+            promptRename()
+            true
+        }
         R.id.action_restart_xray -> { viewModel.restartService("xray"); true }
         R.id.action_uninstall_xray -> {
             MaterialAlertDialogBuilder(requireContext())
@@ -125,6 +129,35 @@ class ManagedServerDetailFragment : Fragment() {
             true
         }
         else -> false
+    }
+
+    /** Modal text-input dialog that calls [viewModel.rename] on OK. */
+    private fun promptRename() {
+        // Pre-fill with the current name so the user is editing rather
+        // than re-typing from scratch.
+        val current = viewModel.status.value?.let { "" } // current name isn't on _status; pull from server view
+        val edit = com.google.android.material.textfield.TextInputEditText(requireContext())
+        edit.hint = getString(R.string.srv_rename_hint)
+        // The current name lives on the ViewModel's `server` private —
+        // we expose just enough through the toolbar binding below.
+        edit.setText(binding.toolbar.title)
+        val layout = com.google.android.material.textfield.TextInputLayout(requireContext()).apply {
+            addView(edit)
+            setPadding(48, 0, 48, 0)
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.srv_rename_title)
+            .setView(layout)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val newName = edit.text?.toString()?.trim().orEmpty()
+                if (newName.isNotEmpty()) {
+                    viewModel.rename(newName) {
+                        binding.toolbar.title = newName
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     override fun onDestroyView() {

@@ -144,12 +144,14 @@ data class InboundSpec(
     val protocol: String = "vless",
     val port: Int = 0,
     val uuid: String = "",
+    val serverName: String = "",
     val label: String = "",
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("protocol", protocol)
         if (port != 0) put("port", port)
         if (uuid.isNotEmpty()) put("uuid", uuid)
+        if (serverName.isNotEmpty()) put("server_name", serverName)
         if (label.isNotEmpty()) put("label", label)
     }
 }
@@ -222,14 +224,78 @@ data class AddProfileRequest(
     val protocol: String = "vless",
     val port: Int = 0,
     val uuid: String = "",
+    val serverName: String = "",
     val label: String = "",
+    /**
+     * Multi-hop chain wiring. When non-null, the agent attaches a VLESS
+     * outbound + a routing rule so traffic from this new inbound is
+     * forwarded into [chainTo] instead of falling through to freedom.
+     * Caller (ChainOrchestrator) walks the chain from EXIT → ENTRY, so
+     * by the time we set chainTo, the next-hop profile already exists.
+     */
+    val chainTo: ChainTarget? = null,
 ) {
     fun toJson(): String = JSONObject().apply {
         put("protocol", protocol)
         if (port != 0) put("port", port)
         if (uuid.isNotEmpty()) put("uuid", uuid)
+        if (serverName.isNotEmpty()) put("server_name", serverName)
         if (label.isNotEmpty()) put("label", label)
+        if (chainTo != null) put("chain_to", chainTo.toJsonObject())
     }.toString()
+}
+
+/** Mirrors the agent's ChainTarget — fields from the next-hop's vless URI. */
+data class ChainTarget(
+    val host: String,
+    val port: Int,
+    val uuid: String,
+    val serverName: String = "",
+    val publicKey: String = "",
+    val shortId: String = "",
+    val flow: String = "",
+) {
+    fun toJsonObject(): JSONObject = JSONObject().apply {
+        put("host", host)
+        put("port", port)
+        put("uuid", uuid)
+        if (serverName.isNotEmpty()) put("server_name", serverName)
+        if (publicKey.isNotEmpty()) put("public_key", publicKey)
+        if (shortId.isNotEmpty()) put("short_id", shortId)
+        if (flow.isNotEmpty()) put("flow", flow)
+    }
+
+    companion object {
+        /**
+         * Parse a vless URI into its ChainTarget components. The caller
+         * usually swaps in a proper public hostname/IP — vless URIs from
+         * the agent carry the agent's view of its own hostname which is
+         * useless externally.
+         */
+        fun fromVlessUri(uri: String, overrideHost: String? = null): ChainTarget? {
+            // vless://<uuid>@<host>:<port>?<params>#label
+            val rx = Regex("^vless://([^@]+)@([^:/?#]+):(\\d+)(\\?[^#]*)?")
+            val m = rx.find(uri) ?: return null
+            val uuid = m.groupValues[1]
+            val host = overrideHost ?: m.groupValues[2]
+            val port = m.groupValues[3].toInt()
+            val qs = m.groupValues[4].removePrefix("?")
+            val params = qs.split('&').mapNotNull {
+                val idx = it.indexOf('=')
+                if (idx < 0) null else it.substring(0, idx) to
+                    java.net.URLDecoder.decode(it.substring(idx + 1), "UTF-8")
+            }.toMap()
+            return ChainTarget(
+                host = host,
+                port = port,
+                uuid = uuid,
+                serverName = params["sni"].orEmpty(),
+                publicKey = params["pbk"].orEmpty(),
+                shortId = params["sid"].orEmpty(),
+                flow = params["flow"].orEmpty(),
+            )
+        }
+    }
 }
 
 data class InboundResult(
@@ -256,7 +322,16 @@ data class InboundRow(
     val port: Int,
     val profileUri: String,
     val createdAt: String,
+    /**
+     * Empty unless this inbound is the entry-or-middle hop of a multi-hop
+     * chain. Non-empty value is the tag of the chained VLESS outbound the
+     * agent created; chainToUri is the next-hop vless URI for display.
+     */
+    val chainToTag: String = "",
+    val chainToUri: String = "",
 ) {
+    val isChainHop: Boolean get() = chainToTag.isNotEmpty()
+
     companion object {
         fun fromJson(j: JSONObject) = InboundRow(
             inboundId = j.getString("inbound_id"),
@@ -264,6 +339,8 @@ data class InboundRow(
             port = j.getInt("port"),
             profileUri = j.getString("profile_uri"),
             createdAt = j.getString("created_at"),
+            chainToTag = j.optString("chain_to_tag"),
+            chainToUri = j.optString("chain_to_uri"),
         )
 
         fun listFromJson(j: JSONObject): List<InboundRow> {

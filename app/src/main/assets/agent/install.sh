@@ -54,13 +54,40 @@ fi
 INSTALL_BIN=/usr/local/bin/netguard-agent
 NG_LISTEN="${NG_LISTEN:-:9443}"
 
-if [[ -n "${NG_BIN_B64:-}" ]]; then
+if [[ -n "${NG_BIN_PATH:-}" ]]; then
+    # Binary already on disk (SFTP-uploaded by the caller). Avoids the
+    # 10MB stdin stream that "Broken pipe"s on flaky carrier paths.
+    [[ -n "${NG_BIN_SHA256:-}" ]] \
+        || fail E_NO_SHA "NG_BIN_PATH supplied without NG_BIN_SHA256"
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp" "$NG_BIN_PATH"' EXIT
+    if [[ "${NG_BIN_GZ:-0}" == "1" ]]; then
+        gunzip -c "$NG_BIN_PATH" > "$tmp" \
+            || fail E_GUNZIP "failed to gunzip $NG_BIN_PATH"
+    else
+        cp "$NG_BIN_PATH" "$tmp"
+    fi
+    got=$(sha256sum "$tmp" | cut -d' ' -f1)
+    if [[ "$got" != "$NG_BIN_SHA256" ]]; then
+        fail E_CHECKSUM "binary sha256 mismatch (want $NG_BIN_SHA256 got $got)"
+    fi
+    install -m 0755 "$tmp" "$INSTALL_BIN"
+elif [[ -n "${NG_BIN_B64:-}" ]]; then
     [[ -n "${NG_BIN_SHA256:-}" ]] \
         || fail E_NO_SHA "NG_BIN_B64 supplied without NG_BIN_SHA256"
     tmp=$(mktemp)
     trap 'rm -f "$tmp"' EXIT
-    echo "$NG_BIN_B64" | base64 -d > "$tmp" \
-        || fail E_BASE64 "failed to decode NG_BIN_B64"
+    # Caller sets NG_BIN_GZ=1 when the binary was gzip'd before base64
+    # (cuts the SSH-channel bytes ~3x — the difference between "stream
+    # finishes" and "Broken pipe" on flaky carrier paths). Falls back
+    # to plain base64 when the env var is absent.
+    if [[ "${NG_BIN_GZ:-0}" == "1" ]]; then
+        echo "$NG_BIN_B64" | base64 -d | gunzip -c > "$tmp" \
+            || fail E_BASE64 "failed to decode/gunzip NG_BIN_B64"
+    else
+        echo "$NG_BIN_B64" | base64 -d > "$tmp" \
+            || fail E_BASE64 "failed to decode NG_BIN_B64"
+    fi
     got=$(sha256sum "$tmp" | cut -d' ' -f1)
     if [[ "$got" != "$NG_BIN_SHA256" ]]; then
         fail E_CHECKSUM "binary sha256 mismatch (want $NG_BIN_SHA256 got $got)"
@@ -103,19 +130,25 @@ UNITEOF
 chmod 0644 "$UNIT"
 
 systemctl daemon-reload
-# enable --now: starts AND sets it to come up on boot. Idempotent —
-# re-runs are no-ops if it's already enabled+running.
-if ! systemctl enable --now netguard-agent.service > /tmp/ngsvc.log 2>&1; then
+# enable then restart: enable is idempotent and persists across boots;
+# restart is the only way to make a re-bootstrap pick up a newly-
+# written binary, since `enable --now` no-ops if the unit was already
+# running with the OLD binary. Without the explicit restart the old
+# process keeps serving while the new bytes sit on disk, and the
+# pair-token wait below times out with E_NO_PAIR_TOKEN.
+systemctl enable netguard-agent.service > /tmp/ngsvc.log 2>&1 || true
+if ! systemctl restart netguard-agent.service >> /tmp/ngsvc.log 2>&1; then
     cat /tmp/ngsvc.log 1>&2
-    fail E_SYSTEMD_START "systemctl enable --now failed (see logs above)"
+    fail E_SYSTEMD_START "systemctl restart failed (see logs above)"
 fi
 
 # --- 5. wait for pair-token file --------------------------------------------
 # Agent creates this on first run. On a re-bootstrap (existing install,
 # valid pair-token still in DB) the agent re-writes the file on boot.
-# 30s should easily cover SQLite migrate + cert gen on slow VPS.
+# 60s covers SQLite migrate + cert gen + Telemost-binary embed-write on
+# slow VPS / low CPU.
 tok=""
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
     if [[ -s /var/lib/netguard-agent/pair-token.txt ]]; then
         tok=$(< /var/lib/netguard-agent/pair-token.txt)
         break

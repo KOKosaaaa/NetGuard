@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  New Chain wizard. Two ordered lists side-by-side conceptually but
+  stacked because phones are narrow:
+    1. "Маршрут (по порядку)" — selected servers, top→bottom = entry→exit
+    2. "Доступные серверы" — pool of remaining managed servers
+
+  Tap a row in pool → moves it to the bottom of the route list.
+  Tap × on a route row → moves it back to the pool.
+
+  We don't ship drag-and-drop for v1 — the +/− mechanic covers the
+  90% case (2-3 hops). Sortable list lands when we have telemetry
+  saying users want it.
+-->
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/scroll_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="false">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chain_title"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chain_hint"
+        android:textSize="13sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="20dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chain_in_order"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_route"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="60dp"
+        android:nestedScrollingEnabled="false"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chain_pool"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:layout_marginTop="6dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_pool"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:nestedScrollingEnabled="false"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="20dp" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/chain_sni_hint">
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_sni"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textUri"
+            android:text="www.cloudflare.com"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/chain_label_hint">
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Hidden until orchestrator starts emitting progress. Two
+         stacked TextViews so the high-level "Hop N/M — server" line
+         stays put while the changing sub-step ("downloading…",
+         "unpacking…") swaps underneath without jumping the layout. -->
+    <LinearLayout
+        android:id="@+id/progress_block"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginTop="16dp">
+
+        <ProgressBar
+            android:id="@+id/pb_chain"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="0" />
+
+        <TextView
+            android:id="@+id/tv_progress_stage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <!-- Reserved a fixed minHeight (~one line) so when the sub-step
+             goes empty → non-empty the row stops shifting the rest of
+             the dialog. -->
+        <TextView
+            android:id="@+id/tv_progress_substep"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="18sp"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_build"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/chain_build"
+        android:textColor="@android:color/white"
+        app:backgroundTint="@color/status_connected" />
+</LinearLayout>
+</androidx.core.widget.NestedScrollView>

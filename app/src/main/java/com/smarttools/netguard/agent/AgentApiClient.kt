@@ -1,6 +1,5 @@
 package com.smarttools.netguard.agent
 
-import okhttp3.CertificatePinner
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -26,9 +25,21 @@ class AgentApiClient(
     private val server: ManagedServer,
     private val appVersion: String,
 ) {
-    private val baseUrl = "https://${server.host}:${server.port}/v1"
+    private val baseUrl = if (server.endpointUrl.isNotEmpty()) {
+        // CF Tunnel mode: endpointUrl is the full root (no port). Trust the
+        // CF cert via standard system anchors; bearer carries auth.
+        server.endpointUrl.trimEnd('/') + "/v1"
+    } else {
+        "https://${server.host}:${server.port}/v1"
+    }
 
-    private val http: OkHttpClient by lazy { buildClient(server.host, server.spkiPin) }
+    private val http: OkHttpClient by lazy {
+        if (server.endpointUrl.isNotEmpty()) {
+            buildClientStandard()
+        } else {
+            buildClient(server.host, server.spkiPin)
+        }
+    }
 
     fun health(): HealthResponse {
         val resp = doGet("/health", auth = false)
@@ -62,6 +73,33 @@ class AgentApiClient(
 
     fun deployXray(req: DeployXrayRequest): TaskAck {
         val resp = doPost("/xray/deploy", body = req.toJson(), auth = true)
+        return TaskAck.fromJson(JSONObject(resp))
+    }
+
+    /**
+     * Fire-and-forget warmup — agent pre-downloads release archives
+     * (xray today, sing-box / telemost when those deploy paths ship)
+     * into /var/cache/netguard-agent so the next deploy skips the
+     * GitHub round-trip. Returns the task_id so the caller can poll if
+     * they care, but the normal pattern is to ignore it.
+     */
+    fun warmupAgent(): TaskAck {
+        val resp = doPost("/agent/warmup", body = "{}", auth = true)
+        return TaskAck.fromJson(JSONObject(resp))
+    }
+
+    /**
+     * Spin up [count] Telemost-bypass instances on the managed server,
+     * each joining its own fresh room with the user's Yandex identity.
+     * Returns a task_id; caller polls /v1/tasks/{id} for completion
+     * and reads `result.rooms[]` to build the multi-channel URI.
+     */
+    fun deployTelemost(count: Int, cookiesJson: String): TaskAck {
+        val body = JSONObject().apply {
+            put("count", count)
+            put("cookies_json", cookiesJson)
+        }.toString()
+        val resp = doPost("/telemost/deploy", body = body, auth = true)
         return TaskAck.fromJson(JSONObject(resp))
     }
 
@@ -225,37 +263,296 @@ class AgentApiClient(
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         /**
+         * Connect once without any pinner, read the leaf certificate
+         * straight off the live TLS handshake, and derive its SPKI
+         * SHA256. This is the pin we must use for every subsequent
+         * call — strictly more correct than fetching cert.pem from
+         * disk via openssl (different format quirks, file race vs the
+         * agent regenerating). Used during Add-Server bootstrap after
+         * SSH install finishes and before /v1/auth/pair.
+         */
+        /**
+         * Pair the freshly-installed agent without any cert pinning,
+         * relying on the fact that we **just** SSH-bootstrapped this
+         * server seconds ago — anyone who could MITM us here could
+         * also have hijacked the SSH session. Returns the new bearer
+         * + the SPKI pin we should use for **subsequent** OkHttp calls,
+         * computed off the live TLS session via SSLSocket.
+         */
+        fun bootstrapPair(
+            host: String,
+            port: Int,
+            pairToken: String,
+            deviceName: String,
+            appVersion: String,
+        ): Pair<PairResponse, String> {
+            val trustAll = trustAllManager()
+            val sslCtx = javax.net.ssl.SSLContext.getInstance("TLS").apply {
+                init(null, arrayOf<javax.net.ssl.TrustManager>(trustAll),
+                    java.security.SecureRandom())
+            }
+            val client = OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .sslSocketFactory(sslCtx.socketFactory, trustAll)
+                .hostnameVerifier { _, _ -> true }
+                .build()
+            val body = PairRequest(pairToken, deviceName, appVersion).toJson()
+            val req = Request.Builder()
+                .url("https://$host:$port/v1/auth/pair")
+                .post(body.toRequestBody(JSON))
+                .header("Accept", "application/json")
+                .build()
+            val pairResp = client.newCall(req).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    throw AgentApiError.fromBody(resp.code, text)
+                }
+                PairResponse.fromJson(org.json.JSONObject(text))
+            }
+            // Compute the SPKI pin off a *separate* SSLSocket so future
+            // OkHttp calls (which carry a CertificatePinner) bind to the
+            // same Android-side encoding of the public key. Doing both
+            // through OkHttp would also work, but Response.handshake
+            // came back null on at least one Android HTTP/2 path; raw
+            // SSLSocket avoids that bug.
+            val pin = fetchSpkiFromLive(host, port, sslCtx)
+            return pairResp to pin
+        }
+
+        private fun trustAllManager() = object : javax.net.ssl.X509TrustManager {
+            override fun checkClientTrusted(
+                chain: Array<java.security.cert.X509Certificate>,
+                authType: String,
+            ) {}
+            override fun checkServerTrusted(
+                chain: Array<java.security.cert.X509Certificate>,
+                authType: String,
+            ) {}
+            override fun getAcceptedIssuers():
+                Array<java.security.cert.X509Certificate> = emptyArray()
+        }
+
+        private fun fetchSpkiFromLive(
+            host: String,
+            port: Int,
+            sslCtx: javax.net.ssl.SSLContext,
+        ): String {
+            var lastError: Exception? = null
+            repeat(5) { _ ->
+                var socket: javax.net.ssl.SSLSocket? = null
+                try {
+                    socket = sslCtx.socketFactory.createSocket() as javax.net.ssl.SSLSocket
+                    socket.soTimeout = 10_000
+                    socket.connect(java.net.InetSocketAddress(host, port), 10_000)
+                    socket.startHandshake()
+                    val leaf = socket.session.peerCertificates.firstOrNull()
+                    if (leaf != null) {
+                        val spkiDer = leaf.publicKey?.encoded
+                            ?: throw IllegalStateException("encoded public key is null")
+                        val sha = java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(spkiDer)
+                        return sha.joinToString("") { "%02x".format(it) }
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                } finally {
+                    try { socket?.close() } catch (_: Exception) {}
+                }
+                try { Thread.sleep(1500L) } catch (_: InterruptedException) {}
+            }
+            throw lastError ?: IllegalStateException("no peer cert after 5 tries")
+        }
+
+        @Deprecated("use bootstrapPair")
+        fun fetchSpkiFromLive(host: String, port: Int): String {
+            // OkHttp's Response.handshake can come back null on certain
+            // Android HTTP/2 paths even after a successful 200 — verified
+            // on the user's phone where /v1/health returned 200 five
+            // times but every handshake was null. Going through a raw
+            // SSLSocket sidesteps that quirk and guarantees we get the
+            // peer certificate chain straight off the SSLSession.
+            val trustAll = object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(
+                    chain: Array<java.security.cert.X509Certificate>,
+                    authType: String,
+                ) {}
+                override fun checkServerTrusted(
+                    chain: Array<java.security.cert.X509Certificate>,
+                    authType: String,
+                ) {}
+                override fun getAcceptedIssuers():
+                    Array<java.security.cert.X509Certificate> = emptyArray()
+            }
+            val sslCtx = javax.net.ssl.SSLContext.getInstance("TLS").apply {
+                init(null, arrayOf<javax.net.ssl.TrustManager>(trustAll),
+                    java.security.SecureRandom())
+            }
+            var lastError: Exception? = null
+            repeat(5) { _ ->
+                var socket: javax.net.ssl.SSLSocket? = null
+                try {
+                    socket = sslCtx.socketFactory.createSocket() as javax.net.ssl.SSLSocket
+                    socket.soTimeout = 10_000
+                    socket.connect(java.net.InetSocketAddress(host, port), 10_000)
+                    socket.startHandshake()
+                    val peerCerts = socket.session.peerCertificates
+                    val leaf = peerCerts.firstOrNull()
+                    if (leaf == null) {
+                        lastError = IllegalStateException("empty peerCertificates")
+                    } else {
+                        val spkiDer = leaf.publicKey?.encoded
+                            ?: throw IllegalStateException("public key has no encoded form")
+                        val sha = java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(spkiDer)
+                        return sha.joinToString("") { "%02x".format(it) }
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                } finally {
+                    try { socket?.close() } catch (_: Exception) {}
+                }
+                try { Thread.sleep(1500L) } catch (_: InterruptedException) {}
+            }
+            throw lastError ?: IllegalStateException(
+                "live TLS handshake to $host:$port yielded no peer certificate"
+            )
+        }
+
+        /**
          * Built per-server because CertificatePinner is host-scoped at
          * construction time; cheap because we share connection pools by
          * keeping a single application-wide client factory.
+         *
+         * The agent uses a self-signed cert that no system CA chains
+         * to. Standard OkHttp validation rejects it with
+         * CertPathValidatorException ("Trust anchor not found"). We
+         * replace the trust check with a permissive TrustManager and
+         * rely on [CertificatePinner] to enforce that the SPKI hash
+         * matches the one we captured during bootstrap — that's a
+         * stronger guarantee than CA validation for this single host.
+         */
+        /**
+         * Builds an OkHttp client that trusts exactly one self-signed
+         * cert — the one whose SPKI hash matches [spkiPin].
+         *
+         * We deliberately do NOT use [CertificatePinner]. OkHttp's
+         * internal SPKI extraction goes through `cert.publicKey.encoded`
+         * filtered by a system Provider that, on some Android builds,
+         * returns subtly different bytes from a vanilla
+         * `MessageDigest.digest(cert.publicKey.encoded)`. We captured
+         * the pin earlier through SSLSocket → publicKey.encoded; using
+         * the same code path in the TrustManager guarantees the two
+         * hashes are computed from byte-identical input and the
+         * comparison succeeds.
          */
         private fun buildClient(host: String, spkiPin: String): OkHttpClient {
-            val pinner = CertificatePinner.Builder()
-                .add(host, "sha256/${spkiPin.spkiHexToBase64()}")
-                .build()
+            val expected = hexToBytes(spkiPin)
+            val pinningTm = object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(
+                    chain: Array<java.security.cert.X509Certificate>,
+                    authType: String,
+                ) {}
+                override fun checkServerTrusted(
+                    chain: Array<java.security.cert.X509Certificate>,
+                    authType: String,
+                ) {
+                    val leaf = chain.firstOrNull()
+                        ?: throw java.security.cert.CertificateException(
+                            "empty server cert chain")
+                    val der = leaf.publicKey?.encoded
+                        ?: throw java.security.cert.CertificateException(
+                            "leaf public key has no encoded form")
+                    val sha = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(der)
+                    if (!sha.contentEquals(expected)) {
+                        throw java.security.cert.CertificateException(
+                            "SPKI pin mismatch (expected $spkiPin)")
+                    }
+                }
+                override fun getAcceptedIssuers():
+                    Array<java.security.cert.X509Certificate> = emptyArray()
+            }
+            val sslCtx = javax.net.ssl.SSLContext.getInstance("TLS").apply {
+                init(null, arrayOf<javax.net.ssl.TrustManager>(pinningTm),
+                    java.security.SecureRandom())
+            }
             return OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .callTimeout(120, TimeUnit.SECONDS)
-                .certificatePinner(pinner)
+                .sslSocketFactory(sslCtx.socketFactory, pinningTm)
+                // CN on the self-signed cert is "netguard-agent", not
+                // the IP we connect to. Hostname check would refuse it
+                // even though the SPKI is right.
+                .hostnameVerifier { _, _ -> true }
+                .build()
+        }
+
+        private fun hexToBytes(hex: String): ByteArray {
+            require(hex.length == 64) { "expected 64-char hex SHA256, got ${hex.length}" }
+            return ByteArray(32) { i ->
+                hex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+            }
+        }
+
+        /**
+         * Standard-TLS OkHttp client for CF-Tunnel-fronted agents. Uses
+         * system trust anchors — the CF edge cert is a public CA chain,
+         * so default validation is the right thing. UA is set to a
+         * Chrome-like string because Cloudflare Bot Fight Mode rejects
+         * requests with empty UA on default zone settings.
+         */
+        private fun buildClientStandard(): OkHttpClient {
+            return OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .callTimeout(120, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    val req = chain.request().newBuilder()
+                        .header(
+                            "User-Agent",
+                            "Mozilla/5.0 (Linux; Android 13) NetGuard-Agent-Client"
+                        )
+                        .build()
+                    chain.proceed(req)
+                }
                 .build()
         }
 
         /**
-         * OkHttp wants `sha256/<base64>` while the agent emits the SPKI
-         * hash as lowercase hex (matches the journalctl line + e2e test).
-         * Convert at the boundary.
+         * One-shot pair against a CF-Tunnel-fronted agent. Hits
+         * `<endpointUrl>/v1/auth/pair` with standard TLS verify (no
+         * SPKI pin), returns the bearer for the [ManagedServer] we are
+         * about to insert. Caller persists the row with
+         * [ManagedServer.endpointUrl] set so subsequent calls go through
+         * [buildClientStandard].
          */
-        private fun String.spkiHexToBase64(): String {
-            require(length == 64) { "expected 64-char hex SHA256, got ${length}: $this" }
-            val bytes = ByteArray(32) { i ->
-                substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        fun quickPairByUrl(
+            endpointUrl: String,
+            pairToken: String,
+            deviceName: String,
+            appVersion: String,
+        ): PairResponse {
+            val client = buildClientStandard()
+            val base = endpointUrl.trimEnd('/')
+            val body = PairRequest(pairToken, deviceName, appVersion).toJson()
+            val req = Request.Builder()
+                .url("$base/v1/auth/pair")
+                .post(body.toRequestBody(JSON))
+                .header("Accept", "application/json")
+                .header("X-NetGuard-App-Version", appVersion)
+                .build()
+            return client.newCall(req).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    throw AgentApiError.fromBody(resp.code, text)
+                }
+                PairResponse.fromJson(JSONObject(text))
             }
-            return android.util.Base64.encodeToString(
-                bytes,
-                android.util.Base64.NO_WRAP,
-            )
         }
+
     }
 }

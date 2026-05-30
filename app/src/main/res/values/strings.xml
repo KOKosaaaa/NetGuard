@@ -90,6 +90,84 @@
     <string name="add_server_failed">Bootstrap failed</string>
     <string name="add_server_show_log">Show log</string>
 
+    <!-- Multi-hop chain -->
+    <string name="chain_new_button">Route</string>
+    <string name="chain_title">New route</string>
+    <string name="chain_hint">Traffic passes through the servers in the order shown. The first one is the entry (paste its vless link into your subscription); the last one is the exit to the internet.</string>
+    <string name="chain_in_order">Route (ordered)</string>
+    <string name="chain_pool">Available servers</string>
+    <string name="chain_sni_hint">SNI for all hops (e.g. www.cloudflare.com)</string>
+    <string name="chain_label_hint">Route name</string>
+    <string name="chain_build">Create route</string>
+    <string name="chain_min_two">Add at least 2 servers</string>
+    <string name="chain_need_more_servers">You need at least 2 servers. Add more via «+».</string>
+    <string name="chain_building">Building route…</string>
+    <string name="chain_ready_title">Route ready</string>
+    <string name="chain_ready_body">Copy the link and paste it as a profile into any NetGuard client. Intermediate hops are wired up automatically.</string>
+    <string name="chain_copy_uri">Copy link</string>
+    <string name="chain_failed">Could not create route</string>
+    <string name="chain_remove">Remove</string>
+    <string name="chain_add">+ Add</string>
+    <string name="srv_action_rename">Rename server</string>
+    <string name="srv_rename_title">Rename server</string>
+    <string name="srv_rename_hint">New name</string>
+    <string name="chains_menu_item">My routes</string>
+    <string name="chains_list_title">My routes</string>
+    <string name="chains_list_empty">No routes yet. Tap «Route» to create your first one.</string>
+    <string name="chains_hop_summary">%1$d hops: %2$s</string>
+    <string name="chains_confirm_delete_title">Delete route?</string>
+    <string name="chains_confirm_delete_body">«%1$s» will be removed: profiles on every server in the chain will be torn down, the imported subscription line will go away. The managed servers themselves stay.</string>
+    <string name="chains_delete_done">Route deleted</string>
+    <string name="chain_arrow_to_next">flows to the next hop</string>
+    <string name="chain_drag_handle">drag to reorder</string>
+
+    <!-- Telemost -->
+    <string name="yandex_login_title">Sign in to Yandex</string>
+    <string name="telemost_title">New Telemost</string>
+    <string name="telemost_streams">Streams</string>
+    <string name="telemost_capacity_known">Server can handle up to %1$d streams (%2$d MB RAM, %3$d vCPU)</string>
+    <string name="telemost_capacity_unknown">Server capacity will be checked after the first connect</string>
+    <string name="telemost_connect_yandex">Sign in with Yandex</string>
+    <string name="telemost_yandex_connected">Yandex account connected</string>
+    <string name="telemost_yandex_required">Sign in first — Telemost rooms can only be created with your Yandex account</string>
+    <string name="telemost_create">Set up Telemost</string>
+    <string name="telemost_warn_low">Light mode, ~%1$d Mbps cap (Yandex SFU limit per stream)</string>
+    <string name="telemost_warn_medium">Balanced. Developer tested up to 6 streams, no bans observed at that level.</string>
+    <string name="telemost_warn_high">⚠ Untested territory. Increased phone load + Yandex may flag the account. Use at your own risk.</string>
+    <string name="telemost_building">Setting up Telemost…</string>
+    <string name="telemost_ready">Telemost ready</string>
+    <string name="telemost_ready_body">%1$d streams running on the server. The profile has been added to your Servers list.</string>
+    <string name="srv_proto_telemost_badge">YA</string>
+    <string name="chain_progress_starting">Setting up %3$s (%1$d of %2$d) — connecting…</string>
+    <string name="chain_progress_deploying">Setting up %3$s (%1$d of %2$d) — installing xray (≈30 sec)…</string>
+    <string name="chain_progress_adding">Setting up %3$s (%1$d of %2$d) — adding profile…</string>
+    <string name="chain_progress_done">Setting up %3$s (%1$d of %2$d) — done</string>
+    <!-- Sub-step labels emitted by the agent during xray install. Wired
+         through ChainOrchestrator.Progress.subStep → chain_substep_*. -->
+    <string name="chain_substep_detect">checking the environment</string>
+    <string name="chain_substep_prereqs">installing dependencies (curl, unzip)</string>
+    <string name="chain_substep_download_xray">downloading xray (≈5 MB)</string>
+    <string name="chain_substep_extract_xray">unpacking</string>
+    <string name="chain_substep_geo_dat">downloading geoip data</string>
+    <string name="chain_substep_write_config">writing config</string>
+    <string name="chain_substep_systemd_unit">registering systemd service</string>
+    <string name="chain_substep_sysctl">tuning sysctl</string>
+    <string name="chain_substep_firewall">opening the firewall port</string>
+    <string name="chain_substep_systemd_start">starting service</string>
+    <string name="chain_substep_rollback">rolling back changes</string>
+    <string name="chain_substep_healthcheck">verifying startup</string>
+
+    <!-- Pair-via-URL (CF Tunnel mode) -->
+    <string name="pair_url_section_title">Already installed?</string>
+    <string name="pair_url_section_hint">If you used the install command on the server and got a pair token, paste it here. SSH not needed.</string>
+    <string name="pair_url_endpoint_hint">Endpoint URL (https://…)</string>
+    <string name="pair_url_token_hint">Pair token</string>
+    <string name="pair_url_button">Pair existing agent</string>
+    <string name="pair_url_endpoint_empty">Endpoint URL is required</string>
+    <string name="pair_url_token_empty">Pair token is required</string>
+    <string name="pair_url_endpoint_invalid">Endpoint must start with https://</string>
+    <string name="pair_url_success">Paired</string>
+
     <!-- Server Detail tabs -->
     <string name="srv_tab_overview">Overview</string>
     <string name="srv_tab_profiles">Profiles</string>
@@ -108,10 +186,37 @@
     <string name="srv_active">active</string>
     <string name="srv_inactive">inactive</string>
     <!-- Profiles tab -->
-    <string name="srv_no_profiles">No profiles yet</string>
+    <string name="srv_no_profiles">Profiles will appear here</string>
     <string name="srv_add_profile">Add VLESS inbound</string>
     <string name="srv_profile_label_hint">Label (optional)</string>
     <string name="srv_profile_port_hint">Port (blank = auto)</string>
+    <string name="srv_create_profile">Создать профиль</string>
+    <string name="srv_creating_profile">Создаю профиль…</string>
+    <string name="srv_profiles_empty_title">Здесь будут твои VPN-профили</string>
+    <string name="srv_profiles_empty_body">Профиль — это набор ключей для подключения к серверу. После создания можно подключаться прямо из NetGuard или поделиться ссылкой — она подойдёт для любого клиента (Hiddify, v2rayNG, Streisand).</string>
+    <string name="srv_profiles_empty_how_title">Как это работает</string>
+    <string name="srv_profiles_empty_how_body">1. Жми «Создать профиль».\n2. Выбери протокол и под какой сайт маскироваться.\n3. Через 30 сек профиль готов — он автоматом появится на главном экране, можно подключаться.</string>
+
+    <!-- Create-profile bottom sheet -->
+    <string name="srv_create_profile_subtitle">Настроим за 30 секунд. Менять можно потом.</string>
+    <string name="srv_protocol">Протокол</string>
+    <string name="srv_proto_vless_title">VLESS + REALITY · рекомендуется</string>
+    <string name="srv_proto_vless_desc">Маскирует трафик под обычное подключение к крупному сайту (ВК, Я.Музыка, и т.д.). Работает в РФ. Подходит для NetGuard, Hiddify, v2rayNG, Streisand.</string>
+    <string name="srv_proto_telemost_title">Видеоконференции (Telemost)</string>
+    <string name="srv_proto_telemost_desc">Прячет трафик внутри настоящей Telemost-конференции. Только NetGuard, видеозвонки и другие тяжёлые сценарии.</string>
+    <string name="srv_proto_soon">скоро</string>
+    <string name="srv_sni_title">Под какой сайт маскироваться</string>
+    <string name="srv_sni_help">Выбери крупный сайт, который точно не блокируется. Реалити-маска заставит провайдера думать, что ты подключаешься к нему.</string>
+    <string name="srv_sni_help_geo">Если сервер за границей — лучше международный сайт (Cloudflare/Microsoft). Российский SNI на зарубежный VPS провайдер режет на лету.</string>
+    <string name="srv_sni_custom">Свой…</string>
+    <string name="srv_sni_custom_hint">Домен, например vk.com</string>
+    <string name="srv_profile_name_hint">Название профиля (необязательно)</string>
+
+    <!-- Profile-created success card -->
+    <string name="srv_profile_ready_title">Профиль готов</string>
+    <string name="srv_profile_ready_body">Ссылка добавлена в раздел «Серверы» — можешь подключаться прямо из NetGuard.\n\nЕсли хочешь подключаться из другого приложения (Hiddify, v2rayNG, Streisand, NekoBox) — просто скопируй ссылку и вставь в это приложение.</string>
+    <string name="srv_profile_ready_copy">Скопировать ссылку</string>
+    <string name="srv_profile_ready_close">Готово</string>
     <!-- Rules tab -->
     <string name="srv_no_rules">No bypass rules</string>
     <string name="srv_upstreams">Upstream proxies</string>

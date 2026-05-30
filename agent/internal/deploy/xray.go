@@ -2,7 +2,9 @@ package deploy
 
 import (
 	"context"
+	"crypto/ecdh"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -149,13 +151,17 @@ func XrayDeploy(db *storage.DB, req *DeployXrayRequest) tasks.Runner {
 					"only amd64 / arm64 are supported", false)
 			}
 			zipURL := fmt.Sprintf(xrayURLTemplate, xrayVersion, arch)
-			zipPath := filepath.Join(os.TempDir(), "xray.zip")
-			h.LogF("downloading %s", zipURL)
-			if err := DownloadAndVerify(ctx, zipURL, zipPath,
+			// Cache the zip under /var/cache so a re-install (or a
+			// concurrent chain hop on the same server) skips the GitHub
+			// round-trip. The file is small (~5 MB) and disk is cheap
+			// on the kind of VPS users actually buy.
+			zipPath := filepath.Join(CacheDir, fmt.Sprintf("Xray-linux-%s-%s.zip", arch, xrayVersion))
+			h.LogF("downloading %s (or reusing cache at %s)", zipURL, zipPath)
+			if err := EnsureCachedDownload(ctx, zipURL, zipPath,
 				xrayZipSha256ByArch[arch]); err != nil {
 				return h.Fail("E_DOWNLOAD", err.Error(), true)
 			}
-			defer os.Remove(zipPath)
+			// Don't delete on exit — leave it cached for next time.
 
 			h.SetStep("extract_xray", 45)
 			extractDir := filepath.Join(os.TempDir(), "xray-extract-"+h.TaskID())
@@ -313,6 +319,14 @@ func rollbackConfig(ctx context.Context, backupDir string, wasRunning bool) {
 // buildInitialConfig produces a minimal xray config with one VLESS
 // inbound + freedom outbound. Adds the inbound to the result so the
 // runner can persist + announce it.
+//
+// If req.ServerName is non-empty, the inbound is wrapped in VLESS+REALITY
+// using that SNI as both the public "serverNames" and the upstream "dest"
+// target. Reality plain ports are 443 by default (so the masquerade is
+// believable); the caller can override via req.Port.
+//
+// If req.ServerName is empty we fall back to plain VLESS-TCP — left in
+// for tests + the (rare) "I want pure inside-LAN tunnel" case.
 func buildInitialConfig(req *InboundSpec) (any, *storage.XrayInbound, error) {
 	if req == nil {
 		// No inbound — fall back to an empty config that still passes xray
@@ -329,10 +343,14 @@ func buildInitialConfig(req *InboundSpec) (any, *storage.XrayInbound, error) {
 	}
 	port := req.Port
 	if port == 0 {
-		var err error
-		port, err = pickFreePort()
-		if err != nil {
-			return nil, nil, err
+		if req.ServerName != "" {
+			port = 443 // Reality masquerade is believable on 443
+		} else {
+			var err error
+			port, err = pickFreePort()
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	uuid := req.UUID
@@ -345,20 +363,68 @@ func buildInitialConfig(req *InboundSpec) (any, *storage.XrayInbound, error) {
 		label = "NetGuard"
 	}
 
-	inboundCfg := map[string]any{
-		"tag":      inboundID,
-		"port":     port,
-		"protocol": "vless",
-		"settings": map[string]any{
-			"clients": []any{
-				map[string]any{"id": uuid, "flow": ""},
+	var inboundCfg map[string]any
+	var uri string
+	if req.ServerName != "" {
+		// VLESS + Reality — the only protocol pair worth deploying inside
+		// RF in 2025+: handshake is indistinguishable from a real TLS
+		// session to the SNI host, the DPI rigs that block plain VLESS
+		// can't tell it apart from a TLS-1.3 session to vk.com.
+		priv, pub, err := generateRealityKeypair()
+		if err != nil {
+			return nil, nil, fmt.Errorf("reality keypair: %w", err)
+		}
+		shortID := randomHex(4) // 8 hex chars — xray accepts 0-16
+		dest := req.ServerName + ":443"
+		inboundCfg = map[string]any{
+			"tag":      inboundID,
+			"port":     port,
+			"protocol": "vless",
+			"settings": map[string]any{
+				"clients": []any{
+					map[string]any{"id": uuid, "flow": "xtls-rprx-vision"},
+				},
+				"decryption": "none",
 			},
-			"decryption": "none",
-		},
-		"streamSettings": map[string]any{
-			"network":  "tcp",
-			"security": "none",
-		},
+			"streamSettings": map[string]any{
+				"network":  "tcp",
+				"security": "reality",
+				"realitySettings": map[string]any{
+					"show":        false,
+					"dest":        dest,
+					"xver":        0,
+					"serverNames": []string{req.ServerName},
+					"privateKey":  priv,
+					"shortIds":    []string{shortID},
+				},
+			},
+		}
+		hostForURI, _ := os.Hostname()
+		if hostForURI == "" {
+			hostForURI = "agent-host"
+		}
+		uri = buildVlessRealityURI(uuid, hostForURI, port, label, req.ServerName, pub, shortID)
+	} else {
+		inboundCfg = map[string]any{
+			"tag":      inboundID,
+			"port":     port,
+			"protocol": "vless",
+			"settings": map[string]any{
+				"clients": []any{
+					map[string]any{"id": uuid, "flow": ""},
+				},
+				"decryption": "none",
+			},
+			"streamSettings": map[string]any{
+				"network":  "tcp",
+				"security": "none",
+			},
+		}
+		hostForURI, _ := os.Hostname()
+		if hostForURI == "" {
+			hostForURI = "agent-host"
+		}
+		uri = buildVlessURI(uuid, hostForURI, port, label)
 	}
 	cfg := map[string]any{
 		"log":       map[string]any{"loglevel": "warning"},
@@ -367,11 +433,6 @@ func buildInitialConfig(req *InboundSpec) (any, *storage.XrayInbound, error) {
 	}
 
 	cfgJSON, _ := json.Marshal(inboundCfg)
-	hostForURI, _ := os.Hostname() // user will override in URI; placeholder
-	if hostForURI == "" {
-		hostForURI = "agent-host"
-	}
-	uri := buildVlessURI(uuid, hostForURI, port, label)
 	inbound := &storage.XrayInbound{
 		ID:         inboundID,
 		Protocol:   "vless",
@@ -381,6 +442,21 @@ func buildInitialConfig(req *InboundSpec) (any, *storage.XrayInbound, error) {
 		CreatedAt:  time.Now(),
 	}
 	return cfg, inbound, nil
+}
+
+// generateRealityKeypair returns a base64url-no-pad encoded X25519
+// (privateKey, publicKey) — the format xray's realitySettings.privateKey
+// and the client URI's `pbk` parameter expect. Standard-library only;
+// matches what `xray x25519` emits byte-for-byte.
+func generateRealityKeypair() (privB64, pubB64 string, err error) {
+	curve := ecdh.X25519()
+	priv, err := curve.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+	privB64 = base64.RawURLEncoding.EncodeToString(priv.Bytes())
+	pubB64 = base64.RawURLEncoding.EncodeToString(priv.PublicKey().Bytes())
+	return privB64, pubB64, nil
 }
 
 // buildVlessURI assembles a vless://uuid@host:port?... URI. The hash
@@ -396,6 +472,25 @@ func buildVlessURI(uuid, host string, port int, label string) string {
 	q.Set("encryption", "none")
 	q.Set("type", "tcp")
 	q.Set("security", "none")
+	return fmt.Sprintf("vless://%s@%s:%d?%s#%s",
+		uuid, host, port, q.Encode(), url.QueryEscape(label))
+}
+
+// buildVlessRealityURI assembles a vless://uuid@host:port?security=reality...
+// URI consumable by any modern xray client (v2rayNG, Hiddify, Streisand,
+// NekoBox). Query keys: security, encryption, type, sni, fp, pbk, sid,
+// spx, flow — names match what xray-core's URI parser expects.
+func buildVlessRealityURI(uuid, host string, port int, label, sni, pbk, sid string) string {
+	q := url.Values{}
+	q.Set("security", "reality")
+	q.Set("encryption", "none")
+	q.Set("type", "tcp")
+	q.Set("sni", sni)
+	q.Set("fp", "chrome")
+	q.Set("pbk", pbk)
+	q.Set("sid", sid)
+	q.Set("spx", "/")
+	q.Set("flow", "xtls-rprx-vision")
 	return fmt.Sprintf("vless://%s@%s:%d?%s#%s",
 		uuid, host, port, q.Encode(), url.QueryEscape(label))
 }

@@ -141,6 +141,20 @@ dependencies {
     // and current KEX algorithms (JSch is unmaintained, fails on Ubuntu 24+).
     implementation("com.hierynomus:sshj:0.38.0")
 
+    // mwiede/jsch — actively-maintained fork of the old JSch with modern
+    // KEX (curve25519, sntrup761x25519). We carry it as a *fallback* SSH
+    // backend: some carrier DPI fingerprints sshj's TCP/handshake
+    // pattern and drops the banner. Falling back to a different library
+    // (different timing + slightly different cipher order on the wire)
+    // is enough to clear that filter on at least one tested carrier.
+    implementation("com.github.mwiede:jsch:0.2.18")
+
+    // Trilead SSH-2 — third independent SSH implementation, used by
+    // Connectbot. Third-line fallback after sshj + JSch both get
+    // banner-timed-out: yet another handshake fingerprint that has a
+    // separate chance of clearing carrier DPI. Tiny (~300KB).
+    implementation("com.trilead:trilead-ssh2:1.0.0-build222")
+
     // libv2ray / libXray AAR — place in app/libs/
     // Download from https://github.com/AnyaKovaleva/libXray/releases
     // or build from 2dust/AndroidLibXrayLite

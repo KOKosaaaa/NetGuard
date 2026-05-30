@@ -34,6 +34,9 @@ class ManagedServerRepository(private val dao: ManagedServerDao) {
 
     suspend fun remove(server: ManagedServer) = dao.delete(server.encrypted())
 
+    /** Rename — used by the Server-detail menu's "Rename" action. */
+    suspend fun rename(id: Long, newName: String) = dao.updateName(id, newName)
+
     suspend fun applyTelemetry(id: Long, status: StatusResponse) {
         dao.updateTelemetry(
             id = id,

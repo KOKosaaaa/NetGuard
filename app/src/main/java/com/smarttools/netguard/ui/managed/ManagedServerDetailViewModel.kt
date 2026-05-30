@@ -10,9 +10,14 @@ import com.smarttools.netguard.agent.AddBypassOutboundRequest
 import com.smarttools.netguard.agent.AddBypassRuleRequest
 import com.smarttools.netguard.agent.AddProfileRequest
 import com.smarttools.netguard.agent.AgentApiClient
+import com.smarttools.netguard.agent.AgentApiError
+import com.smarttools.netguard.agent.AgentErrorMessages
+import com.smarttools.netguard.agent.FriendlyError
 import com.smarttools.netguard.agent.BypassOutbound
 import com.smarttools.netguard.agent.BypassRule
+import com.smarttools.netguard.agent.DeployXrayRequest
 import com.smarttools.netguard.agent.InboundRow
+import com.smarttools.netguard.agent.InboundSpec
 import com.smarttools.netguard.agent.ManagedServer
 import com.smarttools.netguard.agent.ManagedServerRepository
 import com.smarttools.netguard.agent.StatusResponse
@@ -41,6 +46,13 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private val repo = ManagedServerRepository.get(application)
 
     private lateinit var server: ManagedServer
+    /**
+     * Public read-only snapshot of the bound server. Used by sibling
+     * sheets (e.g. CreateTelemostSheet) that share the activity-scoped
+     * ViewModel and need a reference to the agent's identity without
+     * piping it through arguments. Returns null until [bind] has run.
+     */
+    val serverOrNull: ManagedServer? get() = if (::server.isInitialized) server else null
     private lateinit var client: AgentApiClient
 
     private val _status = MutableStateFlow<StatusResponse?>(null)
@@ -61,10 +73,50 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    /**
+     * Separate from [busy] so the full-screen "Создаю профиль…" overlay
+     * only fires for the deploy/add-profile chain, not for the silent
+     * refreshes that run when each tab opens. Previously a stray refresh
+     * would flash the scary "creating profile" card.
+     */
+    private val _creating = MutableStateFlow(false)
+    val creating: StateFlow<Boolean> = _creating.asStateFlow()
+
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
 
     fun consumeToast() { _toast.value = null }
+
+    /**
+     * Set non-null when a new profile was just created — the UI shows a
+     * "вот ссылка" success card with the URI + "where to paste" hint and
+     * then calls [consumeLastCreatedUri] to clear it.
+     */
+    private val _lastCreatedUri = MutableStateFlow<String?>(null)
+    val lastCreatedUri: StateFlow<String?> = _lastCreatedUri.asStateFlow()
+
+    fun consumeLastCreatedUri() { _lastCreatedUri.value = null }
+
+    /**
+     * Set when an addProfile call failed — surfaced as a dialog with
+     * friendly text + a "Повторить" button. We stash the last addProfile
+     * params here so Retry can replay the same call without forcing the
+     * user back through the wizard.
+     */
+    data class ProfileFailure(
+        val error: FriendlyError,
+        val label: String,
+        val port: Int,
+        val serverName: String,
+    )
+    private val _lastProfileError = MutableStateFlow<ProfileFailure?>(null)
+    val lastProfileError: StateFlow<ProfileFailure?> = _lastProfileError.asStateFlow()
+    fun consumeLastProfileError() { _lastProfileError.value = null }
+    fun retryLastProfile() {
+        val f = _lastProfileError.value ?: return
+        _lastProfileError.value = null
+        addProfile(label = f.label, port = f.port, serverName = f.serverName)
+    }
 
     /** Called once per detail-screen lifetime, before any tab can run. */
     suspend fun init(serverId: Long): Boolean {
@@ -90,8 +142,71 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         _status.value = client.status() // reflect fresh pid + since
     }
 
-    fun addProfile(label: String, port: Int) = api {
-        val result = client.addProfile(AddProfileRequest(label = label, port = port))
+    fun addProfile(label: String, port: Int, serverName: String = "") {
+        // We wrap api() ourselves so the catch block has access to
+        // (label, port, serverName) and can stash them for Retry.
+        viewModelScope.launch {
+            _busy.value = true
+            _creating.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    doAddProfile(label = label, port = port, serverName = serverName)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "addProfile failed", e)
+                _lastProfileError.value = ProfileFailure(
+                    error = AgentErrorMessages.explain(e),
+                    label = label,
+                    port = port,
+                    serverName = serverName,
+                )
+            } finally {
+                _creating.value = false
+                _busy.value = false
+            }
+        }
+    }
+
+    private suspend fun doAddProfile(label: String, port: Int, serverName: String) {
+        val result = try {
+            client.addProfile(AddProfileRequest(
+                label = label, port = port, serverName = serverName))
+        } catch (e: AgentApiError) {
+            // First-profile-on-a-fresh-server path: xray hasn't been
+            // deployed yet, so the agent returns E_XRAY_ADD_PROFILE /
+            // "xray is not installed". Auto-deploy with this profile as
+            // first_inbound, wait for the task, then read the resulting
+            // inbound back from /v1/xray/inbounds.
+            val notInstalled = e.code == "E_XRAY_ADD_PROFILE" ||
+                e.errorMessage.contains("not installed", ignoreCase = true)
+            if (!notInstalled) throw e
+            post("Installing xray on server…")
+            val ack = client.deployXray(
+                DeployXrayRequest(
+                    firstInbound = InboundSpec(
+                        protocol = "vless",
+                        port = port,
+                        serverName = serverName,
+                        label = label,
+                    ),
+                ),
+            )
+            waitForTask(ack.taskId, timeoutSec = 180)
+            // After deploy, the first inbound is already in xray — pick
+            // it out of the inbound list by the port we asked for, fall
+            // back to whichever single row is present.
+            val list = client.inbounds()
+            val deployed = list.firstOrNull { it.port == port }
+                ?: list.firstOrNull()
+                ?: throw IllegalStateException(
+                    "xray deploy finished but no inbound was registered")
+            com.smarttools.netguard.agent.InboundResult(
+                inboundId = deployed.inboundId,
+                protocol = deployed.protocol,
+                port = deployed.port,
+                profileUri = deployed.profileUri,
+            )
+        }
         // The server emits the vless URI with its own hostname (often a
         // PTR like basic-white.ptr.network) which is useless for an
         // outside client. Rewrite the host to the IP the user already
@@ -110,7 +225,29 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             }
         }
         _profiles.value = client.inbounds()
-        post("Profile added")
+        _lastCreatedUri.value = fixedUri
+        post("Профиль создан")
+    }
+
+    /**
+     * Poll /v1/tasks/{id} until terminal. Fixed 1s backoff; that's the
+     * pace the UI feels alive at and the agent caps task lifetime well
+     * under 180s for xray-deploy.
+     */
+    private suspend fun waitForTask(taskId: String, timeoutSec: Int) {
+        val deadline = System.currentTimeMillis() + timeoutSec * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            val t = try { client.task(taskId) } catch (_: Exception) { null }
+            if (t != null && t.isTerminal) {
+                if (t.status != "done") {
+                    val msg = t.error?.message ?: t.status
+                    throw IllegalStateException("xray deploy ${t.status}: $msg")
+                }
+                return
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+        throw IllegalStateException("xray deploy timed out after ${timeoutSec}s")
     }
 
     /**
@@ -185,6 +322,21 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         post("uninstall task timed out")
     }
 
+    /** Update only the user-facing name. No network call. */
+    fun rename(newName: String, onDone: () -> Unit) = api {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) {
+            post("Имя не может быть пустым")
+            return@api
+        }
+        repo.rename(server.id, trimmed)
+        // Keep the in-memory copy in sync so subsequent calls see the
+        // new label without a re-fetch.
+        server = server.copy(name = trimmed)
+        post("Сервер переименован")
+        withContext(Dispatchers.Main) { onDone() }
+    }
+
     /** Bearer-revoke + DB delete. Agent keeps running on the VPS. */
     fun removeServer(onDone: () -> Unit) = api {
         try { client.revoke() } catch (_: Exception) { /* best-effort */ }
@@ -193,9 +345,10 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         withContext(Dispatchers.Main) { onDone() }
     }
 
-    private fun api(block: suspend () -> Unit) {
+    private fun api(creating: Boolean = false, block: suspend () -> Unit) {
         viewModelScope.launch {
             _busy.value = true
+            if (creating) _creating.value = true
             try {
                 withContext(Dispatchers.IO) { block() }
             } catch (e: Exception) {
@@ -203,11 +356,30 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                 post(e.message ?: e.javaClass.simpleName)
             } finally {
                 _busy.value = false
+                if (creating) _creating.value = false
             }
         }
     }
 
-    private fun post(msg: String) { _toast.value = msg }
+    /**
+     * Detail screen kicks off 4 refreshes in parallel (status, profiles,
+     * rules, outbounds); when the agent is unreachable all four fail
+     * with the same connect error and the user sees 4 identical
+     * toasts. Dedupe within a short window so a single network outage
+     * shows up exactly once.
+     */
+    @Volatile private var lastToastMsg: String? = null
+    @Volatile private var lastToastAt: Long = 0
+    private fun post(msg: String) {
+        val now = System.currentTimeMillis()
+        if (msg == lastToastMsg && now - lastToastAt < TOAST_DEDUP_MS) return
+        lastToastMsg = msg
+        lastToastAt = now
+        _toast.value = msg
+    }
 
-    companion object { private const val TAG = "MgdSrvDetailVM" }
+    companion object {
+        private const val TAG = "MgdSrvDetailVM"
+        private const val TOAST_DEDUP_MS = 3_000L
+    }
 }

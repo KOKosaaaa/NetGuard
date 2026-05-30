@@ -52,6 +52,13 @@
             android:configChanges="locale|layoutDirection|uiMode|fontScale|smallestScreenSize|screenSize|screenLayout|orientation"
             android:launchMode="singleTask" />
 
+        <!-- Yandex passport login WebView; ships the cookies back to
+             the Telemost wizard via setResult. Not exported. -->
+        <activity
+            android:name=".ui.managed.YandexLoginActivity"
+            android:exported="false"
+            android:label="@string/yandex_login_title" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

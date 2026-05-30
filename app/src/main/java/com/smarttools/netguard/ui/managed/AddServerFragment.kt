@@ -68,6 +68,10 @@ class AddServerFragment : Fragment() {
         )
 
         binding.btnDeploy.setOnClickListener { tryDeploy() }
+        // Pair-via-URL block hidden via XML comment 2026-05-29 — bring
+        // the listener (and tryPairUrl below) back when the install
+        // command actually exists for end users.
+        // binding.btnPairUrl.setOnClickListener { tryPairUrl() }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -86,6 +90,11 @@ class AddServerFragment : Fragment() {
         val user = binding.etUser.text?.toString()?.trim().orEmpty()
         val pass = binding.etPassword.text?.toString().orEmpty()
         val name = binding.etName.text?.toString()?.trim().orEmpty()
+        // Drop the soft keyboard so the progress bar and stage label
+        // aren't hidden behind the IME on smaller phones.
+        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+            as? android.view.inputmethod.InputMethodManager
+        imm?.hideSoftInputFromWindow(binding.btnDeploy.windowToken, 0)
         viewModel.deploy(
             name = name,
             host = host,
@@ -94,6 +103,33 @@ class AddServerFragment : Fragment() {
             sshPassword = pass,
         )
     }
+
+    // Pair-via-URL flow hidden 2026-05-29 — keep the function (and the
+    // strings, and ViewModel.pairByUrl) around for when the install
+    // command flow ships, but nothing in the UI references it right now.
+    /*
+    private fun tryPairUrl() {
+        val endpoint = binding.etEndpointUrl.text?.toString()?.trim().orEmpty()
+        val token = binding.etPairToken.text?.toString()?.trim().orEmpty()
+        if (endpoint.isEmpty()) {
+            binding.etEndpointUrl.error = getString(R.string.pair_url_endpoint_empty)
+            return
+        }
+        if (!endpoint.startsWith("https://", ignoreCase = true)) {
+            binding.etEndpointUrl.error = getString(R.string.pair_url_endpoint_invalid)
+            return
+        }
+        if (token.isEmpty()) {
+            binding.etPairToken.error = getString(R.string.pair_url_token_empty)
+            return
+        }
+        val name = binding.etName.text?.toString()?.trim().orEmpty()
+        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+            as? android.view.inputmethod.InputMethodManager
+        imm?.hideSoftInputFromWindow(binding.btnPairUrl.windowToken, 0)
+        viewModel.pairByUrl(name = name, endpointUrl = endpoint, pairToken = token)
+    }
+    */
 
     private fun render(state: AddServerViewModel.State) {
         binding.stateInput.visibility = if (state is AddServerViewModel.State.Input) View.VISIBLE else View.GONE

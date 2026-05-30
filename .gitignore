@@ -36,3 +36,6 @@ screen*.png
 .DS_Store
 Thumbs.db
 *.tmp
+
+# Agent build output (binaries are rebuilt via Makefile; embed/ inputs are tracked)
+agent/dist/

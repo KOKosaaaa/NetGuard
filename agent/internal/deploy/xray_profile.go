@@ -16,10 +16,35 @@ import (
 // Sync handler — no task FSM needed: editing the live xray config + a
 // `systemctl reload` runs in <1s. Returns the new inbound row directly.
 type XrayAddProfileRequest struct {
-	Protocol string `json:"protocol"` // phase 1 only "vless"
-	Port     int    `json:"port"`     // 0 → pick a free one
-	UUID     string `json:"uuid"`     // empty → generate
-	Label    string `json:"label,omitempty"`
+	Protocol   string `json:"protocol"`              // phase 1 only "vless"
+	Port       int    `json:"port"`                  // 0 → pick a free one (443 for Reality)
+	UUID       string `json:"uuid"`                  // empty → generate
+	ServerName string `json:"server_name,omitempty"` // SNI; non-empty → VLESS+REALITY
+	Label      string `json:"label,omitempty"`
+	// ChainTo: when non-nil, this inbound forwards into a freshly added
+	// VLESS outbound pointing at the next hop instead of falling through
+	// to the freedom outbound. Caller (the chain orchestrator on the
+	// Android side) walks the chain from exit→entry, so by the time we
+	// see ChainTo populated, the next hop's inbound already exists.
+	ChainTo *ChainTarget `json:"chain_to,omitempty"`
+}
+
+// ChainTarget describes the next hop in a multi-hop VPN chain — i.e.
+// where the VLESS outbound on THIS server should connect to. Mirrors
+// the public vless-URI parameters so the Android-side orchestrator can
+// just pull them out of the previous hop's profile_uri response.
+//
+// Reality fields (ServerName, PublicKey, ShortID) are required when
+// the next-hop inbound is VLESS+REALITY; for plain VLESS-TCP they're
+// left empty.
+type ChainTarget struct {
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	UUID       string `json:"uuid"`
+	ServerName string `json:"server_name,omitempty"`
+	PublicKey  string `json:"public_key,omitempty"`
+	ShortID    string `json:"short_id,omitempty"`
+	Flow       string `json:"flow,omitempty"` // "xtls-rprx-vision" for Reality, "" for plain VLESS
 }
 
 // XrayAddProfile inserts a new inbound into the running xray, reloads,
@@ -28,6 +53,12 @@ type XrayAddProfileRequest struct {
 //
 // If xray isn't installed at all yet, returns an error — caller should
 // hit /v1/xray/deploy first.
+//
+// When req.ChainTo is non-nil this is an intermediate / entry hop of a
+// multi-hop chain: we additionally add a VLESS outbound pointing at the
+// next hop AND a routing rule binding this inbound's tag to that
+// outbound's tag. Everything is rolled back atomically on failure so a
+// partial write can't desync xray config vs the agent DB.
 func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult, error) {
 	if !fileExists(XrayInstallPath) {
 		return nil, fmt.Errorf("xray is not installed; call /v1/xray/deploy first")
@@ -37,10 +68,11 @@ func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult,
 	}
 	// Build the new inbound using the same helper as the initial deploy.
 	spec := &InboundSpec{
-		Protocol: req.Protocol,
-		Port:     req.Port,
-		UUID:     req.UUID,
-		Label:    req.Label,
+		Protocol:   req.Protocol,
+		Port:       req.Port,
+		UUID:       req.UUID,
+		ServerName: req.ServerName,
+		Label:      req.Label,
 	}
 	_, newInbound, err := buildInitialConfig(spec)
 	if err != nil {
@@ -60,6 +92,43 @@ func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult,
 	var newInboundCfg map[string]any
 	_ = json.Unmarshal([]byte(newInbound.ConfigJSON), &newInboundCfg)
 	cfg["inbounds"] = append(inbounds, newInboundCfg)
+
+	// Multi-hop chain wiring: add a VLESS outbound + a routing rule so
+	// traffic landing on this new inbound is forwarded straight into the
+	// next hop instead of falling through to the freedom outbound.
+	if req.ChainTo != nil {
+		outboundTag := "chain-" + newInbound.ID
+		outboundCfg, err := buildVlessOutbound(req.ChainTo, outboundTag)
+		if err != nil {
+			return nil, fmt.Errorf("build chain outbound: %w", err)
+		}
+		outbounds, _ := cfg["outbounds"].([]any)
+		// Prepend so the chain outbound takes precedence over the
+		// default freedom outbound when xray walks the list looking
+		// for a tag — defensive even though we always select by tag.
+		cfg["outbounds"] = append([]any{outboundCfg}, outbounds...)
+
+		// Routing section may be absent (the initial deploy doesn't
+		// create one); initialize it on-demand.
+		routing, _ := cfg["routing"].(map[string]any)
+		if routing == nil {
+			routing = map[string]any{"domainStrategy": "AsIs"}
+		}
+		rules, _ := routing["rules"].([]any)
+		rule := map[string]any{
+			"type":        "field",
+			"inboundTag":  []string{newInbound.ID},
+			"outboundTag": outboundTag,
+		}
+		routing["rules"] = append(rules, rule)
+		cfg["routing"] = routing
+
+		newInbound.ChainToTag = outboundTag
+		// Build a vless URI string for the next hop so UI/debug paths
+		// have something readable; the orchestrator can verify the URI
+		// matches what it intended.
+		newInbound.ChainToURI = nextHopURI(req.ChainTo)
+	}
 
 	newCfgBytes, _ := json.MarshalIndent(cfg, "", "  ")
 	if err := AtomicWrite(XrayConfigPath, newCfgBytes, 0o600); err != nil {
@@ -92,8 +161,71 @@ func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult,
 	}, nil
 }
 
+// buildVlessOutbound assembles an xray outbound config that connects to
+// the given chain target. Reality fields are honored when ServerName +
+// PublicKey are both set; otherwise we emit a plain VLESS-TCP outbound.
+func buildVlessOutbound(t *ChainTarget, tag string) (map[string]any, error) {
+	if t.Host == "" || t.Port == 0 || t.UUID == "" {
+		return nil, fmt.Errorf("chain_to.host/port/uuid are required")
+	}
+	user := map[string]any{
+		"id":         t.UUID,
+		"encryption": "none",
+	}
+	if t.Flow != "" {
+		user["flow"] = t.Flow
+	}
+	stream := map[string]any{
+		"network": "tcp",
+	}
+	if t.ServerName != "" && t.PublicKey != "" {
+		stream["security"] = "reality"
+		stream["realitySettings"] = map[string]any{
+			"serverName": t.ServerName,
+			"publicKey":  t.PublicKey,
+			"shortId":    t.ShortID,
+			"fingerprint": "chrome",
+		}
+	} else {
+		stream["security"] = "none"
+	}
+	return map[string]any{
+		"tag":      tag,
+		"protocol": "vless",
+		"settings": map[string]any{
+			"vnext": []any{
+				map[string]any{
+					"address": t.Host,
+					"port":    t.Port,
+					"users":   []any{user},
+				},
+			},
+		},
+		"streamSettings": stream,
+	}, nil
+}
+
+// nextHopURI produces a debugging-grade vless URI for a chain target.
+// Mirror of buildVlessRealityURI / buildVlessURI but without label and
+// without the placeholder-host rewrite — the orchestrator already knows
+// the canonical URI; we just want something readable in the DB.
+func nextHopURI(t *ChainTarget) string {
+	if t.ServerName != "" && t.PublicKey != "" {
+		return fmt.Sprintf(
+			"vless://%s@%s:%d?security=reality&sni=%s&pbk=%s&sid=%s&fp=chrome&flow=%s&type=tcp",
+			t.UUID, t.Host, t.Port, t.ServerName, t.PublicKey, t.ShortID, t.Flow,
+		)
+	}
+	return fmt.Sprintf("vless://%s@%s:%d?type=tcp", t.UUID, t.Host, t.Port)
+}
+
 // XrayDeleteProfile removes the inbound with the given inbound_id from
 // xray config, restarts xray, drops the DB row.
+//
+// If this inbound was a chain hop, we also remove its dedicated VLESS
+// outbound (tag = "chain-<inbound_id>") and the routing rule that
+// glued them together. Done together so a half-deleted chain doesn't
+// leave orphan outbounds tightening xray's startup time.
 func XrayDeleteProfile(db *storage.DB, inboundID string) error {
 	cfgBytes, err := os.ReadFile(XrayConfigPath)
 	if err != nil {
@@ -118,6 +250,47 @@ func XrayDeleteProfile(db *storage.DB, inboundID string) error {
 		return fmt.Errorf("inbound %q not found in xray config", inboundID)
 	}
 	cfg["inbounds"] = kept
+
+	// Chain teardown: drop the matching outbound (if any) and any
+	// routing rules that referenced this inbound. The "chain-" prefix
+	// is a convention we control (set in XrayAddProfile) so we can
+	// derive the outbound tag without a DB lookup.
+	chainTag := "chain-" + inboundID
+	outbounds, _ := cfg["outbounds"].([]any)
+	if len(outbounds) > 0 {
+		filtered := outbounds[:0]
+		for _, raw := range outbounds {
+			m, ok := raw.(map[string]any)
+			if ok && m["tag"] == chainTag {
+				continue
+			}
+			filtered = append(filtered, raw)
+		}
+		cfg["outbounds"] = filtered
+	}
+	if routing, ok := cfg["routing"].(map[string]any); ok {
+		if rules, ok := routing["rules"].([]any); ok {
+			keptRules := rules[:0]
+			for _, raw := range rules {
+				m, ok := raw.(map[string]any)
+				if !ok {
+					keptRules = append(keptRules, raw)
+					continue
+				}
+				// Drop the rule iff it targets either this inbound's
+				// tag or this inbound's chain outbound tag.
+				if m["outboundTag"] == chainTag {
+					continue
+				}
+				if tags, ok := m["inboundTag"].([]any); ok && len(tags) == 1 && tags[0] == inboundID {
+					continue
+				}
+				keptRules = append(keptRules, raw)
+			}
+			routing["rules"] = keptRules
+			cfg["routing"] = routing
+		}
+	}
 
 	newCfgBytes, _ := json.MarshalIndent(cfg, "", "  ")
 	if err := AtomicWrite(XrayConfigPath, newCfgBytes, 0o600); err != nil {

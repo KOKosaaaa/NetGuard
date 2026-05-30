@@ -46,3 +46,9 @@
 -dontwarn sun.security.x509.**
 -dontwarn org.bouncycastle.jce.**
 -dontwarn net.schmizz.sshj.**
+
+# JSch (mwiede/jsch) loads its crypto providers (Random, Cipher, KEX
+# implementations) reflectively by class name. R8 strips them as unused
+# and the bootstrap then dies with ClassNotFoundException at runtime.
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**

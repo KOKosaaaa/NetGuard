@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One hop row in the chain wizard. The downward chevron underneath
+  marks the flow from this hop to the next one (entry → exit). The
+  adapter hides it on the last row so we don't draw a dangling arrow.
+-->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
+        android:background="?attr/selectableItemBackground">
+
+        <TextView
+            android:id="@+id/tv_idx"
+            android:layout_width="28dp"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+
+        <!-- Drag handle — only visible in ROUTE mode and only it
+             starts a drag (so tapping the rest of the row keeps
+             working as the +/− action). -->
+        <ImageView
+            android:id="@+id/iv_drag_handle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="4dp"
+            android:src="@drawable/ic_drag_handle"
+            android:contentDescription="@string/chain_drag_handle"
+            app:tint="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginEnd="8dp">
+
+            <TextView
+                android:id="@+id/tv_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tv_host"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:fontFamily="monospace"
+                android:singleLine="true"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_action"
+            style="?attr/materialIconButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:padding="6dp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/iv_arrow_down"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="-4dp"
+        android:layout_marginBottom="-4dp"
+        android:src="@drawable/ic_chevron_down"
+        android:contentDescription="@string/chain_arrow_to_next"
+        app:tint="?attr/colorPrimary"
+        android:alpha="0.7" />
+
+</LinearLayout>

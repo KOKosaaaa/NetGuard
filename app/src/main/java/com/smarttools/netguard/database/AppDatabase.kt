@@ -7,6 +7,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.smarttools.netguard.agent.ChainDao
+import com.smarttools.netguard.agent.ChainEntity
+import com.smarttools.netguard.agent.ChainHopEntity
 import com.smarttools.netguard.agent.ManagedServer
 import com.smarttools.netguard.agent.ManagedServerDao
 import com.smarttools.netguard.model.ServerProfile
@@ -14,14 +17,21 @@ import com.smarttools.netguard.model.Subscription
 import java.io.File
 
 @Database(
-    entities = [ServerProfile::class, Subscription::class, ManagedServer::class],
-    version = 7,
+    entities = [
+        ServerProfile::class,
+        Subscription::class,
+        ManagedServer::class,
+        ChainEntity::class,
+        ChainHopEntity::class,
+    ],
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun subscriptionDao(): SubscriptionDao
     abstract fun managedServerDao(): ManagedServerDao
+    abstract fun chainDao(): ChainDao
 
     companion object {
         private const val TAG = "AppDatabase"
@@ -91,6 +101,56 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v8: managed_servers.endpointUrl — full base URL (e.g.
+         * https://hel-agent.kvpn.online) for agents that sit behind
+         * Cloudflare Tunnel. When set, host/port/spkiPin are ignored.
+         * Empty string = legacy direct-IP path with SPKI pinning.
+         */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE managed_servers ADD COLUMN endpointUrl TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /**
+         * v9: chains + chain_hops — virtual grouping of multi-hop xray
+         * inbounds the user wires together through the chain wizard.
+         * Schema mirrors ChainEntity / ChainHopEntity exactly.
+         */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `chains` (
+                        `id`              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `label`           TEXT NOT NULL,
+                        `createdAt`       INTEGER NOT NULL,
+                        `entryProfileUri` TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `chain_hops` (
+                        `id`         INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        `chainId`    INTEGER NOT NULL,
+                        `serverId`   INTEGER NOT NULL,
+                        `serverName` TEXT NOT NULL,
+                        `inboundId`  TEXT NOT NULL,
+                        `position`   INTEGER NOT NULL,
+                        FOREIGN KEY(`chainId`) REFERENCES `chains`(`id`) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_chain_hops_chainId` ON `chain_hops`(`chainId`)"
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -105,7 +165,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         DB_NAME
                     )
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                         .fallbackToDestructiveMigration()
                         .build()
                         .also { INSTANCE = it }

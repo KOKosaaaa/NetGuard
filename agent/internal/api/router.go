@@ -188,6 +188,26 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	// Pre-download release archives into the agent's cache so the
+	// first real /xray/deploy (etc.) finishes in seconds. Invoked from
+	// the install.sh script the Android bootstrap leaves behind, but
+	// also exposed as a regular endpoint so any client can kick it
+	// off manually (e.g. after an agent upgrade bumped a pinned
+	// version).
+	mux.Handle("POST /v1/agent/warmup", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id, err := d.Tasks.Spawn("agent.warmup", deploy.Warmup())
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
+
 	mux.Handle("GET /v1/xray/inbounds", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			list, err := d.DB.ListXrayInbounds()
@@ -196,16 +216,29 @@ func Mount(d *Deps) http.Handler {
 				return
 			}
 			// Shape for the client — hide config blob, keep what the UI shows.
+			// chain_to_* are non-empty when this inbound forwards into a
+			// next-hop VLESS outbound (multi-hop chain). UI uses these
+			// to render "🇫🇮 → 🇩🇪 → 🇺🇸" badges.
 			type row struct {
 				InboundID  string    `json:"inbound_id"`
 				Protocol   string    `json:"protocol"`
 				Port       int       `json:"port"`
 				ProfileURI string    `json:"profile_uri"`
 				CreatedAt  time.Time `json:"created_at"`
+				ChainToTag string    `json:"chain_to_tag,omitempty"`
+				ChainToURI string    `json:"chain_to_uri,omitempty"`
 			}
 			out := make([]row, 0, len(list))
 			for _, x := range list {
-				out = append(out, row{x.ID, x.Protocol, x.Port, x.ProfileURI, x.CreatedAt})
+				out = append(out, row{
+					InboundID:  x.ID,
+					Protocol:   x.Protocol,
+					Port:       x.Port,
+					ProfileURI: x.ProfileURI,
+					CreatedAt:  x.CreatedAt,
+					ChainToTag: x.ChainToTag,
+					ChainToURI: x.ChainToURI,
+				})
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"inbounds": out})
 		},
@@ -369,20 +402,34 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
-	// --- telemost (phase 2 stubs — implemented in a follow-up) ---
-	// Surface the endpoints so the Android client can probe them and
-	// degrade gracefully ("Telemost not available on this agent yet")
-	// instead of timing out or crashing on a 404.
+	// --- telemost ---
 	mux.Handle("GET /v1/telemost/health", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{
-				"available": false,
-				"note":      "Telemost deploy lands in agent phase 2; endpoint reserved",
+				"available": true,
+				"note":      "Telemost deploy live; POST /v1/telemost/deploy {count, cookies_json}",
 			})
 		},
 	)))
+	mux.Handle("POST /v1/telemost/deploy", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			var req deploy.DeployTelemostRequest
+			if !decodeJSON(w, r, &req) {
+				return
+			}
+			id, err := d.Tasks.Spawn("telemost.deploy", deploy.DeployTelemost(&req))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
+	// scale / cookies / rooms — task #33, follow-up
 	for _, p := range []string{
-		"POST /v1/telemost/deploy",
 		"POST /v1/telemost/scale",
 		"POST /v1/telemost/cookies",
 		"GET /v1/telemost/rooms",
@@ -390,7 +437,7 @@ func Mount(d *Deps) http.Handler {
 		mux.Handle(p, authenticated(d, http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotImplemented, "E_TELEMOST_PENDING",
-					"Telemost deploy is in agent phase 2 (planned). Track progress in the agent repo.")
+					"This endpoint lands in the next iteration. POST /v1/telemost/deploy works.")
 			},
 		)))
 	}

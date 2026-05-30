@@ -143,6 +143,14 @@ func (d *DB) migrate() error {
 			password   TEXT,
 			created_at TEXT NOT NULL
 		)`,
+		// Multi-hop chains: when an inbound is configured to forward
+		// traffic to another hop instead of the local internet, we
+		// create a dedicated VLESS outbound + a routing rule. We need
+		// to remember the outbound's tag so the DELETE path can tear
+		// them down together. chain_to_uri carries the next-hop vless://
+		// URI for UI/debug — orchestrator builds it before calling us.
+		`ALTER TABLE xray_inbounds ADD COLUMN chain_to_tag TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE xray_inbounds ADD COLUMN chain_to_uri TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, s := range stmts {
 		if _, err := d.db.Exec(s); err != nil {
@@ -370,21 +378,28 @@ type XrayInbound struct {
 	ConfigJSON string
 	ProfileURI string
 	CreatedAt  time.Time
+	// Multi-hop only: non-empty when this inbound forwards into a chained
+	// VLESS outbound (and a matching routing rule) instead of letting xray
+	// fall through to the default freedom outbound. ChainToTag is the
+	// xray outbound tag we added; ChainToURI is the next-hop vless URI
+	// for debugging / UI.
+	ChainToTag string
+	ChainToURI string
 }
 
 func (d *DB) InsertXrayInbound(x *XrayInbound) error {
 	_, err := d.db.Exec(
-		`INSERT INTO xray_inbounds(inbound_id,protocol,port,config_json,profile_uri,created_at)
-		 VALUES(?,?,?,?,?,?)`,
+		`INSERT INTO xray_inbounds(inbound_id,protocol,port,config_json,profile_uri,created_at,chain_to_tag,chain_to_uri)
+		 VALUES(?,?,?,?,?,?,?,?)`,
 		x.ID, x.Protocol, x.Port, x.ConfigJSON, x.ProfileURI,
-		x.CreatedAt.Format(time.RFC3339Nano),
+		x.CreatedAt.Format(time.RFC3339Nano), x.ChainToTag, x.ChainToURI,
 	)
 	return err
 }
 
 func (d *DB) ListXrayInbounds() ([]*XrayInbound, error) {
 	rows, err := d.db.Query(
-		`SELECT inbound_id,protocol,port,config_json,profile_uri,created_at
+		`SELECT inbound_id,protocol,port,config_json,profile_uri,created_at,chain_to_tag,chain_to_uri
 		 FROM xray_inbounds ORDER BY created_at`)
 	if err != nil {
 		return nil, err
@@ -394,7 +409,8 @@ func (d *DB) ListXrayInbounds() ([]*XrayInbound, error) {
 	for rows.Next() {
 		x := &XrayInbound{}
 		var created string
-		if err := rows.Scan(&x.ID, &x.Protocol, &x.Port, &x.ConfigJSON, &x.ProfileURI, &created); err != nil {
+		if err := rows.Scan(&x.ID, &x.Protocol, &x.Port, &x.ConfigJSON,
+			&x.ProfileURI, &created, &x.ChainToTag, &x.ChainToURI); err != nil {
 			return nil, err
 		}
 		x.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
