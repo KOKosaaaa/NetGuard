@@ -520,6 +520,25 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	// Provision everything up-front (xray empty+running, staged Telemost;
+	// sing-box deferred — see provision.go / singbox.go) so the first
+	// profile create is instant. Fired fire-and-forget by the app right
+	// after pairing; runs server-side regardless of whether the app stays
+	// open.
+	mux.Handle("POST /v1/agent/provision", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id, err := d.Tasks.Spawn("agent.provision", deploy.ProvisionAll(d.DB))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
+
 	// Full self-destruct: wipe every deployed service (xray, sing-box,
 	// Telemost) AND the agent itself, then leave the box clean. Launches
 	// a detached script and returns immediately; the agent stops answering

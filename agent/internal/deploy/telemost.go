@@ -250,6 +250,53 @@ func DeployTelemost(req *DeployTelemostRequest) tasks.Runner {
 	}
 }
 
+// PrepareTelemost stages the Telemost worker WITHOUT creating any rooms:
+// it installs the embedded creator binary, the wlb user + dirs, and the
+// systemd unit template. Rooms still need Yandex cookies (the user logs in
+// from the app later) — this just makes that later step fast and means
+// "Telemost is installed" the moment the server is added.
+//
+// It intentionally does NOT write cookies, create rooms, or start any
+// instance. TelemostRooms() still reports Deployed=false until a links
+// file exists, so the app's Telemost card stays hidden until real rooms
+// are provisioned.
+func PrepareTelemost() tasks.Runner {
+	return func(ctx context.Context, h *tasks.Handle) tasks.Outcome {
+		h.SetStep("install_bin", 20)
+		blob, err := telemostCreatorForArch()
+		if err != nil {
+			return h.Fail("E_UNSUPPORTED_ARCH", err.Error(), false)
+		}
+		if err := AtomicWrite(telemostInstallPath, blob, 0o755); err != nil {
+			return h.Fail("E_INSTALL_BIN", err.Error(), false)
+		}
+
+		h.SetStep("user_dirs", 55)
+		if err := ensureWlbUser(ctx); err != nil {
+			return h.Fail("E_INSTALL", err.Error(), false)
+		}
+		for _, d := range []string{telemostConfDir, telemostLogDir, telemostRunDir} {
+			if err := os.MkdirAll(d, 0o750); err != nil {
+				return h.Fail("E_DATA_DIR", err.Error(), false)
+			}
+		}
+		_ = exec.CommandContext(ctx, "chown", "-R", "wlb:wlb", telemostLogDir, telemostRunDir).Run()
+		_ = exec.CommandContext(ctx, "chgrp", "wlb", telemostConfDir).Run()
+		_ = os.Chmod(telemostConfDir, 0o750)
+
+		h.SetStep("systemd_unit", 85)
+		if err := AtomicWrite(telemostUnitPath, []byte(telemostUnitTemplate), 0o644); err != nil {
+			return h.Fail("E_WRITE_UNIT", err.Error(), false)
+		}
+		_, _ = exec.CommandContext(ctx, "systemctl", "daemon-reload").CombinedOutput()
+
+		return h.Ok(map[string]any{
+			"prepared": true,
+			"note":     "binary + unit staged; rooms need Yandex cookies (log in from the app)",
+		})
+	}
+}
+
 // telemostCreatorForArch returns the embedded binary matching the host
 // architecture, or an error on unsupported hosts. The binary itself is
 // selected at build time via per-arch files (telemost_{amd64,arm64}.go);

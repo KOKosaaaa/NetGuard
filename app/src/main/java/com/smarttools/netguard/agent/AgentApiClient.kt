@@ -89,6 +89,20 @@ class AgentApiClient(
     }
 
     /**
+     * Install everything up-front on a freshly-paired server: xray (empty
+     * config, running), sing-box, and a staged Telemost binary+unit. Makes
+     * the user's first profile-create instant instead of paying the xray
+     * download then. Async — returns a task_id; the app fires this
+     * fire-and-forget after Add-Server (the work runs server-side even if
+     * the app closes). Old agents without the endpoint 404 — caller
+     * tolerates it (they just fall back to lazy install on first profile).
+     */
+    fun provisionServer(): TaskAck {
+        val resp = doPost("/agent/provision", body = "{}", auth = true)
+        return TaskAck.fromJson(JSONObject(resp))
+    }
+
+    /**
      * Spin up [count] Telemost-bypass instances on the managed server,
      * each joining its own fresh room with the user's Yandex identity.
      * Returns a task_id; caller polls /v1/tasks/{id} for completion

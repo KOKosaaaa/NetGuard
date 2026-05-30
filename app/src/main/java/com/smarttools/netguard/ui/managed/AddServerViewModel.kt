@@ -168,13 +168,15 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                     final.copy(id = id)
                 }
 
-                // Fire-and-forget warmup so the first chain/profile
-                // create on this server doesn't have to pay the xray
-                // download cost (~30 s on slow VPS). Failure here is
-                // immaterial — we never surface it.
+                // Fire-and-forget full provision so the first profile
+                // create is instant: the agent installs xray (empty+running),
+                // sing-box, and stages Telemost server-side, regardless of
+                // whether this screen stays open. Failure is immaterial — we
+                // never surface it, and an old agent without the endpoint just
+                // falls back to lazy install on first profile.
                 runCatching {
                     withContext(Dispatchers.IO) {
-                        AgentApiClient(managed, BuildConfig.VERSION_NAME).warmupAgent()
+                        AgentApiClient(managed, BuildConfig.VERSION_NAME).provisionServer()
                     }
                 }
 
