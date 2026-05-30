@@ -263,6 +263,39 @@ object GeoLookup {
         return result
     }
 
+    /**
+     * 2-letter ISO country code (e.g. "RU") for an IP or hostname via
+     * ipwho.is, or null on failure. Blocking — call from a background
+     * dispatcher. Used to tailor the Reality SNI list to where the server
+     * physically sits: RF-site SNIs (vk.com, music.yandex.ru) only pass DPI
+     * when the VPS is in Russia; on a foreign VPS they get mangled.
+     */
+    fun countryFromIp(ip: String): String? {
+        val resolved = if (ip.any { it.isLetter() }) {
+            try {
+                java.net.InetAddress.getByName(ip).hostAddress ?: return null
+            } catch (e: Exception) {
+                Log.w("GeoLookup", "resolve $ip failed: ${e.message}")
+                return null
+            }
+        } else ip
+        return try {
+            val conn = URL("https://ipwho.is/$resolved?fields=success,country_code")
+                .openConnection() as HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            val json = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+            val obj = JSONObject(json)
+            if (obj.optBoolean("success", false))
+                obj.optString("country_code").takeIf { it.isNotEmpty() }
+            else null
+        } catch (e: Exception) {
+            Log.w("GeoLookup", "country lookup failed for $ip: ${e.message}")
+            null
+        }
+    }
+
     private fun tryIpWhoIs(ip: String): LatLon? {
         return try {
             val conn = URL("https://ipwho.is/$ip?fields=success,latitude,longitude").openConnection() as HttpURLConnection

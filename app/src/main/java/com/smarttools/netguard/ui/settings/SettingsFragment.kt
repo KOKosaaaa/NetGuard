@@ -667,11 +667,7 @@ class SettingsFragment : Fragment() {
         binding.btnOpenTrigger.setOnClickListener {
             findNavController().navigate(R.id.action_settings_to_trigger)
         }
-
-        // Trigger mode (app-launch auto-VPN) is an Expert-only power feature.
-        binding.sectionTrigger.visibility =
-            if ((requireActivity().application as App).loadSettings().expertMode)
-                android.view.View.VISIBLE else android.view.View.GONE
+        // Trigger mode stays visible in both modes — users find it convenient.
     }
 
     private fun setupExportImport() {

@@ -212,6 +212,13 @@
                     android:text="GitHub" />
 
                 <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_steam"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Steam" />
+
+                <com.google.android.material.chip.Chip
                     android:id="@+id/chip_vk"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
@@ -231,6 +238,20 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Ozon" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_max"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="MAX" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_rutube"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Rutube" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chip_custom"

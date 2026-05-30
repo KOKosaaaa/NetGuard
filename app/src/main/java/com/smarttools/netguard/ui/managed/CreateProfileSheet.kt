@@ -5,9 +5,14 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.BottomSheetCreateProfileBinding
+import com.smarttools.netguard.util.GeoLookup
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Two-step wizard for creating an xray inbound on a managed server.
@@ -45,31 +50,60 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
             dismiss()
         }
 
-        // Simple mode hides the SNI picker entirely and uses a safe default
-        // (Cloudflare works in both directions). Choosing a masquerade domain
-        // is meaningless to a non-technical user.
-        val expert = (requireActivity().application as com.smarttools.netguard.App)
-            .loadSettings().expertMode
-        b.blockSni.visibility = if (expert) View.VISIBLE else View.GONE
-
-        // Chip → SNI mapping. The "custom" chip toggles the EditText
-        // beneath the group; everything else hides it.
-        // International SNIs at the top — they work in BOTH directions
-        // (RF→EU server, EU→RF server). Russian SNIs work only when the
-        // VPS itself sits in Russia; on a foreign VPS, RF carriers' DPI
-        // can mangle TLS ClientHello when SNI looks like a domestic site
-        // routed abroad (observed empirically: MTS → Aeza HEL with
-        // sni=music.yandex.ru produces "failed to read client hello").
+        // Chip → SNI domain. Cloudflare is universal (works in both
+        // directions) and stays the default. The others split into Russian
+        // and international sites: a Russian SNI only passes RF DPI when the
+        // server itself sits in Russia, and an international one is the
+        // believable choice on a foreign server (observed: MTS → Aeza HEL
+        // with sni=music.yandex.ru → "failed to read client hello").
         val sniByChipId = mapOf(
             R.id.chip_cloudflare to "www.cloudflare.com",
             R.id.chip_microsoft to "www.microsoft.com",
             R.id.chip_apple to "www.apple.com",
             R.id.chip_amazon to "www.amazon.com",
             R.id.chip_github to "github.com",
+            R.id.chip_steam to "steamcommunity.com",
             R.id.chip_vk to "vk.com",
             R.id.chip_yamus to "music.yandex.ru",
             R.id.chip_ozon to "ozon.ru",
+            R.id.chip_max to "max.ru",
+            R.id.chip_rutube to "rutube.ru",
         )
+        val rfChips = listOf(
+            R.id.chip_vk, R.id.chip_yamus, R.id.chip_ozon, R.id.chip_max, R.id.chip_rutube,
+        )
+        val intlChips = listOf(
+            R.id.chip_microsoft, R.id.chip_apple, R.id.chip_amazon, R.id.chip_github, R.id.chip_steam,
+        )
+        fun showSniGroup(russian: Boolean) {
+            rfChips.forEach {
+                b.root.findViewById<View>(it).visibility = if (russian) View.VISIBLE else View.GONE
+            }
+            intlChips.forEach {
+                b.root.findViewById<View>(it).visibility = if (russian) View.GONE else View.VISIBLE
+            }
+        }
+
+        // Simple mode hides the SNI picker entirely and uses the universal
+        // Cloudflare default — picking a masquerade domain is meaningless to a
+        // non-technical user. Expert mode shows the picker, pre-filtered to the
+        // server's country: RF sites for a Russian server, international
+        // otherwise. We default to international while the geo lookup runs.
+        val expert = (requireActivity().application as com.smarttools.netguard.App)
+            .loadSettings().expertMode
+        if (expert) {
+            b.blockSni.visibility = View.VISIBLE
+            showSniGroup(russian = false)
+            vm.serverOrNull?.host?.let { host ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val cc = withContext(Dispatchers.IO) { GeoLookup.countryFromIp(host) }
+                    if (_b != null && cc == "RU") showSniGroup(russian = true)
+                }
+            }
+        } else {
+            b.blockSni.visibility = View.GONE
+        }
+
         b.cgSni.setOnCheckedStateChangeListener { _, ids ->
             val id = ids.firstOrNull()
             b.tilCustomSni.visibility =
