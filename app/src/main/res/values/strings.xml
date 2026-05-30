@@ -162,6 +162,13 @@
     <string name="srv_swap_progress">Enabling swap file…</string>
     <string name="srv_swap_done">Done</string>
     <string name="srv_swap_failed">Didn\'t work</string>
+    <string name="srv_status_active">Status: active</string>
+    <string name="srv_status_inactive">Status: inactive</string>
+    <string name="srv_restart">Restart</string>
+    <string name="srv_delete_profile">Delete profile</string>
+    <string name="srv_delete_confirm">The profile will be permanently deleted from the server. This can\'t be undone.</string>
+    <string name="srv_telemost_summary">%1$d of %2$d rooms active</string>
+    <string name="srv_telemost_change_count">Change room count</string>
     <string name="srv_action_update_agent">Update agent</string>
     <string name="srv_action_uninstall_xray">Uninstall xray</string>
     <string name="srv_action_remove_server">Remove server</string>

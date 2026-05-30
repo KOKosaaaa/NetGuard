@@ -67,6 +67,11 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private val _outbounds = MutableStateFlow<List<BypassOutbound>>(emptyList())
     val outbounds: StateFlow<List<BypassOutbound>> = _outbounds.asStateFlow()
 
+    // Telemost deployment on this server (null = not deployed / unknown).
+    // Shown in the profiles tab as a single "Telemost" profile entry.
+    private val _telemost = MutableStateFlow<com.smarttools.netguard.agent.TelemostRooms?>(null)
+    val telemost: StateFlow<com.smarttools.netguard.agent.TelemostRooms?> = _telemost.asStateFlow()
+
     private val _logs = MutableStateFlow("")
     val logs: StateFlow<String> = _logs.asStateFlow()
 
@@ -142,6 +147,38 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         _status.value = client.status() // reflect fresh pid + since
     }
 
+    /** Refresh Telemost deployment state. Silent — null on failure / old
+     *  agent / not deployed, so no error toast for the common "no Telemost" case. */
+    fun refreshTelemost() {
+        viewModelScope.launch {
+            val r = try {
+                withContext(Dispatchers.IO) { client.telemostRooms() }
+            } catch (_: Exception) { null }
+            _telemost.value = r
+        }
+    }
+
+    /** Permanently remove the Telemost install from the server. */
+    fun uninstallTelemost(onDone: (ok: Boolean, msg: String) -> Unit) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    val ack = client.uninstallTelemost()
+                    waitForTask(ack.taskId, timeoutSec = 60)
+                    _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
+                    _status.value = client.status()
+                }
+                onDone(true, "Профиль Telemost удалён с сервера.")
+            } catch (e: Exception) {
+                Log.w(TAG, "uninstallTelemost failed", e)
+                onDone(false, AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     /**
      * Change the number of running Telemost streams (0..12) without a
      * re-deploy. Async task — we poll, then refresh status. Errors are
@@ -155,6 +192,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                 withContext(Dispatchers.IO) {
                     val ack = client.scaleTelemost(targetCount)
                     waitForTask(ack.taskId, timeoutSec = 120)
+                    _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                 }
                 post(if (targetCount == 0) "Telemost остановлен" else "Потоков Telemost: $targetCount")

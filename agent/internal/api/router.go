@@ -415,6 +415,19 @@ func Mount(d *Deps) http.Handler {
 			})
 		},
 	)))
+	mux.Handle("POST /v1/telemost/uninstall", authenticated(d, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			id, err := d.Tasks.Spawn("telemost.uninstall", deploy.UninstallTelemost(r.Context()))
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"task_id": id,
+				"status":  tasks.StatusPending,
+			})
+		},
+	)))
 	mux.Handle("POST /v1/telemost/deploy", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			var req deploy.DeployTelemostRequest

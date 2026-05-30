@@ -30,6 +30,15 @@ class ServerProfilesFragment : Fragment() {
     private val b get() = _b!!
     private val vm: ManagedServerDetailViewModel by activityViewModels()
     private lateinit var adapter: ProfilesAdapter
+    private var hasProfiles = false
+    private var hasTelemost = false
+
+    private fun updateEmpty() {
+        val empty = !hasProfiles && !hasTelemost
+        b.emptyState.visibility = if (empty) View.VISIBLE else View.GONE
+        // FAB hides on empty so the centered CTA is the only call-to-action.
+        b.fabAdd.visibility = if (empty) View.GONE else View.VISIBLE
+    }
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _b = FragmentServerProfilesBinding.inflate(i, c, false)
@@ -40,8 +49,9 @@ class ServerProfilesFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         adapter = ProfilesAdapter(
             onCopy = ::copyUri,
-            onDelete = ::confirmDelete,
+            onManage = ::showVlessManage,
         )
+        vm.refreshTelemost()
         b.rvProfiles.layoutManager = LinearLayoutManager(requireContext())
         b.rvProfiles.adapter = adapter
 
@@ -52,12 +62,25 @@ class ServerProfilesFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 vm.profiles.collect { list ->
                     adapter.submitList(list)
-                    val empty = list.isEmpty()
-                    b.emptyState.visibility = if (empty) View.VISIBLE else View.GONE
-                    // FAB hides on empty so the centered CTA is the only
-                    // call-to-action — avoids the "two + buttons" confusion.
-                    b.fabAdd.visibility = if (empty) View.GONE else View.VISIBLE
-                    b.rvProfiles.visibility = if (empty) View.GONE else View.VISIBLE
+                    hasProfiles = list.isNotEmpty()
+                    b.rvProfiles.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+                    updateEmpty()
+                }
+            }
+        }
+        // Telemost shown as one tappable "profile" card above the VLESS list.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.telemost.collect { rooms ->
+                    val deployed = rooms != null && rooms.installed > 0
+                    hasTelemost = deployed
+                    b.telemostCard.visibility = if (deployed) View.VISIBLE else View.GONE
+                    if (deployed) {
+                        b.tvTelemostSummary.text = getString(
+                            R.string.srv_telemost_summary, rooms!!.activeCount, rooms.installed)
+                        b.telemostCard.setOnClickListener { showTelemostManage(rooms) }
+                    }
+                    updateEmpty()
                 }
             }
         }
@@ -157,11 +180,109 @@ class ServerProfilesFragment : Fragment() {
         Toast.makeText(requireContext(), R.string.copied, Toast.LENGTH_SHORT).show()
     }
 
-    private fun confirmDelete(row: InboundRow) {
+    // --- per-profile management (tap a profile row / the Telemost card) ---
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private fun manageBox() = android.widget.LinearLayout(requireContext()).apply {
+        orientation = android.widget.LinearLayout.VERTICAL
+        setPadding(dp(24), dp(12), dp(24), dp(8))
+    }
+
+    private fun fullWidth(topDp: Int) = android.widget.LinearLayout.LayoutParams(
+        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+        android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+    ).apply { topMargin = dp(topDp) }
+
+    private fun actionBtn(text: String, onClick: () -> Unit) =
+        com.google.android.material.button.MaterialButton(requireContext()).apply {
+            this.text = text
+            layoutParams = fullWidth(8)
+            setOnClickListener { onClick() }
+        }
+
+    private fun redDeleteBtn(onClick: () -> Unit) =
+        com.google.android.material.button.MaterialButton(requireContext()).apply {
+            text = getString(R.string.srv_delete_profile)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFD32F2F.toInt())
+            setTextColor(android.graphics.Color.WHITE)
+            layoutParams = fullWidth(20)
+            setOnClickListener { onClick() }
+        }
+
+    private fun showVlessManage(row: InboundRow) {
+        val active = vm.status.value?.services?.firstOrNull { it.name == "xray" }?.active == true
+        val box = manageBox()
+        var dialog: androidx.appcompat.app.AlertDialog? = null
+        box.addView(android.widget.TextView(requireContext()).apply {
+            text = if (active) getString(R.string.srv_status_active)
+            else getString(R.string.srv_status_inactive)
+        })
+        box.addView(actionBtn(getString(R.string.srv_restart)) {
+            vm.restartService("xray"); dialog?.dismiss()
+        })
+        box.addView(redDeleteBtn {
+            dialog?.dismiss()
+            confirmPermanentDelete { vm.deleteProfile(row.inboundId) }
+        })
+        dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle("${row.protocol.uppercase()} : ${row.port}")
+            .setView(box)
+            .setNegativeButton(R.string.srv_profile_ready_close, null)
+            .show()
+    }
+
+    private fun showTelemostManage(rooms: com.smarttools.netguard.agent.TelemostRooms) {
+        val box = manageBox()
+        var dialog: androidx.appcompat.app.AlertDialog? = null
+        box.addView(android.widget.TextView(requireContext()).apply {
+            text = getString(R.string.srv_telemost_summary, rooms.activeCount, rooms.installed)
+        })
+        // "Restart" re-applies the current count, which re-enables any rooms
+        // that fell inactive.
+        box.addView(actionBtn(getString(R.string.srv_restart)) {
+            vm.scaleTelemost(rooms.installed); dialog?.dismiss()
+        })
+        box.addView(actionBtn(getString(R.string.srv_telemost_change_count)) {
+            dialog?.dismiss(); showRoomCountDialog(rooms.installed)
+        })
+        box.addView(redDeleteBtn {
+            dialog?.dismiss()
+            confirmPermanentDelete {
+                vm.uninstallTelemost { ok, msg ->
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
+                        .setMessage(msg)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+        })
+        dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Telemost")
+            .setView(box)
+            .setNegativeButton(R.string.srv_profile_ready_close, null)
+            .show()
+    }
+
+    private fun showRoomCountDialog(current: Int) {
+        val slider = com.google.android.material.slider.Slider(requireContext()).apply {
+            valueFrom = 0f; valueTo = 12f; stepSize = 1f
+            value = current.coerceIn(0, 12).toFloat()
+        }
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.delete)
-            .setMessage("Delete inbound on port ${row.port}?")
-            .setPositiveButton(android.R.string.ok) { _, _ -> vm.deleteProfile(row.inboundId) }
+            .setTitle(R.string.srv_telemost_change_count)
+            .setView(slider)
+            .setPositiveButton(android.R.string.ok) { _, _ -> vm.scaleTelemost(slider.value.toInt()) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun confirmPermanentDelete(onConfirm: () -> Unit) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.srv_delete_profile)
+            .setMessage(R.string.srv_delete_confirm)
+            .setPositiveButton(R.string.delete) { _, _ -> onConfirm() }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
@@ -170,7 +291,7 @@ class ServerProfilesFragment : Fragment() {
 
     private class ProfilesAdapter(
         val onCopy: (InboundRow) -> Unit,
-        val onDelete: (InboundRow) -> Unit,
+        val onManage: (InboundRow) -> Unit,
     ) : ListAdapter<InboundRow, ProfilesAdapter.VH>(DIFF) {
         inner class VH(val b: ItemServerProfileBinding) : RecyclerView.ViewHolder(b.root)
         override fun onCreateViewHolder(p: ViewGroup, vt: Int) =
@@ -181,7 +302,9 @@ class ServerProfilesFragment : Fragment() {
                 tvProtoPort.text = "${r.protocol.uppercase()} : ${r.port}"
                 tvUri.text = r.profileUri
                 btnCopy.setOnClickListener { onCopy(r) }
-                btnDelete.setOnClickListener { onDelete(r) }
+                // Delete lives in the manage screen now; tap the row to open it.
+                btnDelete.visibility = View.GONE
+                root.setOnClickListener { onManage(r) }
             }
         }
         companion object {

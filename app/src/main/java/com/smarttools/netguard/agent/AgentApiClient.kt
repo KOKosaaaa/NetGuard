@@ -121,6 +121,12 @@ class AgentApiClient(
         return TelemostRooms.fromJson(JSONObject(doGet("/telemost/rooms", auth = true)))
     }
 
+    /** Permanently remove the Telemost install (binary, units, cookies,
+     *  rooms file). Async — poll /tasks/{id}. */
+    fun uninstallTelemost(): TaskAck {
+        return TaskAck.fromJson(JSONObject(doPost("/telemost/uninstall", body = "{}", auth = true)))
+    }
+
     /** Create + enable a swapfile so a low-RAM VPS survives Telemost peaks.
      *  sizeMb 0 → agent default (512). Async. */
     fun setupSwap(sizeMb: Int = 0): TaskAck {
