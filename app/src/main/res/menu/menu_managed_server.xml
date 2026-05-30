@@ -10,6 +10,14 @@
         android:title="@string/srv_action_restart_xray"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_telemost_scale"
+        android:title="@string/srv_action_telemost_scale"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_swap_setup"
+        android:title="@string/srv_action_swap_setup"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_update_agent"
         android:title="@string/srv_action_update_agent"
         app:showAsAction="never" />

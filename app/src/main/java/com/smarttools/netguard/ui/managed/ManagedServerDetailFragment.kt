@@ -101,6 +101,39 @@ class ManagedServerDetailFragment : Fragment() {
             true
         }
         R.id.action_restart_xray -> { viewModel.restartService("xray"); true }
+        R.id.action_telemost_scale -> {
+            // Slider 0..12; if Telemost isn't deployed the agent replies
+            // E_TELEMOST_NOT_DEPLOYED and the VM shows a friendly toast.
+            val slider = com.google.android.material.slider.Slider(requireContext()).apply {
+                valueFrom = 0f; valueTo = 12f; stepSize = 1f; value = 6f
+            }
+            val hint = android.widget.TextView(requireContext()).apply {
+                text = getString(R.string.srv_scale_hint)
+                setPadding(48, 24, 48, 0)
+            }
+            val box = android.widget.LinearLayout(requireContext()).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                addView(hint); addView(slider)
+            }
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.srv_scale_title)
+                .setView(box)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    viewModel.scaleTelemost(slider.value.toInt())
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            true
+        }
+        R.id.action_swap_setup -> {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.srv_swap_title)
+                .setMessage(R.string.srv_swap_message)
+                .setPositiveButton(android.R.string.ok) { _, _ -> viewModel.setupSwap() }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            true
+        }
         R.id.action_uninstall_xray -> {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.srv_action_uninstall_xray)

@@ -79,6 +79,12 @@
     <string name="srv_tab_rules">Правила</string>
     <string name="srv_tab_logs">Логи</string>
     <string name="srv_action_restart_xray">Перезапустить xray</string>
+    <string name="srv_action_telemost_scale">Telemost: число потоков</string>
+    <string name="srv_action_swap_setup">Добавить файл подкачки</string>
+    <string name="srv_scale_title">Сколько потоков Telemost?</string>
+    <string name="srv_scale_hint">Больше потоков - быстрее, но выше нагрузка. 0 - остановить Telemost.</string>
+    <string name="srv_swap_title">Добавить файл подкачки?</string>
+    <string name="srv_swap_message">Создаст swap-файл 512 МБ, чтобы Telemost работал на серверах с малым объёмом RAM. Безопасно и обратимо.</string>
     <string name="srv_action_update_agent">Обновить агент</string>
     <string name="srv_action_uninstall_xray">Удалить xray</string>
     <string name="srv_action_remove_server">Удалить сервер</string>

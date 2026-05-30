@@ -153,6 +153,12 @@
     <string name="srv_tab_rules">Rules</string>
     <string name="srv_tab_logs">Logs</string>
     <string name="srv_action_restart_xray">Restart xray</string>
+    <string name="srv_action_telemost_scale">Telemost streams</string>
+    <string name="srv_action_swap_setup">Add swap file</string>
+    <string name="srv_scale_title">How many Telemost streams?</string>
+    <string name="srv_scale_hint">More streams = faster, but more load. 0 stops Telemost.</string>
+    <string name="srv_swap_title">Add swap file?</string>
+    <string name="srv_swap_message">Creates a 512 MB swap file so Telemost survives on low-RAM servers. Safe and reversible.</string>
     <string name="srv_action_update_agent">Update agent</string>
     <string name="srv_action_uninstall_xray">Uninstall xray</string>
     <string name="srv_action_remove_server">Remove server</string>

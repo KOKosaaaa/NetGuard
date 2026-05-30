@@ -142,6 +142,51 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         _status.value = client.status() // reflect fresh pid + since
     }
 
+    /**
+     * Change the number of running Telemost streams (0..12) without a
+     * re-deploy. Async task — we poll, then refresh status. Errors are
+     * surfaced through the friendly mapping (E_TELEMOST_NOT_DEPLOYED,
+     * E_TELEMOST_NO_COOKIES, E_OOM ...) rather than raw text.
+     */
+    fun scaleTelemost(targetCount: Int) {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    val ack = client.scaleTelemost(targetCount)
+                    waitForTask(ack.taskId, timeoutSec = 120)
+                    _status.value = client.status()
+                }
+                post(if (targetCount == 0) "Telemost остановлен" else "Потоков Telemost: $targetCount")
+            } catch (e: Exception) {
+                Log.w(TAG, "scaleTelemost failed", e)
+                post(AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /** Create + enable a swapfile (helps Telemost survive on low-RAM VPS). */
+    fun setupSwap() {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    val ack = client.setupSwap()
+                    waitForTask(ack.taskId, timeoutSec = 90)
+                    _status.value = client.status()
+                }
+                post("Файл подкачки включён")
+            } catch (e: Exception) {
+                Log.w(TAG, "setupSwap failed", e)
+                post(AgentErrorMessages.explain(e).body)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     fun addProfile(label: String, port: Int, serverName: String = "") {
         // We wrap api() ourselves so the catch block has access to
         // (label, port, serverName) and can stash them for Retry.
