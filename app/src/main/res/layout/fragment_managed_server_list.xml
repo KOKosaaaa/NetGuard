@@ -84,19 +84,20 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Hidden until the user has ≥2 servers (a chain needs at least
-         two hops). Shown as an extended pill above the regular FAB. -->
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/fab_new_chain"
+    <!-- Routes (multi-hop chains) list — sits right next to the add (+)
+         button as a secondary mini-FAB. Opens ChainsListSheet. Moved here
+         from the toolbar overflow menu so it's discoverable. -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_routes"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/chain_new_button"
-        android:contentDescription="@string/chain_new_button"
-        android:visibility="gone"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="88dp"
-        app:icon="@drawable/ic_link"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        android:src="@drawable/ic_link"
+        android:contentDescription="@string/chains_menu_item"
+        app:fabSize="mini"
+        android:layout_marginEnd="12dp"
+        app:layout_constraintTop_toTopOf="@id/fab_add_server"
+        app:layout_constraintBottom_toBottomOf="@id/fab_add_server"
+        app:layout_constraintEnd_toStartOf="@id/fab_add_server" />
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>

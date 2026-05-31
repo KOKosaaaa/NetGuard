@@ -50,12 +50,31 @@ class ChainsListSheet : BottomSheetDialogFragment() {
         b.rvChains.layoutManager = LinearLayoutManager(requireContext())
         b.rvChains.adapter = adapter
 
+        b.btnCreateRoute.setOnClickListener {
+            CreateChainSheet().show(parentFragmentManager, CreateChainSheet.TAG)
+            dismiss()
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 vm.chains.collect { list ->
                     adapter.submitList(list.toList())
                     b.tvChainsEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
                     b.rvChains.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+                }
+            }
+        }
+        // Create needs >=2 servers (a chain has >=2 hops). Disable + explain
+        // why otherwise, rather than letting the wizard fail later.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.servers.collect { servers ->
+                    val enough = servers.size >= 2
+                    b.btnCreateRoute.isEnabled = enough
+                    b.btnCreateRoute.setText(
+                        if (enough) R.string.chains_create_button
+                        else R.string.chains_create_disabled
+                    )
                 }
             }
         }

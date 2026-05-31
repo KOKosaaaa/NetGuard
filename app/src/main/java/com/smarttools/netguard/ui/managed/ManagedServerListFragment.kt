@@ -42,17 +42,10 @@ class ManagedServerListFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding.toolbar.setNavigationOnClickListener { findNavController().navigateUp() }
-        binding.toolbar.inflateMenu(com.smarttools.netguard.R.menu.menu_managed_server_list)
-        // Routes (multi-hop chains) are available to everyone now — the UI
-        // is self-explanatory enough.
-        binding.toolbar.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                com.smarttools.netguard.R.id.action_show_chains -> {
-                    ChainsListSheet().show(parentFragmentManager, ChainsListSheet.TAG)
-                    true
-                }
-                else -> false
-            }
+        // Routes (multi-hop chains) — moved out of the toolbar overflow to a
+        // mini-FAB sitting right next to the add (+) button so it's visible.
+        binding.fabRoutes.setOnClickListener {
+            ChainsListSheet().show(parentFragmentManager, ChainsListSheet.TAG)
         }
 
         val adapter = ManagedServerAdapter { server ->
@@ -70,10 +63,6 @@ class ManagedServerListFragment : Fragment() {
             )
         }
 
-        binding.fabNewChain.setOnClickListener {
-            CreateChainSheet().show(parentFragmentManager, CreateChainSheet.TAG)
-        }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.servers.collect { list ->
@@ -81,11 +70,6 @@ class ManagedServerListFragment : Fragment() {
                         if (list.isEmpty()) View.VISIBLE else View.GONE
                     binding.rvServers.visibility =
                         if (list.isEmpty()) View.GONE else View.VISIBLE
-                    // Chain wizard needs ≥2 servers — anything less and
-                    // the button just causes a frustrating "need more
-                    // servers" dialog, so we hide it instead.
-                    binding.fabNewChain.visibility =
-                        if (list.size >= 2) View.VISIBLE else View.GONE
                     adapter.submitList(list)
                 }
             }

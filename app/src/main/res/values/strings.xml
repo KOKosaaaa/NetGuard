@@ -103,6 +103,9 @@
     <string name="chains_menu_item">My routes</string>
     <string name="chains_list_title">My routes</string>
     <string name="chains_list_empty">No routes yet. Tap «Route» to create your first one.</string>
+    <string name="chains_list_desc">A route (chain) sends your traffic through several of your own servers in turn — e.g. entry in RU → Germany → exit in the US. It hides your real exit country and makes the connection harder to block. You need at least 2 added servers to create a route.</string>
+    <string name="chains_create_button">Create route</string>
+    <string name="chains_create_disabled">Add a 2nd server first</string>
     <string name="chains_hop_summary">%1$d hops: %2$s</string>
     <string name="chains_confirm_delete_title">Delete route?</string>
     <string name="chains_confirm_delete_body">«%1$s» will be removed: profiles on every server in the chain will be torn down, the imported subscription line will go away. The managed servers themselves stay.</string>

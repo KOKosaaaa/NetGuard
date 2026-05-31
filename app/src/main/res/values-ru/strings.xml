@@ -373,6 +373,9 @@
     <string name="chains_menu_item">Мои маршруты</string>
     <string name="chains_list_title">Мои маршруты</string>
     <string name="chains_list_empty">Маршрутов пока нет. Жми «Маршрут» чтобы создать.</string>
+    <string name="chains_list_desc">Маршрут (цепочка) пропускает трафик через несколько твоих серверов по очереди - например, вход в РФ → Германия → выход в США. Это прячет реальную страну выхода и усложняет блокировку. Чтобы создать маршрут, нужно минимум 2 добавленных сервера.</string>
+    <string name="chains_create_button">Создать маршрут</string>
+    <string name="chains_create_disabled">Сначала добавь 2-й сервер</string>
     <string name="chains_hop_summary">%1$d хопов: %2$s</string>
     <string name="chains_confirm_delete_title">Удалить маршрут?</string>
     <string name="chains_confirm_delete_body">«%1$s» будет удалён: профили на каждом сервере цепочки снесутся, импортированная подписка тоже. Сами серверы останутся.</string>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -13,6 +14,15 @@
         android:text="@string/chains_list_title"
         android:textSize="20sp"
         android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/chains_list_desc"
+        android:textSize="13sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:lineSpacingExtra="2dp"
+        android:layout_marginTop="8dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_chains"
@@ -31,6 +41,20 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:gravity="center"
         android:layout_marginTop="20dp"
-        android:layout_marginBottom="20dp"
+        android:layout_marginBottom="12dp"
         android:visibility="gone" />
+
+    <!-- Create-route action lives here, under the list, instead of a
+         separate text FAB on the server list. Enabled only with >=2 servers
+         (a chain needs >=2 hops); disabled state shows why. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_create_route"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/chains_create_button"
+        android:textColor="?attr/colorSurface"
+        app:backgroundTint="@color/create_green"
+        app:icon="@drawable/ic_link"
+        app:iconTint="?attr/colorSurface" />
 </LinearLayout>
