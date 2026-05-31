@@ -392,6 +392,11 @@
     <string name="telemost_capacity_unknown">Лимит сервера проверится после первого подключения</string>
     <string name="telemost_striping">Striping Telemost (эксперимент)</string>
     <string name="telemost_striping_desc">Распределяет каждое соединение по ВСЕМ комнатам Telemost, чтобы одна большая загрузка шла на их суммарной скорости. Нужен обновлённый сервер-эксит. Если загрузки зависают - выключи.</string>
+    <string name="save_logs_to_file">Сохранить логи в файл</string>
+    <string name="logs_saved">Логи сохранены: %1$s</string>
+    <string name="logs_save_failed">Не удалось сохранить логи: %1$s</string>
+    <string name="logs_empty">Нет логов для сохранения</string>
+    <string name="share_logs">Поделиться логами</string>
     <string name="telemost_connect_yandex">Войти через Яндекс</string>
     <string name="telemost_yandex_connected">Яндекс-аккаунт подключён</string>
     <string name="telemost_yandex_required">Сначала войди — Telemost-комнаты создаются твоим Яндекс-аккаунтом</string>

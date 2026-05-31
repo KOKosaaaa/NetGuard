@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Exported logs live under the app's external files dir (logs/). -->
+    <external-files-path name="logs" path="logs/" />
+</paths>

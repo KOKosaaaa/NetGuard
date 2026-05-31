@@ -70,6 +70,10 @@ class LogFragment : Fragment() {
                     Toast.makeText(requireContext(), R.string.copied, Toast.LENGTH_SHORT).show()
                     true
                 }
+                R.id.action_save_logs -> {
+                    saveLogsToFile()
+                    true
+                }
                 else -> false
             }
         }
@@ -85,6 +89,49 @@ class LogFragment : Fragment() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Writes the FULL log buffer (unfiltered — diagnostics need every line) to
+     * a timestamped .txt under the app's external files dir, then opens a share
+     * sheet via FileProvider so it can be sent to Telegram / saved. No storage
+     * permission needed: the file lives in app-private external storage and is
+     * handed out only as a granted content:// URI.
+     */
+    private fun saveLogsToFile() {
+        val ctx = requireContext()
+        if (allEntries.isEmpty()) {
+            Toast.makeText(ctx, R.string.logs_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val tsFile = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+                .format(java.util.Date())
+            val tsLine = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+            val text = buildString {
+                for (e in allEntries) {
+                    append(tsLine.format(java.util.Date(e.timestamp)))
+                    append(" [").append(e.level).append("] ")
+                    append(e.message).append('\n')
+                }
+            }
+            val dir = java.io.File(ctx.getExternalFilesDir(null), "logs").apply { mkdirs() }
+            val file = java.io.File(dir, "netguard-log-$tsFile.txt")
+            file.writeText(text)
+
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                ctx, "${ctx.packageName}.fileprovider", file
+            )
+            val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(android.content.Intent.createChooser(share, getString(R.string.share_logs)))
+            Toast.makeText(ctx, getString(R.string.logs_saved, file.name), Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(ctx, getString(R.string.logs_save_failed, e.message ?: ""), Toast.LENGTH_LONG).show()
         }
     }
 

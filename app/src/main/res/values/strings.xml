@@ -122,6 +122,11 @@
     <string name="telemost_capacity_unknown">Server capacity will be checked after the first connect</string>
     <string name="telemost_striping">Telemost striping (experimental)</string>
     <string name="telemost_striping_desc">Split each connection across ALL Telemost rooms so one big download uses their combined speed. Needs the exit server updated. If downloads stall, turn this off.</string>
+    <string name="save_logs_to_file">Save logs to file</string>
+    <string name="logs_saved">Logs saved: %1$s</string>
+    <string name="logs_save_failed">Could not save logs: %1$s</string>
+    <string name="logs_empty">No logs to save</string>
+    <string name="share_logs">Share logs</string>
     <string name="telemost_connect_yandex">Sign in with Yandex</string>
     <string name="telemost_yandex_connected">Yandex account connected</string>
     <string name="telemost_yandex_required">Sign in first — Telemost rooms can only be created with your Yandex account</string>

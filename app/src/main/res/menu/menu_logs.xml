@@ -9,4 +9,8 @@
         android:id="@+id/action_copy_logs"
         android:title="@string/copy_all"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_save_logs"
+        android:title="@string/save_logs_to_file"
+        app:showAsAction="never" />
 </menu>

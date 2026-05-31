@@ -141,6 +141,18 @@
                 android:resource="@xml/widget_vpn_info" />
         </receiver>
 
+        <!-- Shares exported log .txt files via a content:// URI (no legacy
+             storage permission needed, works on all supported API levels). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>
