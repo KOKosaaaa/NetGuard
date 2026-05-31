@@ -15,6 +15,9 @@ import androidx.recyclerview.widget.RecyclerView
 class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
 
     companion object {
+        // Bright palette — reads well on DARK surfaces (default/OLED/Ocean/
+        // Fsociety themes). Used as both the group-frame stroke and the
+        // header-name text color.
         val GROUP_COLORS = intArrayOf(
             0xFF7C4DFF.toInt(),
             0xFF00BCD4.toInt(),
@@ -25,6 +28,38 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
             0xFFFFEB3B.toInt(),
             0xFF009688.toInt(),
         )
+
+        // Darker variants of the SAME hues (same order) for LIGHT surfaces —
+        // the bright ones (yellow/cyan/green) are near-invisible as text on
+        // white. Picked for >=4:1 contrast on the light theme's #FFFBFE.
+        private val GROUP_COLORS_LIGHT = intArrayOf(
+            0xFF5E35B1.toInt(), // deep purple
+            0xFF00838F.toInt(), // cyan 800
+            0xFFE65100.toInt(), // orange 900
+            0xFF2E7D32.toInt(), // green 800
+            0xFFC2185B.toInt(), // pink 700
+            0xFF283593.toInt(), // indigo 800
+            0xFFF57F17.toInt(), // amber 900 (dark, readable yellow)
+            0xFF00695C.toInt(), // teal 800
+        )
+
+        /** Per-subscription accent color, chosen by the current theme's
+         *  surface luminance so it stays readable on light AND dark themes. */
+        fun colorFor(context: android.content.Context, subId: Long): Int {
+            val palette = if (isLightSurface(context)) GROUP_COLORS_LIGHT else GROUP_COLORS
+            return palette[(subId % palette.size).toInt()]
+        }
+
+        private fun isLightSurface(context: android.content.Context): Boolean {
+            val tv = android.util.TypedValue()
+            context.theme.resolveAttribute(
+                com.google.android.material.R.attr.colorSurface, tv, true)
+            val c = tv.data
+            val lum = 0.299 * android.graphics.Color.red(c) +
+                0.587 * android.graphics.Color.green(c) +
+                0.114 * android.graphics.Color.blue(c)
+            return lum > 150
+        }
 
         private const val FRAME_CORNER_RADIUS = 20f
         private const val FRAME_STROKE_WIDTH = 4f
@@ -120,8 +155,7 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
 
     private fun drawFrame(c: Canvas, parent: RecyclerView,
                           rawTop: Float, rawBottom: Float, subId: Long) {
-        val colorIdx = (subId % GROUP_COLORS.size).toInt()
-        val color = GROUP_COLORS[colorIdx]
+        val color = colorFor(parent.context, subId)
 
         val left = parent.paddingLeft + FRAME_PADDING / 2
         val right = parent.width - parent.paddingRight - FRAME_PADDING / 2

@@ -160,10 +160,10 @@ class ProfileAdapter(
             b.tvSubName.text = sub.name
             b.tvSubTraffic.text = formatTraffic(sub.usedBytes, sub.totalBytes)
 
-            // Pick a stable color from group palette by subscription id
-            val colorIdx = (sub.id % SubscriptionGroupDecoration.GROUP_COLORS.size).toInt()
-            val color = SubscriptionGroupDecoration.GROUP_COLORS[colorIdx]
-            b.tvSubName.setTextColor(color)
+            // Stable per-subscription color, theme-aware so it stays readable
+            // on the light theme too (bright palette is invisible on white).
+            b.tvSubName.setTextColor(
+                SubscriptionGroupDecoration.colorFor(b.tvSubName.context, sub.id))
 
             // Progress: layered drawable (track + clipped fill). Tint both
             // layers via theme attrs, set fill level (0..10000) by fraction.
