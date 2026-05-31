@@ -117,7 +117,8 @@
     <string name="yandex_login_title">Sign in to Yandex</string>
     <string name="telemost_title">New Telemost</string>
     <string name="telemost_streams">Streams</string>
-    <string name="telemost_capacity_known">Server can handle up to %1$d streams (%2$d MB RAM, %3$d vCPU)</string>
+    <string name="telemost_capacity_known">Recommended: up to %1$d streams for this server (%2$d MB RAM, %3$d vCPU). More than that usually makes it slower, not faster.</string>
+    <string name="telemost_streams_explain">Each room is a separate tunnel through your server. More rooms = more total speed — but only up to a point:\n• the phone connects to rooms one by one, so more rooms = a longer wait before it\'s usable;\n• each room loads the server\'s CPU — roughly 2-3 rooms per core. Above that the cores thrash and everything gets slower.\nStick close to the recommended number above.</string>
     <string name="telemost_capacity_unknown">Server capacity will be checked after the first connect</string>
     <string name="telemost_connect_yandex">Sign in with Yandex</string>
     <string name="telemost_yandex_connected">Yandex account connected</string>

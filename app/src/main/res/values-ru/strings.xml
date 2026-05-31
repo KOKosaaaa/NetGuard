@@ -387,7 +387,8 @@
     <string name="yandex_login_title">Вход в Яндекс</string>
     <string name="telemost_title">Новый Telemost</string>
     <string name="telemost_streams">Потоки</string>
-    <string name="telemost_capacity_known">Сервер потянет до %1$d потоков (%2$d МБ RAM, %3$d vCPU)</string>
+    <string name="telemost_capacity_known">Рекомендуется: до %1$d потоков для этого сервера (%2$d МБ RAM, %3$d vCPU). Больше обычно делает медленнее, а не быстрее.</string>
+    <string name="telemost_streams_explain">Каждая комната - отдельный туннель через твой сервер. Больше комнат = больше суммарная скорость, но только до предела:\n• телефон подключается к комнатам по очереди, поэтому больше комнат = дольше ждать, пока заработает;\n• каждая комната грузит CPU сервера - примерно 2-3 комнаты на ядро. Сверх этого ядра захлёбываются и всё становится медленнее.\nДержись близко к рекомендованному числу выше.</string>
     <string name="telemost_capacity_unknown">Лимит сервера проверится после первого подключения</string>
     <string name="telemost_connect_yandex">Войти через Яндекс</string>
     <string name="telemost_yandex_connected">Яндекс-аккаунт подключён</string>

@@ -158,14 +158,15 @@ class SocksRoundRobinLb(
             val s2cThread = Thread({ pump(s, c, "s2c#$idx") }, "lb-s2c-$idx")
                 .apply { isDaemon = true; start() }
             pump(c, s, "c2s#$idx")
-            // The client stopped sending (half-close / EOF). pump() above
-            // already half-closed the server's input (dst.shutdownOutput), so
-            // the server can finish its reply. Wait for the server->client pump
-            // to drain instead of truncating it. Cap at 8s: a normal response
-            // ends s2c in milliseconds; the cap only bounds the pathological
-            // "server half-closed but never sends FIN" case so a stuck conn
-            // can't pin a Dispatchers.IO thread for long under load.
-            try { s2cThread.join(8_000) } catch (_: Exception) {}
+            // The client side ended. Give the server->client pump a brief
+            // moment to flush, then the finally closes both sockets (which
+            // unblocks s2c). MUST stay short: this LB handles many short-lived
+            // connections (a web page / Telegram opens dozens), and a long
+            // wait here pins handler threads on teardown and starves new
+            // connections — a long cap made browsing crawl. 300ms is the
+            // throughput-safe value (was the original); the rare half-closed-
+            // slow-response truncation is an acceptable trade.
+            try { s2cThread.join(300) } catch (_: Exception) {}
         } finally {
             try { srv.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}

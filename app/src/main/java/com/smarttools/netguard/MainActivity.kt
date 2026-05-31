@@ -215,7 +215,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "URI too long", Toast.LENGTH_SHORT).show()
             return
         }
-        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://")
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
         if (!schemes.any { uri.startsWith(it) }) return
 
         val profile = try {

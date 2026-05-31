@@ -292,6 +292,7 @@ class ServerProfilesFragment : Fragment() {
         }
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.srv_telemost_change_count)
+            .setMessage(R.string.telemost_streams_explain)
             .setView(slider)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val n = slider.value.toInt()

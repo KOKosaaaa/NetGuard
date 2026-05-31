@@ -100,8 +100,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="12sp"
+            android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/tv_streams_explain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/telemost_streams_explain"
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="10dp" />
 
         <!-- Progress -->
         <LinearLayout

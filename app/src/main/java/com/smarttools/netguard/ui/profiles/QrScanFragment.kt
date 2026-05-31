@@ -167,7 +167,7 @@ class QrScanFragment : Fragment() {
     }
 
     private fun isVpnUri(value: String): Boolean {
-        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://")
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
         return schemes.any { value.startsWith(it, ignoreCase = true) }
     }
 

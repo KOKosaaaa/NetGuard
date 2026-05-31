@@ -76,9 +76,13 @@ class CreateTelemostViewModel(application: Application) : AndroidViewModel(appli
         // ~95 MB (64 MB soft cap + Go runtime overhead). Leave 80 MB
         // for the agent itself + headroom for sshd / kernel slabs.
         val byMem = ((effectiveFreeMb - 80) / 95).coerceAtLeast(0)
-        // CPU isn't the bottleneck for idle WebRTC peers; 4 per vCPU is
-        // safe headroom.
-        val byCpu = s.cpuCount * 4
+        // CPU is the real bottleneck under ACTIVE relaying: each instance
+        // does WebRTC encode/decode + obfuscation, so oversubscribing the
+        // cores thrashes them and AGGREGATE throughput drops (observed: 12
+        // streams on a 2-vCPU box was slower than 6). Prod experience on
+        // Aeza is ~2-3 active streams per vCPU; use 3 as the ceiling so the
+        // recommendation tracks the cores, not just free RAM.
+        val byCpu = s.cpuCount * 3
         return minOf(byMem, byCpu, 12).coerceAtLeast(1)
     }
 
