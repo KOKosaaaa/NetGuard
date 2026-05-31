@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repo = ManagedServerRepository.get(application)
+    private val chainRepo = com.smarttools.netguard.agent.ChainRepository.get(application)
 
     private lateinit var server: ManagedServer
     /**
@@ -280,7 +281,9 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     _status.value = client.status()
                     _telemost.value?.let { updateImportedTelemostProfile(it) }
                 }
-                post(if (targetCount == 0) "Telemost остановлен" else "Потоков Telemost: $targetCount")
+                post(if (targetCount == 0) "Telemost остановлен"
+                    else getApplication<App>().resources.getQuantityString(
+                        com.smarttools.netguard.R.plurals.telemost_stream_count, targetCount, targetCount))
             } catch (e: Exception) {
                 Log.w(TAG, "scaleTelemost failed", e)
                 post(AgentErrorMessages.explain(e).body)
@@ -650,6 +653,9 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                                     it.name.startsWith(server.name))
                         }
                         .forEach { app.profileRepository.delete(it) }
+                    // Routes through this (now-wiped) server can never work
+                    // again — drop them from the Routes tab too.
+                    runCatching { chainRepo.deleteChainsForServer(server.id) }
                     repo.remove(server)
                     down
                 }
@@ -691,6 +697,9 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     /** Bearer-revoke + DB delete. Agent keeps running on the VPS. */
     fun removeServer(onDone: () -> Unit) = api {
         try { client.revoke() } catch (_: Exception) { /* best-effort */ }
+        // Drop any routes through this server before we forget it — once the
+        // server's gone from the app the chain can't be managed anyway.
+        runCatching { chainRepo.deleteChainsForServer(server.id) }
         repo.remove(server)
         post("Server removed")
         withContext(Dispatchers.Main) { onDone() }

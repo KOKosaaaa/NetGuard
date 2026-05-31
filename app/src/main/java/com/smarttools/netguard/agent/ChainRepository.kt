@@ -89,6 +89,27 @@ class ChainRepository(
         dao.deleteChain(chain.chain.id)
     }
 
+    /**
+     * Delete every chain that has a hop on [serverId]. Called when a server
+     * is purged / removed from the app — any route through it can never work
+     * again, so it shouldn't linger in the Routes tab. Best-effort agent
+     * cleanup on the OTHER (still-live) hops happens inside [delete]; the
+     * purged server's own hop just fails to clean (agent gone) and is
+     * tolerated. Returns how many chains were removed.
+     */
+    suspend fun deleteChainsForServer(serverId: Long): Int = withContext(Dispatchers.IO) {
+        var removed = 0
+        for (c in dao.getAllChains()) {
+            val hops = dao.getHopsByChainId(c.id)
+            if (hops.any { it.serverId == serverId }) {
+                runCatching { delete(ChainWithHops(c, hops)) }
+                    .onFailure { Log.w(TAG, "deleteChainsForServer: ${it.message}") }
+                removed++
+            }
+        }
+        removed
+    }
+
     data class CreateHopRow(
         val serverId: Long,
         val serverName: String,

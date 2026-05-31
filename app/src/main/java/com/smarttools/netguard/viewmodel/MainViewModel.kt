@@ -46,6 +46,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _speedResult = MutableStateFlow<SpeedTester.SpeedResult?>(null)
     val speedResult: StateFlow<SpeedTester.SpeedResult?> = _speedResult.asStateFlow()
 
+    init {
+        // Orphaned-tunnel guard: if the profile the tunnel is actually
+        // connected to is deleted (server purged/removed, profile or route
+        // deleted), the VPN would otherwise keep running as "connected, no
+        // server". Detect it (connected + active profile id no longer in the
+        // DB) and stop. Uses the ACTUAL connected id, not the selected one,
+        // so a trigger-mode tunnel on a still-existing (just non-selected)
+        // profile is left alone.
+        viewModelScope.launch {
+            combine(connectionState, profileRepo.getAllFlow()) { state, profiles ->
+                state to profiles
+            }.collect { (state, profiles) ->
+                val pid = TunnelVpnService.activeProfileId
+                if (state is ConnectionState.Connected && pid != -1L &&
+                    profiles.none { it.id == pid }
+                ) {
+                    TunnelVpnService.stop(getApplication())
+                }
+            }
+        }
+    }
+
     fun toggleConnection() {
         val currentState = connectionState.value
         if (currentState is ConnectionState.Connected || currentState is ConnectionState.Connecting) {

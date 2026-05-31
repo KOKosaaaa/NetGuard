@@ -56,6 +56,16 @@ class TunnelVpnService : VpnService() {
         private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
         val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
+        /**
+         * Profile id the running tunnel is actually using (-1 when stopped).
+         * Exposed so the UI can detect an "orphaned" tunnel — connected to a
+         * profile that was since deleted (server purged, profile/route removed)
+         * — and stop it instead of showing "connected, no server". Distinct
+         * from the *selected* profile: trigger mode can run a non-selected one.
+         */
+        @Volatile var activeProfileId: Long = -1L
+            private set
+
         private val _trafficStats = MutableStateFlow(TrafficSnapshot(0L, 0L, 0L, 0L))
         val trafficStats: StateFlow<TrafficSnapshot> = _trafficStats.asStateFlow()
 
@@ -428,6 +438,7 @@ class TunnelVpnService : VpnService() {
         _connectionState.value = ConnectionState.Connecting
         LogBuffer.add(LogBuffer.LogLevel.INFO, "Starting tunnel...")
         currentProfileId = profileId
+        activeProfileId = profileId
         isStarting = true
         // Fresh session — reset crash counter so a new connect attempt isn't
         // pre-loaded with attempts from a previous handover.
@@ -1928,6 +1939,7 @@ class TunnelVpnService : VpnService() {
                         return@withTimeout
                     }
                     currentProfileId = profile.id
+                    activeProfileId = profile.id
                     app.getPreferences().edit()
                         .putLong("last_profile_id", profile.id)
                         .putString("last_profile_name", profile.name)
@@ -2072,6 +2084,7 @@ class TunnelVpnService : VpnService() {
         // stale "restart in flight" flag left set by a recover path that bailed
         // out through stopTunnel().
         xrayRecovering = false
+        activeProfileId = -1L
         reconnectTargetNetwork = null
         unregisterNetworkCallback()
         trafficMonitor?.stop()

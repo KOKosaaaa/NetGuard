@@ -76,8 +76,8 @@ class ServerProfilesFragment : Fragment() {
                     hasTelemost = deployed
                     b.telemostCard.visibility = if (deployed) View.VISIBLE else View.GONE
                     if (deployed) {
-                        b.tvTelemostSummary.text = getString(
-                            R.string.srv_telemost_summary, rooms!!.activeCount)
+                        b.tvTelemostSummary.text = resources.getQuantityString(
+                            R.plurals.telemost_active_rooms, rooms!!.activeCount, rooms.activeCount)
                         b.telemostCard.setOnClickListener { showTelemostManage(rooms) }
                     }
                     updateEmpty()
@@ -250,7 +250,8 @@ class ServerProfilesFragment : Fragment() {
         val box = manageBox()
         var dialog: androidx.appcompat.app.AlertDialog? = null
         box.addView(android.widget.TextView(requireContext()).apply {
-            text = getString(R.string.srv_telemost_summary, rooms.activeCount)
+            text = resources.getQuantityString(
+                R.plurals.telemost_active_rooms, rooms.activeCount, rooms.activeCount)
         })
         // "Restart" re-applies the CURRENT room count (the number running now),
         // not the provisioned capacity — otherwise restarting after a scale-

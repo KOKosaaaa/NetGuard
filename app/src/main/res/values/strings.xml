@@ -129,6 +129,18 @@
     <string name="telemost_building">Setting up Telemost…</string>
     <string name="telemost_ready">Telemost ready</string>
     <string name="telemost_ready_body">%1$d streams running on the server. The profile has been added to your Servers list.</string>
+    <plurals name="telemost_streams_running">
+        <item quantity="one">%1$d stream is running on the server. The profile has been added to your Servers list.</item>
+        <item quantity="other">%1$d streams are running on the server. The profile has been added to your Servers list.</item>
+    </plurals>
+    <plurals name="telemost_active_rooms">
+        <item quantity="one">%1$d active room</item>
+        <item quantity="other">%1$d active rooms</item>
+    </plurals>
+    <plurals name="telemost_stream_count">
+        <item quantity="one">%1$d Telemost stream</item>
+        <item quantity="other">%1$d Telemost streams</item>
+    </plurals>
     <string name="srv_proto_telemost_badge">YA</string>
     <string name="chain_progress_starting">Setting up %3$s (%1$d of %2$d) — connecting…</string>
     <string name="chain_progress_deploying">Setting up %3$s (%1$d of %2$d) — installing xray (≈30 sec)…</string>

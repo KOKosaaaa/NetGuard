@@ -399,6 +399,24 @@
     <string name="telemost_building">Поднимаю Telemost…</string>
     <string name="telemost_ready">Telemost готов</string>
     <string name="telemost_ready_body">%1$d потоков работают на сервере. Профиль добавлен в Серверы.</string>
+    <plurals name="telemost_streams_running">
+        <item quantity="one">%1$d поток работает на сервере. Профиль добавлен в Серверы.</item>
+        <item quantity="few">%1$d потока работают на сервере. Профиль добавлен в Серверы.</item>
+        <item quantity="many">%1$d потоков работают на сервере. Профиль добавлен в Серверы.</item>
+        <item quantity="other">%1$d потока работают на сервере. Профиль добавлен в Серверы.</item>
+    </plurals>
+    <plurals name="telemost_active_rooms">
+        <item quantity="one">%1$d активная комната</item>
+        <item quantity="few">%1$d активные комнаты</item>
+        <item quantity="many">%1$d активных комнат</item>
+        <item quantity="other">%1$d активных комнат</item>
+    </plurals>
+    <plurals name="telemost_stream_count">
+        <item quantity="one">%1$d поток Telemost</item>
+        <item quantity="few">%1$d потока Telemost</item>
+        <item quantity="many">%1$d потоков Telemost</item>
+        <item quantity="other">%1$d потока Telemost</item>
+    </plurals>
     <string name="srv_proto_telemost_badge">YA</string>
     <string name="chain_progress_starting">Настраиваю %3$s (%1$d из %2$d) — подключаюсь…</string>
     <string name="chain_progress_deploying">Настраиваю %3$s (%1$d из %2$d) — ставлю xray (≈30 сек)…</string>

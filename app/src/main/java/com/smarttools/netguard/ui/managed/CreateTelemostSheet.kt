@@ -171,7 +171,7 @@ class CreateTelemostSheet : BottomSheetDialogFragment() {
         val activityCtx = requireActivity()
         MaterialAlertDialogBuilder(activityCtx)
             .setTitle(R.string.telemost_ready)
-            .setMessage(getString(R.string.telemost_ready_body, count) + "\n\n" + uri)
+            .setMessage(resources.getQuantityString(R.plurals.telemost_streams_running, count, count) + "\n\n" + uri)
             .setPositiveButton(R.string.chain_copy_uri) { _, _ ->
                 val cm = activityCtx.getSystemService(Context.CLIPBOARD_SERVICE) as
                     android.content.ClipboardManager
