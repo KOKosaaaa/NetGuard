@@ -34,9 +34,9 @@ const (
 	retransmitScan = 1 * time.Second
 
 	// pipeRateBytesPerSec paces Data per pipe just under one room's ~1.25 Mbps
-	// ceiling; pipeBurstBytes allows a short burst before the bucket throttles.
+	// ceiling, keeping the session under the ~9 Mbps point where the upstream
+	// Acks collapse.
 	pipeRateBytesPerSec = 125000.0 // ~1.0 Mbps
-	pipeBurstBytes      = 96 * 1024
 
 	// chunkRTO (ms) is how long a chunk may go unacked before it is resent.
 	// Must sit well above the real Ack round-trip over Telemost so a slow but
@@ -169,37 +169,30 @@ type pipe struct {
 	// striping spreads load across pipes or collapses onto one.
 	wrote atomic.Int64
 	rd    atomic.Int64
-	// Pacing (token bucket) so we never push Data faster than one Telemost
-	// room sustains (~1.25 Mbps). Overdriving a room bloats its WebRTC buffer,
-	// inflates latency and stalls the Ack feedback — the burst-to-20-then-0
-	// pattern. Control frames (Acks) bypass this.
-	paceMu     sync.Mutex
-	paceTokens float64
-	paceLast   time.Time
+	// Pacing so we never push Data faster than one Telemost room sustains
+	// (~1.25 Mbps). Overdriving a room saturates its WebRTC channel and
+	// starves the upstream Acks (the in=0 stall above ~9 Mbps). Virtual-
+	// scheduling limiter: each send reserves its slot by advancing paceNext
+	// under the lock, then sleeps outside it — correct under many concurrent
+	// senders (a plain token bucket leaked because sleepers bypassed it).
+	// Control frames (Acks) bypass pacing.
+	paceMu   sync.Mutex
+	paceNext time.Time
 }
 
-// pace blocks until n bytes of pacing budget are available for this pipe.
+// pace blocks until this pipe's rate budget allows n more bytes.
 func (p *pipe) pace(n int) {
 	p.paceMu.Lock()
 	now := time.Now()
-	if p.paceLast.IsZero() {
-		p.paceLast = now
-		p.paceTokens = pipeBurstBytes
+	if p.paceNext.Before(now) {
+		p.paceNext = now
 	}
-	p.paceTokens += now.Sub(p.paceLast).Seconds() * pipeRateBytesPerSec
-	if p.paceTokens > pipeBurstBytes {
-		p.paceTokens = pipeBurstBytes
-	}
-	p.paceLast = now
-	if p.paceTokens >= float64(n) {
-		p.paceTokens -= float64(n)
-		p.paceMu.Unlock()
-		return
-	}
-	deficit := float64(n) - p.paceTokens
-	p.paceTokens = 0
+	wait := p.paceNext.Sub(now)
+	p.paceNext = p.paceNext.Add(time.Duration(float64(n) / pipeRateBytesPerSec * float64(time.Second)))
 	p.paceMu.Unlock()
-	time.Sleep(time.Duration(deficit / pipeRateBytesPerSec * float64(time.Second)))
+	if wait > 0 {
+		time.Sleep(wait)
+	}
 }
 
 func (p *pipe) write(f Frame) error {
