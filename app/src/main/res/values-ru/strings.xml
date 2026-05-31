@@ -434,4 +434,26 @@
     <string name="chain_substep_systemd_start">запускаю сервис</string>
     <string name="chain_substep_rollback">откатываю изменения</string>
     <string name="chain_substep_healthcheck">проверяю что стартанул</string>
+    <string name="srv_create_profile">Создать профиль</string>
+    <string name="srv_create_profile_subtitle">Настроим за 30 секунд. Менять можно потом.</string>
+    <string name="srv_creating_profile">Создаю профиль…</string>
+    <string name="srv_profile_name_hint">Название профиля (необязательно)</string>
+    <string name="srv_profile_ready_body">Ссылка добавлена в раздел «Серверы» — можешь подключаться прямо из NetGuard.\n\nЕсли хочешь подключаться из другого приложения (Hiddify, v2rayNG, Streisand, NekoBox) — просто скопируй ссылку и вставь в это приложение.</string>
+    <string name="srv_profile_ready_close">Готово</string>
+    <string name="srv_profile_ready_copy">Скопировать ссылку</string>
+    <string name="srv_profile_ready_title">Профиль готов</string>
+    <string name="srv_profiles_empty_body">Профиль — это набор ключей для подключения к серверу. После создания можно подключаться прямо из NetGuard или поделиться ссылкой — она подойдёт для любого клиента (Hiddify, v2rayNG, Streisand).</string>
+    <string name="srv_profiles_empty_how_body">1. Жми «Создать профиль».\n2. Выбери протокол и под какой сайт маскироваться.\n3. Через 30 сек профиль готов — он автоматом появится на главном экране, можно подключаться.</string>
+    <string name="srv_profiles_empty_how_title">Как это работает</string>
+    <string name="srv_profiles_empty_title">Здесь будут твои VPN-профили</string>
+    <string name="srv_proto_telemost_desc">＋ Работает даже в «режиме БС», когда обычный VPN заблокирован.\n－ Медленнее VLESS и заметно сильнее грузит сервер и телефон.\nПрячет трафик внутри настоящей Telemost-конференции. Только NetGuard.</string>
+    <string name="srv_proto_telemost_title">Видеоконференции (Telemost)</string>
+    <string name="srv_proto_vless_desc">＋ Быстрый, почти не грузит сервер и телефон. Маскируется под крупный сайт.\n－ Не работает в «режиме БС», когда оператор режет по IP-адресам.\nПодходит для NetGuard, Hiddify, v2rayNG, Streisand.</string>
+    <string name="srv_proto_vless_title">VLESS + REALITY · рекомендуется</string>
+    <string name="srv_protocol">Протокол</string>
+    <string name="srv_sni_custom">Свой…</string>
+    <string name="srv_sni_custom_hint">Домен, например vk.com</string>
+    <string name="srv_sni_help">Выбери крупный сайт, который точно не блокируется. Реалити-маска заставит провайдера думать, что ты подключаешься к нему.</string>
+    <string name="srv_sni_help_geo">Если сервер за границей — лучше международный сайт (Cloudflare/Microsoft). Российский SNI на зарубежный VPS провайдер режет на лету.</string>
+    <string name="srv_sni_title">Под какой сайт маскироваться</string>
 </resources>
