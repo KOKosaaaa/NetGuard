@@ -257,6 +257,28 @@ class StripeMux(
         return "$host:$port"
     }
 
+    /**
+     * Writes a frame to every live pipe. Used for tiny control frames (Acks)
+     * so the fastest surviving pipe delivers them and one slow/dead pipe can't
+     * delay the peer's window update. Duplicates are harmless (cumulative).
+     */
+    fun broadcast(frame: StripeFrame) {
+        val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }
+        if (snapshot.isEmpty()) return
+        val wire = frame.encode()
+        for (p in snapshot) {
+            if (p.dead) continue
+            try {
+                synchronized(p.writeLock) {
+                    p.out.write(wire)
+                    p.out.flush()
+                }
+            } catch (e: Exception) {
+                p.dead = true
+            }
+        }
+    }
+
     /** Stripes one frame across the live pipes round-robin. */
     fun send(frame: StripeFrame): Boolean {
         val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }

@@ -7,20 +7,25 @@ import (
 	"time"
 )
 
+// txChunk is one sent-but-not-yet-acked s2c chunk, retained so it can be
+// resent if the pipe it went on dies (the substrate has no retransmit of its
+// own and Telemost rooms drop often).
+type txChunk struct {
+	off  uint64
+	data []byte
+}
+
 // flow is one application connection multiplexed over the session's pipes.
 //
-// Two directions run as two goroutines:
-//   - rxLoop  (c2s): frames arrive from the client, get reassembled in
-//     offset order, and the contiguous bytes are written to the real dest.
-//     We Ack our cumulative delivered offset back so the client's send
-//     window can advance.
-//   - txLoop  (s2c): we read the dest, chunk it, stripe chunks across pipes,
-//     and gate ourselves on the client's Acks so we never run more than
-//     Window bytes ahead (which also bounds the client's reorder buffer).
-//
-// The window is what stops a slow flow from blocking a shared pipe: the
-// client is paced by how fast we drain to dest, so the per-flow inbound
-// channel never backs up past the window and the pipe reader never stalls.
+//   - rxLoop  (c2s): client frames are reassembled in offset order and written
+//     to the real dest; we Ack our cumulative delivered offset back.
+//   - txReader (s2c): we read the dest, chunk it, stripe chunks across pipes,
+//     window-gated on the client's Acks.
+//   - txRetransmit (s2c): a backstop that resends the unacked window when Acks
+//     stop advancing (a room died mid-transfer and took in-flight chunks with
+//     it). Go-Back-N style — resend everything still unacked; the receiver
+//     dedups by offset. This is what keeps one dead room from stalling the
+//     whole striped flow to zero.
 type flow struct {
 	id   uint32
 	sess *session
@@ -40,10 +45,13 @@ type flow struct {
 	lastAckSent uint64
 
 	// tx (s2c) state — guarded by txMu/txCond.
-	txMu    sync.Mutex
-	txCond  *sync.Cond
-	txSeq   uint64 // next offset to assign / total sent
-	txAcked uint64 // cumulative delivered reported by client Acks
+	txMu       sync.Mutex
+	txCond     *sync.Cond
+	txBase     uint64 // cumulative bytes acked by the client (window left edge)
+	txNext     uint64 // next offset to assign
+	unacked    []txChunk
+	finReached bool
+	finSeq     uint64
 
 	rxDone atomic.Bool
 	txDone atomic.Bool
@@ -71,7 +79,7 @@ func (fl *flow) start() {
 	go fl.reaper()
 }
 
-func (fl *flow) touch()             { fl.lastProg.Store(time.Now().UnixNano()) }
+func (fl *flow) touch()              { fl.lastProg.Store(time.Now().UnixNano()) }
 func (fl *flow) lastProgress() int64 { return fl.lastProg.Load() }
 
 func (fl *flow) isClosed() bool {
@@ -84,7 +92,7 @@ func (fl *flow) isClosed() bool {
 }
 
 // deliver routes a frame the session handed us. Data/Fin queue for rxLoop;
-// Ack and Rst act inline (Ack just bumps the tx window, Rst tears down).
+// Ack advances the tx window (and frees acked chunks); Rst tears down.
 func (fl *flow) deliver(f Frame) {
 	switch f.Type {
 	case FrameOpen:
@@ -95,15 +103,32 @@ func (fl *flow) deliver(f Frame) {
 		case <-fl.closed:
 		}
 	case FrameAck:
-		fl.txMu.Lock()
-		if f.Seq > fl.txAcked {
-			fl.txAcked = f.Seq
-			fl.txCond.Broadcast()
-		}
-		fl.txMu.Unlock()
-		fl.touch()
+		fl.onAck(f.Seq)
 	case FrameRst:
 		fl.close()
+	}
+}
+
+// onAck advances the window left edge and drops fully-acked chunks from the
+// retransmit buffer. Acks are cumulative, so we take the max.
+func (fl *flow) onAck(cum uint64) {
+	fl.txMu.Lock()
+	if cum > fl.txBase {
+		fl.txBase = cum
+		i := 0
+		for i < len(fl.unacked) && fl.unacked[i].off+uint64(len(fl.unacked[i].data)) <= fl.txBase {
+			i++
+		}
+		if i > 0 {
+			fl.unacked = append(fl.unacked[:0:0], fl.unacked[i:]...)
+		}
+		fl.txCond.Broadcast()
+	}
+	done := fl.finReached && fl.txBase >= fl.txNext
+	fl.txMu.Unlock()
+	fl.touch()
+	if done {
+		fl.markTxDone()
 	}
 }
 
@@ -127,7 +152,8 @@ func (fl *flow) setDest(addr string) {
 			}
 			fl.dest = conn
 			close(fl.dialed)
-			go fl.txLoop()
+			go fl.txReader()
+			go fl.txRetransmit()
 		}()
 	})
 }
@@ -140,7 +166,6 @@ func (fl *flow) rxLoop() {
 		return
 	}
 	if fl.dialErr != nil {
-		// Dial failed: drain and discard until close so deliver() never blocks.
 		for {
 			select {
 			case <-fl.inbound:
@@ -183,19 +208,17 @@ func (fl *flow) rxLoop() {
 	}
 }
 
-// maybeAck emits a cumulative Ack when delivery has advanced enough. Only
-// rxLoop touches lastAckSent, so no lock is needed.
+// maybeAck emits a cumulative Ack when delivery has advanced enough. The Ack
+// is broadcast on every live pipe (it is tiny) so the fastest surviving pipe
+// carries it — a single congested/dead pipe can't delay the window update.
 func (fl *flow) maybeAck() {
 	d := fl.rx.Delivered()
 	if d-fl.lastAckSent >= AckThreshold {
-		fl.sess.send(Frame{Type: FrameAck, FlowID: fl.id, Seq: d})
+		fl.sess.broadcast(Frame{Type: FrameAck, FlowID: fl.id, Seq: d})
 		fl.lastAckSent = d
 	}
 }
 
-// checkRxFin returns true (and finishes the c2s half) once every client byte
-// has been delivered to dest. It half-closes our write side toward dest so
-// the destination sees EOF, and sends a final Ack.
 func (fl *flow) checkRxFin() bool {
 	if !fl.rxFinSet || fl.rx.Delivered() != fl.rxFinal {
 		return false
@@ -203,18 +226,18 @@ func (fl *flow) checkRxFin() bool {
 	if cw, ok := fl.dest.(interface{ CloseWrite() error }); ok {
 		_ = cw.CloseWrite()
 	}
-	fl.sess.send(Frame{Type: FrameAck, FlowID: fl.id, Seq: fl.rx.Delivered()})
+	fl.sess.broadcast(Frame{Type: FrameAck, FlowID: fl.id, Seq: fl.rx.Delivered()})
 	fl.markRxDone()
 	return true
 }
 
-// txLoop reads dest, stripes chunks across the pipes, and never runs more
-// than Window bytes ahead of the client's Acks.
-func (fl *flow) txLoop() {
+// txReader reads dest, buffers each chunk for possible retransmit, stripes it
+// across the pipes, and window-gates on the client's Acks.
+func (fl *flow) txReader() {
 	buf := make([]byte, ChunkSize)
 	for {
 		fl.txMu.Lock()
-		for fl.txSeq-fl.txAcked >= Window {
+		for fl.txNext-fl.txBase >= Window {
 			if fl.isClosed() {
 				fl.txMu.Unlock()
 				return
@@ -228,27 +251,77 @@ func (fl *flow) txLoop() {
 
 		n, err := fl.dest.Read(buf)
 		if n > 0 {
-			payload := append([]byte(nil), buf[:n]...)
+			data := append([]byte(nil), buf[:n]...)
 			fl.txMu.Lock()
-			off := fl.txSeq
-			fl.txSeq += uint64(n)
+			off := fl.txNext
+			fl.txNext += uint64(n)
+			fl.unacked = append(fl.unacked, txChunk{off: off, data: data})
 			fl.txMu.Unlock()
-			if !fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: payload}) {
-				fl.abort()
-				return
-			}
+			// Best-effort first send; if no pipe is usable right now the
+			// retransmit loop will carry it once a pipe returns.
+			fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: data})
 			fl.touch()
 		}
 		if err != nil {
-			if fl.isClosed() {
-				return
-			}
 			fl.txMu.Lock()
-			final := fl.txSeq
+			fl.finReached = true
+			fl.finSeq = fl.txNext
+			done := fl.txBase >= fl.txNext
 			fl.txMu.Unlock()
-			fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: final})
-			fl.markTxDone()
+			fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: fl.finSeq})
+			if done {
+				fl.markTxDone()
+			}
 			return
+		}
+	}
+}
+
+// txRetransmit resends the unacked window whenever the client's Acks stop
+// advancing for one RTO — the recovery path for a room that died holding
+// in-flight chunks. Resent chunks the client already has are dropped by its
+// reorder buffer (offset dedup), so over-resending is safe, just wasteful.
+func (fl *flow) txRetransmit() {
+	t := time.NewTicker(retransmitRTO)
+	defer t.Stop()
+	var lastBase uint64
+	for {
+		select {
+		case <-fl.closed:
+			return
+		case <-t.C:
+			fl.txMu.Lock()
+			base, next := fl.txBase, fl.txNext
+			if base >= next {
+				fin := fl.finReached
+				lastBase = base
+				fl.txMu.Unlock()
+				if fin {
+					fl.markTxDone()
+					return
+				}
+				continue
+			}
+			progressed := base != lastBase
+			lastBase = base
+			var resend []txChunk
+			var fr bool
+			var fs uint64
+			if !progressed {
+				resend = append([]txChunk(nil), fl.unacked...)
+				fr, fs = fl.finReached, fl.finSeq
+			}
+			fl.txMu.Unlock()
+
+			if len(resend) == 0 {
+				continue
+			}
+			for _, ch := range resend {
+				fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
+			}
+			if fr {
+				fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: fs})
+			}
 		}
 	}
 }
@@ -263,15 +336,14 @@ func (fl *flow) markTxDone() {
 	fl.maybeFinish()
 }
 
-// maybeFinish closes the flow cleanly once both directions have finished.
 func (fl *flow) maybeFinish() {
 	if fl.rxDone.Load() && fl.txDone.Load() {
 		fl.close()
 	}
 }
 
-// reaper closes a flow that has made no progress for flowIdle — the backstop
-// for a room that died mid-transfer and left a permanent gap (no retransmit).
+// reaper closes a flow that has made no progress for flowIdle — the final
+// backstop if even retransmission can't recover (e.g. every pipe gone).
 func (fl *flow) reaper() {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
@@ -289,14 +361,11 @@ func (fl *flow) reaper() {
 	}
 }
 
-// abort tells the client to drop the flow, then closes it. Used for errors
-// (dial fail, reorder overflow, dest write fail, no usable pipe, idle).
 func (fl *flow) abort() {
 	fl.sess.send(Frame{Type: FrameRst, FlowID: fl.id})
 	fl.close()
 }
 
-// close is idempotent: unblock txLoop, close dest, drop from the session.
 func (fl *flow) close() {
 	fl.closeOnce.Do(func() {
 		close(fl.closed)

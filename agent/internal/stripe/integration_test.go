@@ -45,7 +45,8 @@ type striper struct {
 	t      *testing.T
 	pipes  []net.Conn
 	cursor int
-	sendMu sync.Mutex // serialize writes across pipes from the c2s sender
+	killed map[int]bool // pipes a test deliberately dropped
+	sendMu sync.Mutex   // serialize writes across pipes from the c2s sender
 
 	mu        sync.Mutex
 	cond      *sync.Cond
@@ -59,7 +60,7 @@ type striper struct {
 }
 
 func newStriper(t *testing.T, serverAddr string, k int) *striper {
-	s := &striper{t: t, rx: NewReorder(Window)}
+	s := &striper{t: t, rx: NewReorder(Window), killed: map[int]bool{}}
 	s.cond = sync.NewCond(&s.mu)
 	var sid [16]byte
 	rand.Read(sid[:])
@@ -80,15 +81,33 @@ func newStriper(t *testing.T, serverAddr string, k int) *striper {
 	return s
 }
 
-// writeStriped sends one frame on the next pipe round-robin.
+// writeStriped sends one frame on the next live pipe round-robin, skipping
+// any pipe deliberately killed by a test (so an Ack write doesn't fail the
+// test after we simulate a room death).
 func (s *striper) writeStriped(f Frame) {
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
-	p := s.pipes[s.cursor%len(s.pipes)]
-	s.cursor++
-	if _, err := p.Write(f.Encode(nil)); err != nil {
-		s.t.Errorf("writeStriped: %v", err)
+	wire := f.Encode(nil)
+	for i := 0; i < len(s.pipes); i++ {
+		idx := s.cursor % len(s.pipes)
+		s.cursor++
+		if s.killed[idx] {
+			continue
+		}
+		if _, err := s.pipes[idx].Write(wire); err == nil {
+			return
+		}
+		s.killed[idx] = true
 	}
+}
+
+// kill simulates a room dropping mid-transfer: close the pipe and mark it so
+// we stop sending on it.
+func (s *striper) kill(idx int) {
+	s.sendMu.Lock()
+	s.killed[idx] = true
+	s.sendMu.Unlock()
+	s.pipes[idx].Close()
 }
 
 func (s *striper) readPipe(c net.Conn) {
@@ -263,5 +282,86 @@ func TestStripeDialFailureSendsRst(t *testing.T) {
 	c.mu.Unlock()
 	if !got {
 		t.Fatalf("expected RST after dial failure")
+	}
+}
+
+// startPush serves a fixed N-byte payload to each client (write then
+// half-close), the s2c-heavy stand-in for a download. Returns the payload so
+// tests can byte-compare what came back through the mux.
+func startPush(t *testing.T, n int) (net.Listener, []byte) {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("push listen: %v", err)
+	}
+	payload := make([]byte, n)
+	rand.Read(payload)
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				c.Write(payload)
+				if cw, ok := c.(*net.TCPConn); ok {
+					cw.CloseWrite()
+				}
+				io.Copy(io.Discard, c)
+			}(c)
+		}
+	}()
+	return l, payload
+}
+
+// TestStripeServerRetransmitOnPipeDeath kills a pipe partway through a 1 MiB
+// download and verifies the server's retransmit still delivers every byte —
+// the recovery path for a Telemost room dying mid-transfer.
+func TestStripeServerRetransmitOnPipeDeath(t *testing.T) {
+	const N = 1 << 20
+	push, payload := startPush(t, N)
+	defer push.Close()
+
+	srvL, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("server listen: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srv := NewServer(func(string, ...any) {})
+	go srv.Serve(ctx, srvL)
+
+	c := newStriper(t, srvL.Addr().String(), 4)
+	defer c.close()
+
+	// Open flow 1 to the push dest; we send no c2s data (Fin at 0).
+	c.writeStriped(Frame{Type: FrameOpen, FlowID: 1, Payload: []byte(push.Addr().String())})
+	c.writeStriped(Frame{Type: FrameFin, FlowID: 1, Seq: 0})
+
+	// Once ~200 KiB has arrived, kill pipe 2 to simulate a room death.
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			c.mu.Lock()
+			got := len(c.recv)
+			c.mu.Unlock()
+			if got > 200*1024 {
+				c.kill(2)
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+
+	if !c.waitDone(N, 30*time.Second) {
+		t.Fatalf("download did not complete after pipe death: delivered=%d want=%d rst=%v",
+			c.rx.Delivered(), N, c.rst)
+	}
+	c.mu.Lock()
+	got := c.recv
+	c.mu.Unlock()
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("post-retransmit bytes differ: got %d want %d", len(got), N)
 	}
 }

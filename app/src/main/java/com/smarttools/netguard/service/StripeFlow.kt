@@ -12,17 +12,16 @@ import kotlin.concurrent.withLock
  * One application connection multiplexed over [StripeMux]'s pipes. Mirror of
  * the Go server's flow, from the client's point of view:
  *
- *   - c2s (app -> server): the pump thread reads the tun2socks socket, chunks
- *     it, stripes Data frames across pipes, and window-gates on the server's
- *     Acks so we never run more than WINDOW bytes ahead.
+ *   - c2s (app -> server): the pump thread reads the tun2socks socket, buffers
+ *     each chunk for possible retransmit, stripes Data across pipes, and
+ *     window-gates on the server's Acks. A retransmit thread resends the
+ *     unacked window if Acks stop advancing (a room died mid-transfer) — the
+ *     substrate has no retransmit of its own, so without this a dead room
+ *     leaves a permanent gap and the flow stalls to zero.
  *   - s2c (server -> app): a writer thread drains a queue fed by the pipe
- *     readers, reassembles the bytes in offset order, writes them to the app
- *     socket, and Acks our cumulative delivery so the server's window advances.
- *
- * Frame routing (onFrame) is called from the pipe-reader threads; it only
- * enqueues s2c Data/Fin and bumps the c2s Ack — it never blocks on the app
- * socket, so one slow flow can't stall a shared pipe (the window keeps the
- * queue bounded).
+ *     readers, reassembles in offset order, writes to the app socket, and
+ *     broadcasts our cumulative-delivered Ack on every pipe so the server's
+ *     window can't stall behind one slow pipe.
  */
 class StripeFlow(
     private val id: Int,
@@ -33,15 +32,19 @@ class StripeFlow(
         private val EMPTY = ByteArray(0)
     }
 
+    private class TxChunk(val off: Long, val data: ByteArray)
+
     private val clientIn = DataInputStream(client.getInputStream())
     private val clientOut: OutputStream = client.getOutputStream()
 
-    // c2s send state. txSeq is touched only by the pump thread; c2sAcked is
-    // updated by pipe readers (onFrame) so it is guarded by lock/cond.
+    // c2s send state — guarded by lock/cond.
     private val lock = ReentrantLock()
     private val cond = lock.newCondition()
-    private var txSeq: Long = 0
-    private var c2sAcked: Long = 0
+    private var txBase: Long = 0   // cumulative bytes acked by the server
+    private var txNext: Long = 0   // next offset to assign
+    private val unacked = ArrayDeque<TxChunk>()
+    private var finReached = false
+    private var finSeq: Long = 0
 
     // s2c receive state — touched only by the writer thread, so no lock.
     private val rx = StripeReorder(StripeProtocol.WINDOW.toInt())
@@ -49,9 +52,6 @@ class StripeFlow(
     private var rxFinSet = false
     private var lastAckSent: Long = 0
 
-    // Bounded by the window: the server won't send s2c past WINDOW unacked,
-    // and we Ack only after writing to the app socket, so the queue can't grow
-    // past ~WINDOW/CHUNK. +8 slack.
     private val s2cQueue = ArrayBlockingQueue<StripeFrame>(
         (StripeProtocol.WINDOW / StripeProtocol.CHUNK_SIZE).toInt() + 8
     )
@@ -63,20 +63,18 @@ class StripeFlow(
 
     @Volatile private var writerThread: Thread? = null
     @Volatile private var pumpThread: Thread? = null
+    @Volatile private var retransmitThread: Thread? = null
 
     fun run() {
         writerThread = Thread({ s2cWriter() }, "stripe-s2c-$id").apply { isDaemon = true; start() }
         pumpThread = Thread({ c2sPump() }, "stripe-c2s-$id").apply { isDaemon = true; start() }
+        retransmitThread = Thread({ c2sRetransmit() }, "stripe-rtx-$id").apply { isDaemon = true; start() }
     }
 
     /** Called from pipe-reader threads. Never blocks on the app socket. */
     fun onFrame(f: StripeFrame) {
         when (f.type) {
-            StripeProtocol.ACK -> {
-                lock.withLock {
-                    if (f.seq > c2sAcked) { c2sAcked = f.seq; cond.signalAll() }
-                }
-            }
+            StripeProtocol.ACK -> onAck(f.seq)
             StripeProtocol.DATA, StripeProtocol.FIN -> {
                 try {
                     s2cQueue.put(f)
@@ -88,13 +86,27 @@ class StripeFlow(
         }
     }
 
-    /** c2s: read the app socket, stripe chunks, gate on the server's window. */
+    /** Advance the c2s window and drop fully-acked chunks from the buffer. */
+    private fun onAck(cum: Long) {
+        lock.withLock {
+            if (cum > txBase) {
+                txBase = cum
+                while (unacked.isNotEmpty()) {
+                    val c = unacked.first()
+                    if (c.off + c.data.size <= txBase) unacked.removeFirst() else break
+                }
+                cond.signalAll()
+            }
+        }
+    }
+
+    /** c2s: read the app socket, buffer + stripe each chunk, gate on the window. */
     private fun c2sPump() {
         val buf = ByteArray(StripeProtocol.CHUNK_SIZE)
         try {
             while (true) {
                 lock.withLock {
-                    while (txSeq - c2sAcked >= StripeProtocol.WINDOW && !closed.get()) {
+                    while (txNext - txBase >= StripeProtocol.WINDOW && !closed.get()) {
                         cond.await()
                     }
                 }
@@ -102,18 +114,53 @@ class StripeFlow(
                 val n = clientIn.read(buf)
                 if (n < 0) break
                 if (n == 0) continue
-                val off = txSeq
-                txSeq += n
-                if (!mux.send(StripeFrame(StripeProtocol.DATA, id, off, buf.copyOf(n)))) {
-                    abort(); return
+                val data = buf.copyOf(n)
+                val off: Long
+                lock.withLock {
+                    off = txNext
+                    txNext += n
+                    unacked.addLast(TxChunk(off, data))
                 }
+                mux.send(StripeFrame(StripeProtocol.DATA, id, off, data))
             }
-            // Clean app EOF: half-close c2s with the total byte count.
-            mux.send(StripeFrame(StripeProtocol.FIN, id, txSeq, EMPTY))
+            lock.withLock { finReached = true; finSeq = txNext }
+            mux.send(StripeFrame(StripeProtocol.FIN, id, txNext, EMPTY))
             txDone.set(true)
             maybeFinish()
         } catch (e: Exception) {
             if (!closed.get()) abort()
+        }
+    }
+
+    /** Resend the unacked window when the server's Acks stop advancing. */
+    private fun c2sRetransmit() {
+        var lastBase = -1L
+        try {
+            while (!closed.get()) {
+                Thread.sleep(StripeProtocol.RETRANSMIT_RTO_MS)
+                if (closed.get()) return
+                var resend: List<TxChunk> = emptyList()
+                var fr = false
+                var fs = 0L
+                lock.withLock {
+                    if (txBase < txNext) {
+                        val progressed = txBase != lastBase
+                        lastBase = txBase
+                        if (!progressed) {
+                            resend = ArrayList(unacked); fr = finReached; fs = finSeq
+                        }
+                    } else {
+                        lastBase = txBase
+                    }
+                }
+                if (resend.isEmpty()) continue
+                for (c in resend) {
+                    mux.send(StripeFrame(StripeProtocol.DATA, id, c.off, c.data))
+                }
+                if (fr) mux.send(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
+            }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
@@ -152,16 +199,15 @@ class StripeFlow(
     private fun maybeAck() {
         val d = rx.delivered()
         if (d - lastAckSent >= StripeProtocol.ACK_THRESHOLD) {
-            mux.send(StripeFrame(StripeProtocol.ACK, id, d, EMPTY))
+            mux.broadcast(StripeFrame(StripeProtocol.ACK, id, d, EMPTY))
             lastAckSent = d
         }
     }
 
-    /** True once all s2c bytes are delivered: half-close the app socket. */
     private fun checkRxFin(): Boolean {
         if (!rxFinSet || rx.delivered() != rxFinal) return false
         try { client.shutdownOutput() } catch (_: Exception) {}
-        mux.send(StripeFrame(StripeProtocol.ACK, id, rx.delivered(), EMPTY))
+        mux.broadcast(StripeFrame(StripeProtocol.ACK, id, rx.delivered(), EMPTY))
         rxDone.set(true)
         maybeFinish()
         return true
@@ -171,7 +217,6 @@ class StripeFlow(
         if (rxDone.get() && txDone.get()) close()
     }
 
-    /** Tell the server to drop the flow, then close locally. */
     private fun abort() {
         mux.send(StripeFrame(StripeProtocol.RST, id, 0, EMPTY))
         close()
@@ -183,6 +228,7 @@ class StripeFlow(
         s2cQueue.offer(POISON)
         writerThread?.interrupt()
         pumpThread?.interrupt()
+        retransmitThread?.interrupt()
         try { client.close() } catch (_: Exception) {}
         mux.dropFlow(id)
     }

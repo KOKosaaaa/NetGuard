@@ -2,8 +2,10 @@ package stripe
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,8 +26,15 @@ const (
 	Window = 512 * 1024
 
 	// AckThreshold is how far Delivered must advance before we emit a fresh
-	// cumulative Ack. Quarter-window keeps the window full without ACK spam.
-	AckThreshold = Window / 4
+	// cumulative Ack. Eighth-window keeps Acks frequent so the sender's
+	// window stays open (Acks are broadcast on all pipes, so they're cheap).
+	AckThreshold = Window / 8
+
+	// retransmitRTO is how long the sender waits with no Ack progress before
+	// resending the unacked window. Must comfortably exceed the real Ack
+	// round-trip over Telemost or it resends spuriously; below the 90s idle
+	// reaper so a dead-room gap recovers in ~1s, not on teardown.
+	retransmitRTO = 1200 * time.Millisecond
 
 	// dialTimeout caps how long we wait to connect to the real destination.
 	dialTimeout = 15 * time.Second
@@ -107,6 +116,7 @@ func (s *Server) handlePipe(conn net.Conn) {
 		if err != nil {
 			return
 		}
+		p.rd.Add(int64(HeaderSize + len(f.Payload)))
 		sess.route(f)
 	}
 }
@@ -139,16 +149,24 @@ type pipe struct {
 	conn    net.Conn
 	writeMu sync.Mutex
 	dead    atomic.Bool
+	// Diagnostics: cumulative wire bytes out (written to this pipe) and in
+	// (read from it). The session stats loop samples these to show whether
+	// striping spreads load across pipes or collapses onto one.
+	wrote atomic.Int64
+	rd    atomic.Int64
 }
 
 func (p *pipe) write(f Frame) error {
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
-	_, err := p.conn.Write(f.Encode(nil))
+	wire := f.Encode(nil)
+	_, err := p.conn.Write(wire)
 	if err != nil {
 		p.dead.Store(true)
+		return err
 	}
-	return err
+	p.wrote.Add(int64(len(wire)))
+	return nil
 }
 
 // session groups the pipes of one phone and owns its flow table. Outgoing
@@ -165,10 +183,51 @@ type session struct {
 	fmu   sync.Mutex
 	flows map[uint32]*flow
 	down  bool
+
+	done chan struct{} // closed by shutdown to stop statsLoop
 }
 
 func newSession(id [16]byte, logf func(string, ...any)) *session {
-	return &session{id: id, logf: logf, flows: make(map[uint32]*flow)}
+	s := &session{id: id, logf: logf, flows: make(map[uint32]*flow), done: make(chan struct{})}
+	go s.statsLoop()
+	return s
+}
+
+// statsLoop logs per-pipe throughput every 5s while the session is alive — the
+// diagnostics that show whether a single flow's bytes spread across the pipes
+// (striping works) or pile onto one (it doesn't). Drops to silence when idle.
+func (s *session) statsLoop() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	type snap struct{ wrote, rd int64 }
+	last := map[*pipe]snap{}
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			s.pmu.RLock()
+			pipes := append([]*pipe(nil), s.pipes...)
+			s.pmu.RUnlock()
+			var totW, totR int64
+			parts := make([]string, 0, len(pipes))
+			for i, p := range pipes {
+				w, r := p.wrote.Load(), p.rd.Load()
+				dw := w - last[p].wrote
+				dr := r - last[p].rd
+				last[p] = snap{w, r}
+				totW += dw
+				totR += dr
+				parts = append(parts, fmt.Sprintf("p%d=%dKB/%dKB", i, dw/1024, dr/1024))
+			}
+			if totW+totR > 0 {
+				s.logf("stripe: session %x 5s out=%.2fMbps in=%.2fMbps per-pipe[out/in] %s",
+					s.id[:4],
+					float64(totW*8)/5e6, float64(totR*8)/5e6,
+					strings.Join(parts, " "))
+			}
+		}
+	}
 }
 
 func (s *session) addPipe(conn net.Conn) *pipe {
@@ -221,6 +280,20 @@ func (s *session) send(f Frame) bool {
 	return false
 }
 
+// broadcast writes a frame to every live pipe. Used for tiny control frames
+// (Acks) so the fastest surviving pipe delivers them — one slow/dead pipe
+// can't delay a window update. Duplicates are harmless (cumulative Acks).
+func (s *session) broadcast(f Frame) {
+	s.pmu.RLock()
+	pipes := append([]*pipe(nil), s.pipes...)
+	s.pmu.RUnlock()
+	for _, p := range pipes {
+		if !p.dead.Load() {
+			_ = p.write(f)
+		}
+	}
+}
+
 // route delivers an inbound frame to its flow, creating the flow lazily on
 // the first frame that references a new flowID (Open or any Data — they can
 // arrive in either order across pipes).
@@ -257,6 +330,11 @@ func (s *session) dropFlow(id uint32) {
 }
 
 func (s *session) shutdown() {
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
 	s.fmu.Lock()
 	s.down = true
 	flows := make([]*flow, 0, len(s.flows))
