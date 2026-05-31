@@ -30,6 +30,20 @@ const (
 	// window stays open (Acks are broadcast on all pipes, so they're cheap).
 	AckThreshold = Window / 8
 
+	// retransmitScan is how often the sender checks for overdue chunks.
+	retransmitScan = 1 * time.Second
+
+	// pipeRateBytesPerSec paces Data per pipe just under one room's ~1.25 Mbps
+	// ceiling; pipeBurstBytes allows a short burst before the bucket throttles.
+	pipeRateBytesPerSec = 125000.0 // ~1.0 Mbps
+	pipeBurstBytes      = 96 * 1024
+
+	// chunkRTO (ms) is how long a chunk may go unacked before it is resent.
+	// Must sit well above the real Ack round-trip over Telemost so a slow but
+	// arriving Ack never triggers a resend; high enough that a healthy flow
+	// never resends, low enough that a lagging-pipe gap clears in a few sec.
+	chunkRTO int64 = 5000
+
 	// dialTimeout caps how long we wait to connect to the real destination.
 	dialTimeout = 15 * time.Second
 
@@ -155,6 +169,37 @@ type pipe struct {
 	// striping spreads load across pipes or collapses onto one.
 	wrote atomic.Int64
 	rd    atomic.Int64
+	// Pacing (token bucket) so we never push Data faster than one Telemost
+	// room sustains (~1.25 Mbps). Overdriving a room bloats its WebRTC buffer,
+	// inflates latency and stalls the Ack feedback — the burst-to-20-then-0
+	// pattern. Control frames (Acks) bypass this.
+	paceMu     sync.Mutex
+	paceTokens float64
+	paceLast   time.Time
+}
+
+// pace blocks until n bytes of pacing budget are available for this pipe.
+func (p *pipe) pace(n int) {
+	p.paceMu.Lock()
+	now := time.Now()
+	if p.paceLast.IsZero() {
+		p.paceLast = now
+		p.paceTokens = pipeBurstBytes
+	}
+	p.paceTokens += now.Sub(p.paceLast).Seconds() * pipeRateBytesPerSec
+	if p.paceTokens > pipeBurstBytes {
+		p.paceTokens = pipeBurstBytes
+	}
+	p.paceLast = now
+	if p.paceTokens >= float64(n) {
+		p.paceTokens -= float64(n)
+		p.paceMu.Unlock()
+		return
+	}
+	deficit := float64(n) - p.paceTokens
+	p.paceTokens = 0
+	p.paceMu.Unlock()
+	time.Sleep(time.Duration(deficit / pipeRateBytesPerSec * float64(time.Second)))
 }
 
 func (p *pipe) write(f Frame) error {
@@ -274,6 +319,9 @@ func (s *session) send(f Frame) int {
 		p := pipes[(start+i)%n]
 		if p.dead.Load() {
 			continue
+		}
+		if f.Type == FrameData {
+			p.pace(HeaderSize + len(f.Payload))
 		}
 		if err := p.write(f); err == nil {
 			return p.id

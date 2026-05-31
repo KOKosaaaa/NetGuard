@@ -12,9 +12,10 @@ import (
 // own and Telemost rooms drop often). pid is the id of the pipe it was last
 // sent on (-1 = not yet sent), so a pipe death resends only its own chunks.
 type txChunk struct {
-	off  uint64
-	data []byte
-	pid  int
+	off    uint64
+	data   []byte
+	pid    int
+	sentAt int64 // unix ms of the last (re)send, for the per-chunk RTO
 }
 
 // flow is one application connection multiplexed over the session's pipes.
@@ -54,7 +55,8 @@ type flow struct {
 	unacked    []*txChunk
 	finReached bool
 	finSeq     uint64
-	finPid     int // pipe the Fin was last sent on (-1 = unsent)
+	finPid     int   // pipe the Fin was last sent on (-1 = unsent)
+	finSentAt  int64 // unix ms of the last Fin (re)send
 
 	rxDone atomic.Bool
 	txDone atomic.Bool
@@ -85,6 +87,8 @@ func (fl *flow) start() {
 
 func (fl *flow) touch()              { fl.lastProg.Store(time.Now().UnixNano()) }
 func (fl *flow) lastProgress() int64 { return fl.lastProg.Load() }
+
+func nowMs() int64 { return time.Now().UnixMilli() }
 
 func (fl *flow) isClosed() bool {
 	select {
@@ -157,6 +161,7 @@ func (fl *flow) setDest(addr string) {
 			fl.dest = conn
 			close(fl.dialed)
 			go fl.txReader()
+			go fl.txRetransmit()
 		}()
 	})
 }
@@ -264,6 +269,7 @@ func (fl *flow) txReader() {
 			pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: data})
 			fl.txMu.Lock()
 			ch.pid = pid
+			ch.sentAt = nowMs()
 			fl.txMu.Unlock()
 			fl.touch()
 		}
@@ -276,6 +282,7 @@ func (fl *flow) txReader() {
 			pid := fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: fl.finSeq})
 			fl.txMu.Lock()
 			fl.finPid = pid
+			fl.finSentAt = nowMs()
 			fl.txMu.Unlock()
 			if done {
 				fl.markTxDone()
@@ -305,16 +312,63 @@ func (fl *flow) onPipeDead(deadID int) {
 		pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
 		fl.txMu.Lock()
 		ch.pid = pid
+		ch.sentAt = nowMs()
 		fl.txMu.Unlock()
 	}
 	if resendFin {
 		pid := fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: finSeq})
 		fl.txMu.Lock()
 		fl.finPid = pid
+		fl.finSentAt = nowMs()
 		fl.txMu.Unlock()
 	}
 	if len(resend) > 0 || resendFin {
 		fl.touch()
+	}
+}
+
+// txRetransmit resends individual chunks that have gone unacked longer than
+// chunkRTO — the recovery path for a pipe that is alive but lagging (so it
+// never fires onPipeDead) and is holding the gap that stalls the client's
+// reassembly. Per-chunk (not whole-window) with an RTO well above the real
+// Ack round-trip, and sentAt resets on resend, so a merely-slow-but-arriving
+// Ack never triggers a resend storm.
+func (fl *flow) txRetransmit() {
+	t := time.NewTicker(retransmitScan)
+	defer t.Stop()
+	for {
+		select {
+		case <-fl.closed:
+			return
+		case <-t.C:
+			now := nowMs()
+			fl.txMu.Lock()
+			var resend []*txChunk
+			for _, ch := range fl.unacked {
+				if now-ch.sentAt >= chunkRTO {
+					resend = append(resend, ch)
+				}
+			}
+			resendFin := fl.finReached && !fl.txDone.Load() &&
+				fl.txBase >= fl.txNext && now-fl.finSentAt >= chunkRTO
+			finSeq := fl.finSeq
+			fl.txMu.Unlock()
+
+			for _, ch := range resend {
+				pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
+				fl.txMu.Lock()
+				ch.pid = pid
+				ch.sentAt = now
+				fl.txMu.Unlock()
+			}
+			if resendFin {
+				pid := fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: finSeq})
+				fl.txMu.Lock()
+				fl.finPid = pid
+				fl.finSentAt = nowMs()
+				fl.txMu.Unlock()
+			}
+		}
 	}
 }
 
