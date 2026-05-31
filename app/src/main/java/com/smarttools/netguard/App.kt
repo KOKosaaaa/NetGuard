@@ -140,7 +140,8 @@ class App : Application() {
                 prefs.getString("tls_fingerprint_mode", null), TlsFingerprintMode.CHROME
             ),
             autoBypassRuPackages = prefs.getBoolean("auto_bypass_ru_packages", false),
-            expertMode = prefs.getBoolean("expert_mode", false)
+            expertMode = prefs.getBoolean("expert_mode", false),
+            telemostStriping = prefs.getBoolean("telemost_striping", false)
         )
     }
 
@@ -214,6 +215,7 @@ class App : Application() {
             putString("tls_fingerprint_mode", settings.tlsFingerprintMode.name)
             putBoolean("auto_bypass_ru_packages", settings.autoBypassRuPackages)
             putBoolean("expert_mode", settings.expertMode)
+            putBoolean("telemost_striping", settings.telemostStriping)
             apply()
         }
     }
