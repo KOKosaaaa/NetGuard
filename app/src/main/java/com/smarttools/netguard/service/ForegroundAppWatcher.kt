@@ -42,7 +42,10 @@ class TriggerWatcherService : Service() {
 
     companion object {
         private const val TAG = "TriggerWatcher"
-        private const val POLL_MS = 100L
+        // 100ms was 10 polls/sec forever — a real battery/CPU drain. 300ms
+        // keeps trigger latency under a third of a second while cutting the
+        // wakeups by 3x.
+        private const val POLL_MS = 300L
         private const val NOTIFICATION_ID = 2
         private const val CHANNEL_ID = "trigger_watcher"
 
@@ -235,9 +238,9 @@ class TriggerWatcherService : Service() {
                 // Flexible mode: bring up the regular tunnel respecting
                 // perAppMode/perAppList. The trigger list only chooses WHEN
                 // the tunnel comes up, not WHO routes through it.
-                kotlinx.coroutines.CoroutineScope(
-                    kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
-                ).launch {
+                // Reuse the service scope instead of allocating (and leaking)
+                // a fresh CoroutineScope on every trigger event.
+                scope?.launch {
                     val profileId = app.database.profileDao().getSelected()?.id
                         ?: app.getPreferences().getLong("last_profile_id", -1)
                     if (profileId != -1L) {

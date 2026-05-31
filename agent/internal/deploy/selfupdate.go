@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -38,24 +39,43 @@ type UpdateAgentRequest struct {
 	SHA256 string `json:"sha256"`
 }
 
-// ApplyUploadedAgent installs a new agent binary the app uploaded over
-// HTTPS (no external download / hosting needed). It verifies the sha256,
-// smoke-tests that the binary actually runs on this host (`--version`) so a
-// wrong-arch or corrupt upload can't brick the live agent, backs up the
-// current binary, then atomically swaps it in. Caller restarts the service
-// afterwards via [ScheduleAgentRestart].
-func ApplyUploadedAgent(data []byte, wantSha string) error {
-	sum := sha256.Sum256(data)
-	got := hex.EncodeToString(sum[:])
-	if wantSha != "" && !strings.EqualFold(got, wantSha) {
-		return fmt.Errorf("sha256 mismatch: got %s want %s", got, wantSha)
-	}
-	if len(data) < 1_000_000 {
-		return fmt.Errorf("uploaded binary suspiciously small (%d bytes)", len(data))
+// ApplyUploadedAgent installs a new agent binary the app streamed over
+// HTTPS (no external download / hosting needed). It STREAMS the body to a
+// temp file while hashing (so a 64 MB upload never sits whole in RAM on a
+// low-memory VPS), REQUIRES a matching sha256 (an empty hash is rejected —
+// installing an unverified binary as root is never acceptable, even for an
+// authenticated caller), smoke-tests that the binary runs on this host
+// (`--version`) so a wrong-arch / corrupt upload can't brick the live
+// agent, backs up the current binary, then atomically swaps it in. Caller
+// restarts the service afterwards via [ScheduleAgentRestart].
+func ApplyUploadedAgent(body io.Reader, wantSha string) error {
+	if strings.TrimSpace(wantSha) == "" {
+		return fmt.Errorf("sha256 is required (refusing to install an unverified binary)")
 	}
 	tmp := AgentBinaryPath + ".new"
-	if err := os.WriteFile(tmp, data, 0o755); err != nil {
-		return fmt.Errorf("write temp: %w", err)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err != nil {
+		return fmt.Errorf("open temp: %w", err)
+	}
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(f, h), body)
+	closeErr := f.Close()
+	if err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("stream upload: %w", err)
+	}
+	if closeErr != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("flush temp: %w", closeErr)
+	}
+	if n < 1_000_000 {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("uploaded binary suspiciously small (%d bytes)", n)
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, wantSha) {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("sha256 mismatch: got %s want %s", got, wantSha)
 	}
 	// Smoke-test: the new binary must execute here. `--version` prints and
 	// exits 0; a wrong-arch / corrupt binary fails, so we bail before
@@ -122,23 +142,20 @@ func AgentUpdate(db *storage.DB, req *UpdateAgentRequest) tasks.Runner {
 		h.LogF("installed %d-byte binary at %s", len(data), AgentBinaryPath)
 
 		h.SetStep("restart-scheduled", 95)
-		h.LogF("scheduling self-exit in 2s for systemd restart")
+		h.LogF("scheduling graceful restart in ~1s")
 
-		// Fire the exit AFTER this runner returns and the framework has
-		// persisted the final status row. systemd restarts us per
-		// netguard-agent.service Restart=on-failure. The next time the
-		// agent boots, FailRunningTasksOnStartup will NOT fire for this
-		// task because we marked it done first.
-		go func() {
-			time.Sleep(2 * time.Second)
-			log.Print("self-update: exiting now (systemd will restart)")
-			os.Exit(0)
-		}()
+		// Restart via `systemctl restart` (graceful) instead of os.Exit(0):
+		// a bare os.Exit skips the HTTP server's Shutdown and abandons any
+		// other in-flight task mid-operation, and exit code 0 wouldn't even
+		// trip Restart=on-failure. ScheduleAgentRestart lets systemd stop us
+		// cleanly and bring the new binary up. Fires AFTER this runner
+		// returns + the framework persists the final status row.
+		ScheduleAgentRestart()
 
 		return h.Ok(map[string]any{
 			"installed_path": AgentBinaryPath,
 			"arch":           runtime.GOARCH,
-			"restart_in_s":   2,
+			"restart_in_s":   1,
 			"note":           "agent will be unreachable for ~2-5s as systemd restarts it; poll /v1/health to confirm the new version",
 		})
 	}

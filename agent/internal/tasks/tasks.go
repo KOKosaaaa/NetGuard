@@ -39,12 +39,17 @@ const (
 type Manager struct {
 	db *storage.DB
 
-	mu      sync.Mutex
-	running map[string]context.CancelFunc // id → cancel
+	mu          sync.Mutex
+	running     map[string]context.CancelFunc // id → cancel
+	runningType map[string]string             // task type → in-flight id (single-flight)
 }
 
 func NewManager(db *storage.DB) *Manager {
-	return &Manager{db: db, running: map[string]context.CancelFunc{}}
+	return &Manager{
+		db:          db,
+		running:     map[string]context.CancelFunc{},
+		runningType: map[string]string{},
+	}
 }
 
 // Runner is the work a task does. The framework supplies a *Handle the
@@ -66,6 +71,15 @@ type Outcome struct {
 // Spawn creates a task row + kicks off the runner in a goroutine.
 // Returns the task ID immediately (caller polls /v1/tasks/{id}).
 func (m *Manager) Spawn(taskType string, r Runner) (string, error) {
+	// Single-flight per task type: if one of this type is already running,
+	// return its id instead of spawning a duplicate. Stops two concurrent
+	// /agent/provision (two xray deploys), repeated /agent/purge launching
+	// multiple self-destruct scripts, etc. Callers poll the returned id.
+	m.mu.Lock()
+	if existing, ok := m.runningType[taskType]; ok {
+		m.mu.Unlock()
+		return existing, nil
+	}
 	id := newID()
 	t := &storage.Task{
 		ID:        id,
@@ -74,7 +88,15 @@ func (m *Manager) Spawn(taskType string, r Runner) (string, error) {
 		Log:       []string{},
 		StartedAt: time.Now(),
 	}
+	// Reserve the type slot before the DB write so a racing Spawn of the
+	// same type can't slip through the gap.
+	m.runningType[taskType] = id
+	m.mu.Unlock()
+
 	if err := m.db.InsertTask(t); err != nil {
+		m.mu.Lock()
+		delete(m.runningType, taskType)
+		m.mu.Unlock()
 		return "", err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,6 +112,9 @@ func (m *Manager) run(ctx context.Context, t *storage.Task, r Runner) {
 	defer func() {
 		m.mu.Lock()
 		delete(m.running, t.ID)
+		if m.runningType[t.Type] == t.ID {
+			delete(m.runningType, t.Type)
+		}
 		m.mu.Unlock()
 	}()
 

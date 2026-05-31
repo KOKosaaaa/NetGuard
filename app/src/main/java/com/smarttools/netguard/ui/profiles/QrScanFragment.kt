@@ -42,6 +42,9 @@ class QrScanFragment : Fragment() {
 
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private var processed = false
+    // Held so we can close() it in onDestroyView — the MLKit detector holds
+    // native resources and leaks on every camera (re)start otherwise.
+    private var scanner: com.google.mlkit.vision.barcode.BarcodeScanner? = null
 
     private val cameraPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -115,7 +118,9 @@ class QrScanFragment : Fragment() {
                 it.setSurfaceProvider(binding.previewView.surfaceProvider)
             }
 
-            val scanner = BarcodeScanning.getClient()
+            scanner?.close() // close a prior one if startCamera runs again
+            val sc = BarcodeScanning.getClient()
+            scanner = sc
 
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -132,7 +137,7 @@ class QrScanFragment : Fragment() {
                     return@setAnalyzer
                 }
                 val inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-                scanner.process(inputImage)
+                sc.process(inputImage)
                     .addOnSuccessListener { barcodes ->
                         for (barcode in barcodes) {
                             val value = barcode.rawValue ?: continue
@@ -251,6 +256,8 @@ class QrScanFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        runCatching { scanner?.close() }
+        scanner = null
         _binding = null
         super.onDestroyView()
     }

@@ -813,7 +813,12 @@ class TunnelVpnService : VpnService() {
             }
         }
         if (!connected) {
-            Log.w(TAG, "tun2socks socket not found after 2s, trying anyway")
+            // Socket never appeared — tun2socks almost certainly failed to
+            // start. Fail loudly so the tunnel start aborts and failover/
+            // recovery kicks in, instead of reporting "Connected" with a TUN
+            // whose packets nobody drains ("connected but no traffic").
+            throw IllegalStateException(
+                "tun2socks control socket $sockPath never appeared (process failed to start?)")
         }
 
         val sock = android.net.LocalSocket()
@@ -825,6 +830,14 @@ class TunnelVpnService : VpnService() {
             Log.i(TAG, "TUN fd sent to tun2socks via Unix socket")
         } finally {
             try { sock.close() } catch (_: Exception) {}
+        }
+        // Confirm tun2socks survived the handoff. If it died right after
+        // accepting the fd, nothing drains the TUN — surface it as a failure
+        // rather than a silent black-hole.
+        delay(100)
+        if (tun2socksProcess?.isAlive != true) {
+            throw IllegalStateException(
+                "tun2socks exited right after receiving the TUN fd; check its log")
         }
     }
 
@@ -896,6 +909,12 @@ class TunnelVpnService : VpnService() {
     }
 
     @Volatile private var xrayRestartAttempts = 0
+    // Guards against two watchdog deaths launching concurrent restart
+    // coroutines that race on xrayProcess/tun2socksProcess/CredentialManager.
+    // recoverXrayCrash runs on Main (serialized), but the restart WORK is an
+    // async launch, so without this flag a second crash could fire a second
+    // restart before the first finished.
+    @Volatile private var xrayRecovering = false
 
     /**
      * Try to restart xray (up to 3 times) instead of tearing the whole tunnel
@@ -910,6 +929,10 @@ class TunnelVpnService : VpnService() {
         // handover.
         if (isReconnecting || intentionalProcessKill) {
             Log.i(TAG, "Xray exited ($exitCode) but reconnect is pending — skipping recover")
+            return
+        }
+        if (xrayRecovering) {
+            Log.i(TAG, "Xray exited ($exitCode) but a restart is already in flight — skipping")
             return
         }
         xrayRestartAttempts++
@@ -945,6 +968,7 @@ class TunnelVpnService : VpnService() {
         }
         Log.i(TAG, "Restarting xray (attempt $xrayRestartAttempts/3)")
         LogBuffer.add(LogBuffer.LogLevel.INFO, "Xray died ($exitCode), restarting…")
+        xrayRecovering = true
         serviceScope?.launch {
             try {
                 kotlinx.coroutines.delay(500L * xrayRestartAttempts)
@@ -982,12 +1006,17 @@ class TunnelVpnService : VpnService() {
                     config.socksPass ?: return@launch
                 )
                 launchProcessWatchdog()
+                // New watchdog is armed — allow a fresh recover if xray dies
+                // again (counts toward the 3-attempt budget). Clear before the
+                // long decay delay so we're not blocked for a full minute.
+                xrayRecovering = false
                 _connectionState.value = ConnectionState.Connected()
                 NotificationHelper.showConnectedNotification(this@TunnelVpnService)
                 // Decay restart counter after a successful run
                 kotlinx.coroutines.delay(60_000)
                 xrayRestartAttempts = 0
             } catch (e: Exception) {
+                xrayRecovering = false
                 Log.e(TAG, "Xray restart failed", e)
                 stopTunnel()
             }
@@ -2039,6 +2068,10 @@ class TunnelVpnService : VpnService() {
         failoverInProgress = false
         failoverTried.clear()
         isReconnecting = false
+        // Clear the xray-recovery guard so a later reconnect isn't blocked by a
+        // stale "restart in flight" flag left set by a recover path that bailed
+        // out through stopTunnel().
+        xrayRecovering = false
         reconnectTargetNetwork = null
         unregisterNetworkCallback()
         trafficMonitor?.stop()

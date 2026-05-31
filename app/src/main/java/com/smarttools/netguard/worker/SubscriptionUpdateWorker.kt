@@ -4,8 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.smarttools.netguard.database.AppDatabase
-import com.smarttools.netguard.repository.SubscriptionRepository
+import com.smarttools.netguard.App
 
 class SubscriptionUpdateWorker(
     context: Context,
@@ -19,8 +18,9 @@ class SubscriptionUpdateWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            val db = AppDatabase.getInstance(applicationContext)
-            val repo = SubscriptionRepository(db.subscriptionDao(), db.profileDao(), applicationContext)
+            // Reuse the app-wide singleton repo (and its OkHttpClient/pool)
+            // instead of building a throwaway one each periodic run.
+            val repo = (applicationContext as App).subscriptionRepository
             val subs = repo.getAll()
             var successCount = 0
             var errorCount = 0

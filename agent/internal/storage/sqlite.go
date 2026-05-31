@@ -8,7 +8,9 @@
 package storage
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +22,15 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+// hashToken returns the hex sha256 of a bearer token. We store the HASH,
+// never the plaintext, so a leaked agent DB (backup/snapshot) doesn't
+// expose live device tokens. The token itself is high-entropy random, so
+// hash lookup is not grindable.
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
 
 // DB wraps *sql.DB with helpers for the structures we persist.
 //
@@ -213,10 +224,11 @@ type Bearer struct {
 }
 
 func (d *DB) InsertBearer(b *Bearer) error {
+	// Store the hash, never the plaintext token.
 	_, err := d.db.Exec(
 		`INSERT INTO bearers(token,device_name,app_version,created_at,expires_at,last_seen_at)
 		 VALUES(?,?,?,?,?,?)`,
-		b.Token, b.DeviceName, b.AppVersion,
+		hashToken(b.Token), b.DeviceName, b.AppVersion,
 		b.CreatedAt.Format(time.RFC3339Nano),
 		b.ExpiresAt.Format(time.RFC3339Nano),
 		b.LastSeenAt.Format(time.RFC3339Nano),
@@ -226,17 +238,38 @@ func (d *DB) InsertBearer(b *Bearer) error {
 
 // LookupBearer returns the bearer if it's known, unexpired, not revoked.
 // Side-effect: bumps last_seen_at to now.
+//
+// The token column stores sha256(token). We look up by hash; if that
+// misses we fall back to a legacy plaintext row (agents paired before
+// hashing landed) and upgrade it in place — so an in-place agent update
+// never locks out an already-paired device.
 func (d *DB) LookupBearer(token string) (*Bearer, error) {
+	hashed := hashToken(token)
+	stored := hashed
 	row := d.db.QueryRow(
 		`SELECT token,device_name,app_version,created_at,expires_at,last_seen_at
-		 FROM bearers WHERE token=? AND revoked_at IS NULL`, token)
+		 FROM bearers WHERE token=? AND revoked_at IS NULL`, hashed)
 	b := &Bearer{}
 	var created, expires, seen string
 	if err := row.Scan(&b.Token, &b.DeviceName, &b.AppVersion, &created, &expires, &seen); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
+			// Legacy plaintext row? Match on the raw token, upgrade to hash.
+			legacy := d.db.QueryRow(
+				`SELECT token,device_name,app_version,created_at,expires_at,last_seen_at
+				 FROM bearers WHERE token=? AND revoked_at IS NULL`, token)
+			if err2 := legacy.Scan(&b.Token, &b.DeviceName, &b.AppVersion, &created, &expires, &seen); err2 != nil {
+				if errors.Is(err2, sql.ErrNoRows) {
+					return nil, ErrNotFound
+				}
+				return nil, err2
+			}
+			// Existing row is keyed by plaintext; upgrade it to the hash so
+			// subsequent lookups (incl. the last_seen bump below) hit it.
+			_, _ = d.db.Exec(`UPDATE bearers SET token=? WHERE token=?`, hashed, token)
+			stored = hashed
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 	b.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	b.ExpiresAt, _ = time.Parse(time.RFC3339Nano, expires)
@@ -246,15 +279,16 @@ func (d *DB) LookupBearer(token string) (*Bearer, error) {
 	}
 	now := time.Now()
 	_, _ = d.db.Exec(`UPDATE bearers SET last_seen_at=? WHERE token=?`,
-		now.Format(time.RFC3339Nano), token)
+		now.Format(time.RFC3339Nano), stored)
 	b.LastSeenAt = now
 	return b, nil
 }
 
-// RevokeBearer marks a token as revoked; subsequent Lookups fail.
+// RevokeBearer marks a token as revoked; subsequent Lookups fail. Matches
+// both the hashed row and any not-yet-upgraded legacy plaintext row.
 func (d *DB) RevokeBearer(token string) error {
-	_, err := d.db.Exec(`UPDATE bearers SET revoked_at=? WHERE token=?`,
-		time.Now().Format(time.RFC3339Nano), token)
+	_, err := d.db.Exec(`UPDATE bearers SET revoked_at=? WHERE token IN (?,?)`,
+		time.Now().Format(time.RFC3339Nano), hashToken(token), token)
 	return err
 }
 

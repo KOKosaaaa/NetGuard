@@ -19,7 +19,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -503,12 +502,9 @@ func Mount(d *Deps) http.Handler {
 		func(w http.ResponseWriter, r *http.Request) {
 			sha := r.URL.Query().Get("sha256")
 			r.Body = http.MaxBytesReader(w, r.Body, 64<<20) // 64 MB cap
-			data, err := io.ReadAll(r.Body)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, "E_READ_BODY", err.Error())
-				return
-			}
-			if err := deploy.ApplyUploadedAgent(data, sha); err != nil {
+			// Stream the body straight through (verify + swap happens inside)
+			// so the binary never sits whole in RAM on a low-memory VPS.
+			if err := deploy.ApplyUploadedAgent(r.Body, sha); err != nil {
 				writeError(w, http.StatusBadRequest, "E_AGENT_UPDATE", err.Error())
 				return
 			}

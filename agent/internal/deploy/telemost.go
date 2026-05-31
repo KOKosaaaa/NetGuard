@@ -203,6 +203,7 @@ func DeployTelemost(req *DeployTelemostRequest) tasks.Runner {
 		for i := 1; i <= req.Count; i++ {
 			unit := fmt.Sprintf("wlb-telemost@%d.service", i)
 			if _, err := exec.CommandContext(ctx, "systemctl", "enable", "--now", unit).CombinedOutput(); err != nil {
+				stopTelemostInstances(ctx, req.Count)
 				return h.FailRolledBack("E_SYSTEMCTL_START",
 					fmt.Sprintf("%s: %v", unit, err), true)
 			}
@@ -233,6 +234,7 @@ func DeployTelemost(req *DeployTelemostRequest) tasks.Runner {
 				break
 			}
 			if time.Now().After(deadline) {
+				stopTelemostInstances(ctx, req.Count)
 				return h.FailRolledBack("E_HEALTHCHECK",
 					fmt.Sprintf("%s did not become active within 30s; check journalctl", firstDown), true)
 			}
@@ -435,6 +437,16 @@ func readNonBlankLines(path string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// stopTelemostInstances best-effort disables instances 1..count. Used by
+// the deploy rollback paths so a failed deploy doesn't leave crash-looping
+// units running (which would make the "rolled_back" task status a lie).
+func stopTelemostInstances(ctx context.Context, count int) {
+	for i := 1; i <= count; i++ {
+		_, _ = exec.CommandContext(ctx, "systemctl", "disable", "--now",
+			fmt.Sprintf("wlb-telemost@%d.service", i)).CombinedOutput()
+	}
 }
 
 // UninstallTelemost wipes the install — used both by the operator and

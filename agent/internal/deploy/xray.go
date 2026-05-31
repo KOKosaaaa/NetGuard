@@ -16,11 +16,22 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/KOKosaaaa/NetGuard/agent/internal/storage"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/tasks"
 )
+
+// xrayConfigMu serializes every read-modify-write-restart of
+// /etc/xray/config.json. XrayAddProfile, XrayDeleteProfile and
+// ApplyBypassToXray all do read → mutate → AtomicWrite → restart; without
+// this lock two concurrent mutations (e.g. a profile add racing a bypass
+// rule, or two adds) interleave and silently drop one of the changes.
+// AtomicWrite only makes each individual write atomic, not the sequence.
+// NOTE: holders MUST NOT call each other while locked (the mutex is not
+// reentrant) — none of the three do today.
+var xrayConfigMu sync.Mutex
 
 // ErrPortInUse is returned when an explicitly-requested inbound port is
 // already held by another listener. The API layer maps it to E_PORT_BUSY

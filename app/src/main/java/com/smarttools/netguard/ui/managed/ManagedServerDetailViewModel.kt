@@ -207,7 +207,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.scaleTelemost(targetCount)
-                    waitForTask(ack.taskId, timeoutSec = 120)
+                    waitForTask(ack.taskId, timeoutSec = 120, op = "Изменение Telemost")
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                     _telemost.value?.let { updateImportedTelemostProfile(it) }
@@ -240,7 +240,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.uninstallTelemost()
-                    waitForTask(ack.taskId, timeoutSec = 60)
+                    waitForTask(ack.taskId, timeoutSec = 60, op = "Удаление Telemost")
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                     // Remove the imported Telemost profile(s) from the Servers
@@ -275,7 +275,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.scaleTelemost(targetCount)
-                    waitForTask(ack.taskId, timeoutSec = 120)
+                    waitForTask(ack.taskId, timeoutSec = 120, op = "Изменение Telemost")
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                     _telemost.value?.let { updateImportedTelemostProfile(it) }
@@ -302,7 +302,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.setupSwap()
-                    waitForTask(ack.taskId, timeoutSec = 90)
+                    waitForTask(ack.taskId, timeoutSec = 90, op = "Файл подкачки")
                     _status.value = client.status()
                 }
                 onDone(true, "Файл подкачки включён. Теперь сервер выдержит больше потоков Telemost.")
@@ -365,7 +365,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     ),
                 ),
             )
-            waitForTask(ack.taskId, timeoutSec = 180) { step ->
+            waitForTask(ack.taskId, timeoutSec = 180, op = "Установка xray") { step ->
                 _createStep.value = translateStep(step)
             }
             // After deploy, the first inbound is already in xray — pick
@@ -487,22 +487,30 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private suspend fun waitForTask(
         taskId: String,
         timeoutSec: Int,
+        op: String = "Операция",
         onStep: ((String) -> Unit)? = null,
     ) {
         val deadline = System.currentTimeMillis() + timeoutSec * 1000L
         while (System.currentTimeMillis() < deadline) {
-            val t = try { client.task(taskId) } catch (_: Exception) { null }
+            val t = try {
+                client.task(taskId)
+            } catch (e: AgentApiError) {
+                // Terminal HTTP errors (auth gone, endpoint missing) won't fix
+                // themselves — abort now instead of spinning to the timeout.
+                if (e.httpCode == 401 || e.httpCode == 403 || e.httpCode == 404) throw e
+                null
+            } catch (_: Exception) { null }
             if (t != null) onStep?.invoke(t.step)
             if (t != null && t.isTerminal) {
                 if (t.status != "done") {
                     val msg = t.error?.message ?: t.status
-                    throw IllegalStateException("xray deploy ${t.status}: $msg")
+                    throw IllegalStateException("$op failed (${t.status}): $msg")
                 }
                 return
             }
             kotlinx.coroutines.delay(1000)
         }
-        throw IllegalStateException("xray deploy timed out after ${timeoutSec}s")
+        throw IllegalStateException("$op timed out after ${timeoutSec}s")
     }
 
     /**
@@ -595,7 +603,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.uninstallXray()
-                    waitForTask(ack.taskId, timeoutSec = 90)
+                    waitForTask(ack.taskId, timeoutSec = 90, op = "Удаление xray")
                     _profiles.value = client.inbounds() // empty now
                     _status.value = client.status()
                 }

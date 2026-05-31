@@ -1,6 +1,6 @@
 # NetGuard — Architecture & Navigation Map
 
-> Developer map for fast lookup. Updated 2026-05-30. ~21.5k LoC Kotlin (app)
+> Developer map for fast lookup. Updated 2026-05-31. ~21.5k LoC Kotlin (app)
 > + a Go agent (server-side). Package root: `com.smarttools.netguard`.
 > applicationId `com.smarttools.netguard`, minSdk 26, 16 locales.
 
@@ -41,8 +41,39 @@ Android (agent/AgentApiClient)  ──HTTPS+bearer──►  netguard-agent (Go,
                                                     manages: xray / Telemost / sing-box
 ```
 
+### Why Go (agent language choice)
+
+The agent is uploaded over SSH to an **arbitrary fresh VPS** and must just run
+there. That single constraint drives the language choice:
+
+- **One static binary, zero runtime deps.** Go compiles to a self-contained
+  executable — no interpreter, no shared libs, no package manager on the
+  server. Deploy is literally `scp binary && ./binary`. Python would need an
+  interpreter + `pip install` on every box (a bootstrap nightmare on a bare
+  VPS where even `curl` may be missing); Node needs node + node_modules; a
+  JVM agent needs a JRE. Go sidesteps all of it.
+- **Trivial cross-compilation.** We build Linux binaries for both arches from
+  the Windows/dev machine with `GOOS=linux GOARCH=amd64|arm64 go build` —
+  no cross-toolchain, sysroots, or linkers (the pain point with C/Rust).
+  Both arch binaries ship inside the APK; `SshBootstrap` picks one by
+  `uname -m`.
+- **Stdlib covers exactly this job**, no heavy framework: `net/http` +
+  `crypto/tls` (HTTPS control-plane with a self-signed cert), `os/exec`
+  (shell out to `systemctl`/`apt`/`xray`), `//go:embed` (the Telemost
+  creator binary is embedded per-arch), goroutines (the async task model —
+  deploy/scale/purge/provision all run in the background).
+- **Memory-safe + statically typed + small RAM footprint** — important on the
+  cheap low-RAM VPSes users actually buy, and on a remote box you can't easily
+  debug (no segfaults like C, lighter than a JVM).
+
+Rust would also fit technically (static binary, cross-compiles), but Go is
+faster to write and its stdlib maps 1:1 onto this control-plane glue.
+
 - **Server-side agent is a separate Go program**, NOT in this Kotlin tree. It lives in this same repo under **`agent/`** (Go module). Build: `cd agent && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/netguard-agent-amd64 ./cmd/netguard-agent` (+ arm64). The two arch binaries are bundled into the APK at `app/src/main/assets/agent/netguard-agent-{amd64,arm64}` (gitignored; SshBootstrap streams the right one + sha256 verifies).
-- Agent endpoints (`agent/internal/api/router.go`): `/v1/auth/{pair,rotate,revoke}`, `/v1/status`, `/v1/xray/{deploy,profile,uninstall,inbounds,refresh-geo-dat}`, `/v1/telemost/{deploy,scale,rooms,cookies,health}`, `/v1/bypass/{rules,outbounds}`, `/v1/agent/{warmup,update,swap-setup}`, `/v1/tasks/{id}`.
+- Agent endpoints (`agent/internal/api/router.go`): `/v1/auth/{pair,rotate,revoke}`, `/v1/status`, `/v1/xray/{deploy,profile,uninstall,inbounds,refresh-geo-dat}`, `/v1/telemost/{deploy,scale,rooms,cookies,uninstall,health}`, `/v1/bypass/{rules,outbounds}`, `/v1/agent/{warmup,update,update-upload,swap-setup,provision,purge}`, `/v1/tasks/{id}`.
+  - `/v1/agent/provision` — fire-and-forget after pairing: installs xray (empty+running) + stages Telemost so the first profile create is instant (`deploy/provision.go`).
+  - `/v1/agent/purge` — full self-destruct (xray, sing-box, Telemost, wlb user, the agent itself); script runs inline via `sh -c` because the unit's `PrivateTmp=true` hides a /tmp file from the systemd-run cleanup (`deploy/purge.go`).
+  - **sing-box** installer (`deploy/singbox.go`) is written but **deferred** — not wired into provision (no consumer yet; profiles go through xray). Revisit for Hysteria2/TUIC profiles.
 - Long ops are async **tasks** (`agent/internal/tasks`): POST returns `task_id`, poll `GET /v1/tasks/{id}` (status pending/running/done/failed/rolled_back).
 - Deploy logic with the 6 idempotency rules: `agent/internal/deploy/` (`xray.go`, `telemost.go`, `swap.go`, `common.go`). Port preflight → `E_PORT_BUSY`; healthcheck checks `systemctl is-active` (not just port-listening).
 

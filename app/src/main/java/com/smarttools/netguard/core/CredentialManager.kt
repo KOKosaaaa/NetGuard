@@ -33,7 +33,15 @@ object CredentialManager {
             passChars[i] = CHARSET[sr.nextInt(CHARSET.length)]
         }
         val port = RandomPort.getAvailable()
-        val httpPort = RandomPort.getAvailable()
+        // Two back-to-back getAvailable() calls can hand back the SAME port
+        // (the first socket is closed before the second opens, so the OS may
+        // reassign it) — that would make the SOCKS and HTTP inbounds collide
+        // and xray fail to bind. Retry until they differ.
+        var httpPort = RandomPort.getAvailable()
+        var guard = 0
+        while (httpPort == port && guard++ < 10) {
+            httpPort = RandomPort.getAvailable()
+        }
 
         // Clear any previous credentials before overwriting.
         clear()

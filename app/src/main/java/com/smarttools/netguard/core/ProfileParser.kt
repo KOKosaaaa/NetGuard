@@ -135,6 +135,9 @@ object ProfileParser {
         val atIndex = mainPart.indexOf('@')
         if (atIndex < 0) throw IllegalArgumentException("Invalid VLESS URI: missing '@'")
         val uuid = mainPart.substring(0, atIndex)
+        // An empty UUID parses fine but produces a config xray refuses, so
+        // the server looks "dead" and the failover budget gets burned on it.
+        if (uuid.isBlank()) throw IllegalArgumentException("Invalid VLESS URI: empty UUID")
         val rest = mainPart.substring(atIndex + 1)
 
         val (hostPort, queryString) = splitQuery(rest)
@@ -186,6 +189,9 @@ object ProfileParser {
             throw IllegalArgumentException("Private/loopback address not allowed: $host")
         }
         AddressValidator.requirePublicAddress(host)
+        if ((json.get("id")?.asString ?: "").isBlank()) {
+            throw IllegalArgumentException("Empty id in VMess URI")
+        }
         val rawName = json.get("ps")?.asString ?: ""
         val name = safeName(rawName, "$host:$port")
 
@@ -225,6 +231,7 @@ object ProfileParser {
         val atIndex = mainPart.indexOf('@')
         if (atIndex < 0) throw IllegalArgumentException("Invalid Trojan URI: missing '@'")
         val password = urlDecode(mainPart.substring(0, atIndex))
+        if (password.isBlank()) throw IllegalArgumentException("Invalid Trojan URI: empty password")
         val rest = mainPart.substring(atIndex + 1)
 
         val (hostPort, queryString) = splitQuery(rest)

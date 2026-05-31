@@ -149,6 +149,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
 
+                // 3. Restore settings. exportConfig writes a "settings"
+                //    object, but without this block a restore silently dropped
+                //    every preference (routing/DNS/theme/trigger/expert...).
+                //    perAppList is stripped on export for privacy, so keep the
+                //    device's current one instead of wiping it to empty.
+                val settingsEl = root.get("settings")
+                if (settingsEl != null && settingsEl.isJsonObject) {
+                    try {
+                        // Gson fills via Unsafe and IGNORES Kotlin default values,
+                        // so a partial/foreign JSON would leave non-null fields
+                        // null. Merge at the JSON level instead: start from the
+                        // CURRENT settings (every field present), overlay only the
+                        // keys the backup actually contains, then deserialize the
+                        // complete object — no field can come out null.
+                        val gson = Gson()
+                        val base = gson.toJsonTree(_settings.value).asJsonObject
+                        for ((k, v) in settingsEl.asJsonObject.entrySet()) {
+                            base.add(k, v)
+                        }
+                        val merged = gson.fromJson(base, AppSettings::class.java)
+                            .copy(perAppList = _settings.value.perAppList)
+                        app.saveSettings(merged)
+                        _settings.value = merged
+                    } catch (e: Exception) {
+                        android.util.Log.w("ImportConfig", "Skipping malformed settings block: ${e.message}")
+                    }
+                }
+
                 _importResult.emit(Result.success(count))
             } catch (e: Exception) {
                 _importResult.emit(Result.failure(e))

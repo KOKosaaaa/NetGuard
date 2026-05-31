@@ -190,6 +190,11 @@ func ReplaceBypassRules(db *storage.DB, reqs []*AddBypassRuleRequest) ([]*storag
 // tables, then restarts xray. No-ops if xray isn't deployed yet (the
 // rules apply on the next deploy via buildXrayConfigFromDB).
 func ApplyBypassToXray(db *storage.DB) error {
+	// Same lock as XrayAddProfile/XrayDeleteProfile — serialize config
+	// rewrites. Callers (AddBypassRule, XrayDeploy's final step, etc.) do
+	// NOT hold this lock, so taking it here is not reentrant.
+	xrayConfigMu.Lock()
+	defer xrayConfigMu.Unlock()
 	if !fileExists(XrayConfigPath) {
 		return nil // not deployed yet
 	}

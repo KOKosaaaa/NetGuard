@@ -60,6 +60,10 @@ type ChainTarget struct {
 // outbound's tag. Everything is rolled back atomically on failure so a
 // partial write can't desync xray config vs the agent DB.
 func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult, error) {
+	// Serialize against any other config mutation (another add, a delete,
+	// or a bypass-rule apply) so concurrent edits can't drop each other.
+	xrayConfigMu.Lock()
+	defer xrayConfigMu.Unlock()
 	if !fileExists(XrayInstallPath) {
 		return nil, fmt.Errorf("xray is not installed; call /v1/xray/deploy first")
 	}
@@ -248,6 +252,8 @@ func nextHopURI(t *ChainTarget) string {
 // glued them together. Done together so a half-deleted chain doesn't
 // leave orphan outbounds tightening xray's startup time.
 func XrayDeleteProfile(db *storage.DB, inboundID string) error {
+	xrayConfigMu.Lock()
+	defer xrayConfigMu.Unlock()
 	cfgBytes, err := os.ReadFile(XrayConfigPath)
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
@@ -318,8 +324,21 @@ func XrayDeleteProfile(db *storage.DB, inboundID string) error {
 		return fmt.Errorf("write config: %w", err)
 	}
 	ctx := context.Background()
+	// revert restores the pre-delete config + restarts xray, so a delete
+	// that produces an invalid config (e.g. a dangling rule) doesn't leave
+	// xray crash-looping and drop the DB row out of sync.
+	revert := func() {
+		_ = AtomicWrite(XrayConfigPath, cfgBytes, 0o600)
+		_, _ = exec.CommandContext(ctx, "systemctl", "restart", "xray").CombinedOutput()
+	}
 	if _, err := exec.CommandContext(ctx, "systemctl", "restart", "xray").CombinedOutput(); err != nil {
+		revert()
 		return fmt.Errorf("systemctl restart xray: %w", err)
+	}
+	// xray must still be active after the delete (port 0 = is-active only).
+	if err := waitXrayHealthy(ctx, 0); err != nil {
+		revert()
+		return fmt.Errorf("xray unhealthy after delete, reverted: %w", err)
 	}
 	return db.DeleteXrayInbound(inboundID)
 }

@@ -42,8 +42,15 @@ object AgentErrorMessages {
                     rawDetails = raw,
                 )
         }
-        // waitForTask wraps task failures as IllegalStateException
+        // waitForTask wraps task failures as IllegalStateException of the
+        // shape "<op> failed (status): <agent msg>". Any such message may
+        // carry an E_ code — map it generically so a swap/Telemost failure
+        // isn't mislabeled as an xray problem (the message used to be
+        // hard-coded to "xray deploy …").
         val msg = throwable.message.orEmpty()
+        Regex("E_[A-Z_]+").find(msg)?.value?.let { code ->
+            mapCode(code, msg, msg)?.let { return it }
+        }
         if (msg.startsWith("xray deploy") || msg.contains("xray deploy")) {
             return explainXrayTaskMessage(msg)
         }

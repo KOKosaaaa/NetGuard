@@ -174,7 +174,7 @@ class ManagedServerDetailFragment : Fragment() {
                 .setTitle(R.string.srv_action_remove_server)
                 .setMessage("Remove this server from the app? Agent keeps running on the VPS.")
                 .setPositiveButton(android.R.string.ok) { _, _ ->
-                    viewModel.removeServer { findNavController().navigateUp() }
+                    viewModel.removeServer { if (isAdded) findNavController().navigateUp() }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
@@ -240,7 +240,7 @@ class ManagedServerDetailFragment : Fragment() {
                 val newName = edit.text?.toString()?.trim().orEmpty()
                 if (newName.isNotEmpty()) {
                     viewModel.rename(newName) {
-                        binding.toolbar.title = newName
+                        if (isAdded) binding.toolbar.title = newName
                     }
                 }
             }
