@@ -718,11 +718,36 @@ class HomeFragment : Fragment() {
             }
             is ConnectionState.Error -> {
                 binding.btnConnect.setBackgroundResource(R.drawable.bg_button_disconnected)
-                binding.tvStatus.text = if (fsocietyMode) "[ SEGFAULT ]" else state.message
+                binding.tvStatus.text = if (fsocietyMode) "[ SEGFAULT ]" else humanizeConnError(state.message)
                 binding.tvStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_error))
                 if (fsocietyMode) setFsocPrompt("root@fsociety:~$ ${state.message.take(40)}")
                 stopPulse()
             }
+        }
+    }
+
+    /**
+     * Turn a raw connection-error message into something an ordinary user
+     * understands. Messages we already write in Russian (whitelist hint,
+     * "Нет сети", ...) are passed through; English/technical ones (raw xray
+     * / socket exceptions like "failed to connect", "Connection timed out")
+     * map to a short friendly line.
+     */
+    private fun humanizeConnError(msg: String): String {
+        if (msg.any { it in 'Ѐ'..'ӿ' }) return msg // already Russian
+        val m = msg.lowercase()
+        return when {
+            m.contains("permission") -> "Нет разрешения на VPN. Разреши подключение и попробуй снова."
+            m.contains("profile not found") || m.contains("no selected") ->
+                "Сервер не выбран. Выбери сервер и подключись."
+            m.contains("timed out") || m.contains("timeout") ->
+                "Сервер не отвечает. Попробуй другой сервер."
+            m.contains("refused") || m.contains("reset") || m.contains("unreachable") ||
+                m.contains("no route") || m.contains("connect") ->
+                "Не удалось подключиться к серверу. Попробуй другой или проверь интернет."
+            m.contains("tun2socks") || m.contains("xray") ->
+                "Подключение прервалось. Попробуй ещё раз."
+            else -> "Не удалось подключиться. Попробуй ещё раз или выбери другой сервер."
         }
     }
 

@@ -694,15 +694,27 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         withContext(Dispatchers.Main) { onDone() }
     }
 
-    /** Bearer-revoke + DB delete. Agent keeps running on the VPS. */
-    fun removeServer(onDone: () -> Unit) = api {
-        try { client.revoke() } catch (_: Exception) { /* best-effort */ }
-        // Drop any routes through this server before we forget it — once the
-        // server's gone from the app the chain can't be managed anyway.
-        runCatching { chainRepo.deleteChainsForServer(server.id) }
-        repo.remove(server)
-        post("Server removed")
-        withContext(Dispatchers.Main) { onDone() }
+    /**
+     * Remove the server from the app (an unpair — the agent keeps running).
+     * Must feel INSTANT: we drop the DB row and navigate away immediately,
+     * then do the slow network bits (revoke our bearer, tear down routes
+     * through this server — each hop restarts xray) in the background. The
+     * VM is activity-scoped so this coroutine survives the navigateUp pop;
+     * we capture server/client locally so a subsequent init(otherServer)
+     * can't repoint them mid-cleanup.
+     */
+    fun removeServer(onDone: () -> Unit) {
+        val srv = server
+        val cli = client
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { repo.remove(srv) }
+            withContext(Dispatchers.Main) { onDone() }
+            // Best-effort, non-blocking cleanup AFTER the UI moved on.
+            withContext(Dispatchers.IO) {
+                runCatching { cli.revoke() }
+                runCatching { chainRepo.deleteChainsForServer(srv.id) }
+            }
+        }
     }
 
     private fun api(creating: Boolean = false, block: suspend () -> Unit) {
