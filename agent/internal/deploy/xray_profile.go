@@ -117,10 +117,14 @@ func XrayAddProfile(db *storage.DB, req *XrayAddProfileRequest) (*InboundResult,
 			return nil, fmt.Errorf("build chain outbound: %w", err)
 		}
 		outbounds, _ := cfg["outbounds"].([]any)
-		// Prepend so the chain outbound takes precedence over the
-		// default freedom outbound when xray walks the list looking
-		// for a tag — defensive even though we always select by tag.
-		cfg["outbounds"] = append([]any{outboundCfg}, outbounds...)
+		// APPEND, never prepend: xray treats the FIRST outbound as the
+		// default for any traffic that matches no routing rule. The exit
+		// hop's inbound has no rule, so a prepended chain outbound becomes
+		// the default and the exit hop forwards back into the chain instead
+		// of exiting to the internet — an A→B→A→B loop (which also OOM-kills
+		// xray). Rules select the chain outbound by tag, so it does not need
+		// to be first; keeping freedom first preserves a real exit.
+		cfg["outbounds"] = append(outbounds, outboundCfg)
 
 		// Routing section may be absent (the initial deploy doesn't
 		// create one); initialize it on-demand.
