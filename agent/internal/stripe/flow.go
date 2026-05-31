@@ -9,10 +9,12 @@ import (
 
 // txChunk is one sent-but-not-yet-acked s2c chunk, retained so it can be
 // resent if the pipe it went on dies (the substrate has no retransmit of its
-// own and Telemost rooms drop often).
+// own and Telemost rooms drop often). pid is the id of the pipe it was last
+// sent on (-1 = not yet sent), so a pipe death resends only its own chunks.
 type txChunk struct {
 	off  uint64
 	data []byte
+	pid  int
 }
 
 // flow is one application connection multiplexed over the session's pipes.
@@ -49,9 +51,10 @@ type flow struct {
 	txCond     *sync.Cond
 	txBase     uint64 // cumulative bytes acked by the client (window left edge)
 	txNext     uint64 // next offset to assign
-	unacked    []txChunk
+	unacked    []*txChunk
 	finReached bool
 	finSeq     uint64
+	finPid     int // pipe the Fin was last sent on (-1 = unsent)
 
 	rxDone atomic.Bool
 	txDone atomic.Bool
@@ -68,6 +71,7 @@ func newFlow(id uint32, sess *session) *flow {
 		inbound: make(chan Frame, Window/ChunkSize+8),
 		closed:  make(chan struct{}),
 		rx:      NewReorder(Window),
+		finPid:  -1,
 	}
 	fl.txCond = sync.NewCond(&fl.txMu)
 	return fl
@@ -153,7 +157,6 @@ func (fl *flow) setDest(addr string) {
 			fl.dest = conn
 			close(fl.dialed)
 			go fl.txReader()
-			go fl.txRetransmit()
 		}()
 	})
 }
@@ -255,11 +258,13 @@ func (fl *flow) txReader() {
 			fl.txMu.Lock()
 			off := fl.txNext
 			fl.txNext += uint64(n)
-			fl.unacked = append(fl.unacked, txChunk{off: off, data: data})
+			ch := &txChunk{off: off, data: data, pid: -1}
+			fl.unacked = append(fl.unacked, ch)
 			fl.txMu.Unlock()
-			// Best-effort first send; if no pipe is usable right now the
-			// retransmit loop will carry it once a pipe returns.
-			fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: data})
+			pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: data})
+			fl.txMu.Lock()
+			ch.pid = pid
+			fl.txMu.Unlock()
 			fl.touch()
 		}
 		if err != nil {
@@ -268,7 +273,10 @@ func (fl *flow) txReader() {
 			fl.finSeq = fl.txNext
 			done := fl.txBase >= fl.txNext
 			fl.txMu.Unlock()
-			fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: fl.finSeq})
+			pid := fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: fl.finSeq})
+			fl.txMu.Lock()
+			fl.finPid = pid
+			fl.txMu.Unlock()
 			if done {
 				fl.markTxDone()
 			}
@@ -277,52 +285,36 @@ func (fl *flow) txReader() {
 	}
 }
 
-// txRetransmit resends the unacked window whenever the client's Acks stop
-// advancing for one RTO — the recovery path for a room that died holding
-// in-flight chunks. Resent chunks the client already has are dropped by its
-// reorder buffer (offset dedup), so over-resending is safe, just wasteful.
-func (fl *flow) txRetransmit() {
-	t := time.NewTicker(retransmitRTO)
-	defer t.Stop()
-	var lastBase uint64
-	for {
-		select {
-		case <-fl.closed:
-			return
-		case <-t.C:
-			fl.txMu.Lock()
-			base, next := fl.txBase, fl.txNext
-			if base >= next {
-				fin := fl.finReached
-				lastBase = base
-				fl.txMu.Unlock()
-				if fin {
-					fl.markTxDone()
-					return
-				}
-				continue
-			}
-			progressed := base != lastBase
-			lastBase = base
-			var resend []txChunk
-			var fr bool
-			var fs uint64
-			if !progressed {
-				resend = append([]txChunk(nil), fl.unacked...)
-				fr, fs = fl.finReached, fl.finSeq
-			}
-			fl.txMu.Unlock()
-
-			if len(resend) == 0 {
-				continue
-			}
-			for _, ch := range resend {
-				fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
-			}
-			if fr {
-				fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: fs})
-			}
+// onPipeDead resends only the chunks that were riding the dead pipe (plus any
+// never-sent chunk) onto a live pipe — the chunks the substrate just lost. No
+// blind timer, so a merely-slow Ack never triggers a resend storm; the
+// receiver dedups resends by offset.
+func (fl *flow) onPipeDead(deadID int) {
+	fl.txMu.Lock()
+	var resend []*txChunk
+	for _, ch := range fl.unacked {
+		if ch.pid == deadID || ch.pid == -1 {
+			resend = append(resend, ch)
 		}
+	}
+	resendFin := fl.finReached && (fl.finPid == deadID || fl.finPid == -1)
+	finSeq := fl.finSeq
+	fl.txMu.Unlock()
+
+	for _, ch := range resend {
+		pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
+		fl.txMu.Lock()
+		ch.pid = pid
+		fl.txMu.Unlock()
+	}
+	if resendFin {
+		pid := fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: finSeq})
+		fl.txMu.Lock()
+		fl.finPid = pid
+		fl.txMu.Unlock()
+	}
+	if len(resend) > 0 || resendFin {
+		fl.touch()
 	}
 }
 

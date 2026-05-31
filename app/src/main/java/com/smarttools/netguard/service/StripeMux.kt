@@ -201,7 +201,7 @@ class StripeMux(
         val flow = StripeFlow(id, client, this)
         flows[id] = flow
         // OPEN must precede DATA so the server learns the destination.
-        if (!send(StripeFrame(StripeProtocol.OPEN, id, 0, dest.toByteArray(Charsets.US_ASCII)))) {
+        if (send(StripeFrame(StripeProtocol.OPEN, id, 0, dest.toByteArray(Charsets.US_ASCII))) < 0) {
             flows.remove(id)
             try { client.close() } catch (_: Exception) {}
             return
@@ -279,11 +279,15 @@ class StripeMux(
         }
     }
 
-    /** Stripes one frame across the live pipes round-robin. */
-    fun send(frame: StripeFrame): Boolean {
+    /**
+     * Stripes one frame across the live pipes round-robin. Returns the idx of
+     * the pipe that carried it, or -1 if none could — the caller records that
+     * on the chunk so a pipe death can resend exactly its chunks.
+     */
+    fun send(frame: StripeFrame): Int {
         val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }
         val n = snapshot.size
-        if (n == 0) return false
+        if (n == 0) return -1
         val wire = frame.encode()
         val start = (pipeCursor.getAndIncrement() and Int.MAX_VALUE) % n
         for (i in 0 until n) {
@@ -294,12 +298,17 @@ class StripeMux(
                     p.out.write(wire)
                     p.out.flush()
                 }
-                return true
+                return p.idx
             } catch (e: Exception) {
                 p.dead = true
             }
         }
-        return false
+        return -1
+    }
+
+    /** Tells every flow to resend the c2s chunks that rode the dead pipe. */
+    private fun onPipeDead(deadIdx: Int) {
+        for (flow in flows.values) flow.onPipeDead(deadIdx)
     }
 
     private fun pipeReader(p: Pipe) {
@@ -310,9 +319,11 @@ class StripeMux(
                 flow.onFrame(f)
             }
         } catch (_: Exception) {
-            // pipe EOF / error: mark dead. Flows striped over it will stall
-            // and be torn down; new frames route to surviving pipes.
+            // pipe EOF / error: the room died. Mark it dead and have every
+            // flow resend the c2s chunks it had on this pipe over a live one.
+        } finally {
             p.dead = true
+            onPipeDead(p.idx)
         }
     }
 

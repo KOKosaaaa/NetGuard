@@ -31,10 +31,6 @@ object StripeProtocol {
     const val CHUNK_SIZE: Int = 16 * 1024
     const val WINDOW: Long = (512 * 1024).toLong()
     const val ACK_THRESHOLD: Long = WINDOW / 8
-    // Resend the unacked window after this long with no Ack progress — the
-    // recovery path for a Telemost room dying mid-transfer (matches the Go
-    // server's retransmitRTO).
-    const val RETRANSMIT_RTO_MS: Long = 1200
 }
 
 /** One decoded protocol frame. */

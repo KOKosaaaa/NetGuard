@@ -30,12 +30,6 @@ const (
 	// window stays open (Acks are broadcast on all pipes, so they're cheap).
 	AckThreshold = Window / 8
 
-	// retransmitRTO is how long the sender waits with no Ack progress before
-	// resending the unacked window. Must comfortably exceed the real Ack
-	// round-trip over Telemost or it resends spuriously; below the 90s idle
-	// reaper so a dead-room gap recovers in ~1s, not on teardown.
-	retransmitRTO = 1200 * time.Millisecond
-
 	// dialTimeout caps how long we wait to connect to the real destination.
 	dialTimeout = 15 * time.Second
 
@@ -108,6 +102,12 @@ func (s *Server) handlePipe(conn net.Conn) {
 		if empty {
 			s.detach(sid)
 			s.logf("stripe: session %x closed (last pipe gone)", sid[:4])
+		} else {
+			// A room died but others survive: have every flow resend the
+			// chunks that went on this pipe (they're lost — no substrate
+			// retransmit) over a live pipe. Event-driven, so no spurious
+			// resend storm from merely-slow Acks.
+			sess.onPipeDead(p.id)
 		}
 	}()
 
@@ -146,6 +146,7 @@ func (s *Server) detach(sid [16]byte) {
 // written to the underlying conn atomically since many flow goroutines share
 // the pipe.
 type pipe struct {
+	id      int
 	conn    net.Conn
 	writeMu sync.Mutex
 	dead    atomic.Bool
@@ -176,9 +177,10 @@ type session struct {
 	id   [16]byte
 	logf func(string, ...any)
 
-	pmu    sync.RWMutex
-	pipes  []*pipe
-	cursor atomic.Uint32
+	pmu     sync.RWMutex
+	pipes   []*pipe
+	cursor  atomic.Uint32
+	pipeSeq atomic.Int32 // stable per-pipe ids for retransmit targeting
 
 	fmu   sync.Mutex
 	flows map[uint32]*flow
@@ -231,7 +233,7 @@ func (s *session) statsLoop() {
 }
 
 func (s *session) addPipe(conn net.Conn) *pipe {
-	p := &pipe{conn: conn}
+	p := &pipe{id: int(s.pipeSeq.Add(1)), conn: conn}
 	s.pmu.Lock()
 	s.pipes = append(s.pipes, p)
 	s.pmu.Unlock()
@@ -257,15 +259,15 @@ func (s *session) pipeCount() int {
 }
 
 // send stripes one frame across the live pipes: round-robin, skipping pipes
-// already marked dead, retrying the next on a write error. Returns false if
-// no pipe could carry it (session has no usable pipe right now).
-func (s *session) send(f Frame) bool {
+// already marked dead, retrying the next on a write error. Returns the id of
+// the pipe that carried it, or -1 if none could (no usable pipe right now).
+func (s *session) send(f Frame) int {
 	s.pmu.RLock()
 	pipes := s.pipes
 	n := len(pipes)
 	s.pmu.RUnlock()
 	if n == 0 {
-		return false
+		return -1
 	}
 	start := int(s.cursor.Add(1)-1) % n
 	for i := 0; i < n; i++ {
@@ -274,10 +276,23 @@ func (s *session) send(f Frame) bool {
 			continue
 		}
 		if err := p.write(f); err == nil {
-			return true
+			return p.id
 		}
 	}
-	return false
+	return -1
+}
+
+// onPipeDead tells every flow to resend the chunks it had on the dead pipe.
+func (s *session) onPipeDead(deadID int) {
+	s.fmu.Lock()
+	flows := make([]*flow, 0, len(s.flows))
+	for _, fl := range s.flows {
+		flows = append(flows, fl)
+	}
+	s.fmu.Unlock()
+	for _, fl := range flows {
+		fl.onPipeDead(deadID)
+	}
 }
 
 // broadcast writes a frame to every live pipe. Used for tiny control frames
