@@ -57,6 +57,7 @@ class TelemostRelayManager(
 
     private val instances = mutableListOf<RelayInstance>()
     private var lb: SocksRoundRobinLb? = null
+    private var stripeMux: StripeMux? = null
 
     /** First relay's process — used by the existing watchdog hook. */
     fun process(): Process? = instances.firstOrNull()?.process
@@ -77,7 +78,13 @@ class TelemostRelayManager(
         socksUser: String,
         socksPass: String,
         scope: CoroutineScope,
-        timeoutMs: Long = 30_000
+        timeoutMs: Long = 30_000,
+        // Opt-in: when true, fan out with the striping mux (one flow split
+        // across ALL rooms) instead of the round-robin LB (one flow pinned to
+        // one room). Requires the stripe-server deployed on the exit. Default
+        // false keeps the proven round-robin path untouched.
+        useStriping: Boolean = false,
+        stripePort: Int = 38500
     ): Boolean {
         stop()
         val links = profile.address.split('\n', '\r')
@@ -124,6 +131,22 @@ class TelemostRelayManager(
         }
 
         val upstreams = instances.map { InetSocketAddress("127.0.0.1", it.socksPort) }
+
+        if (useStriping) {
+            // Striping: one flow's bytes are split across all rooms and
+            // reassembled by the exit's stripe-server (reached via a SOCKS5
+            // CONNECT to 127.0.0.1:stripePort through each relay).
+            val mux = StripeMux(exposedSocksPort, upstreams, "127.0.0.1", stripePort, onLog)
+            if (!mux.start(scope)) {
+                onLog("StripeMux failed to start on port $exposedSocksPort")
+                stop()
+                return false
+            }
+            this.stripeMux = mux
+            onLog("Telemost striping up: ${instances.size}/${links.size} relays, mux on :$exposedSocksPort -> stripe-server :$stripePort")
+            return true
+        }
+
         val lb = SocksRoundRobinLb(exposedSocksPort, upstreams)
         if (!lb.start(scope)) {
             onLog("LB failed to bind on port $exposedSocksPort")
@@ -138,6 +161,8 @@ class TelemostRelayManager(
     fun stop() {
         try { lb?.stop() } catch (_: Exception) {}
         lb = null
+        try { stripeMux?.stop() } catch (_: Exception) {}
+        stripeMux = null
         instances.forEach { it.stop() }
         instances.clear()
     }

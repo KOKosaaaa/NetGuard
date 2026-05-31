@@ -45,6 +45,10 @@ rm -rf /etc/xray %[7]s %[8]s
 # --- sing-box (best-effort; only if the agent ever set it up) ---
 systemctl disable --now sing-box 2>/dev/null || true
 
+# --- stripe-server (Telemost striping exit mux) ---
+systemctl disable --now %[11]s 2>/dev/null || true
+rm -f %[12]s %[13]s
+
 # --- the agent itself ---
 systemctl disable --now netguard-agent 2>/dev/null || true
 rm -f /etc/systemd/system/netguard-agent.service
@@ -62,6 +66,9 @@ systemctl daemon-reload 2>/dev/null || true
 		XrayAssetDir,              // 8 /usr/local/share/xray
 		"/var/lib/netguard-agent", // 9 agent state dir
 		AgentBinaryPath,           // 10 /usr/local/bin/netguard-agent
+		stripeUnitName,            // 11 netguard-stripe-server.service
+		stripeUnitPath,            // 12 /etc/systemd/system/netguard-stripe-server.service
+		stripeInstallPath,         // 13 /usr/local/bin/netguard-stripe-server
 	)
 }
 

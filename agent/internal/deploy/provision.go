@@ -48,8 +48,18 @@ func ProvisionAll(db *storage.DB) tasks.Runner {
 			h.LogF("provision: Telemost FAILED: %s (%s)", to.Error.Code, to.Error.Message)
 		}
 
-		h.LogF("provision: done xray=%v telemost=%v (sing-box deferred)",
-			status["xray"], status["telemost"])
+		// --- stripe-server: exit-side mux for Telemost room striping. Stage
+		// + start it so a striping-enabled client has something to dial. It
+		// only listens on loopback and is idle until a phone opens pipes. ---
+		h.LogF("provision: staging stripe-server")
+		so := PrepareStripe()(ctx, h)
+		status["stripe"] = so.Error == nil
+		if so.Error != nil {
+			h.LogF("provision: stripe-server FAILED: %s (%s)", so.Error.Code, so.Error.Message)
+		}
+
+		h.LogF("provision: done xray=%v telemost=%v stripe=%v (sing-box deferred)",
+			status["xray"], status["telemost"], status["stripe"])
 		return h.Ok(status)
 	}
 }

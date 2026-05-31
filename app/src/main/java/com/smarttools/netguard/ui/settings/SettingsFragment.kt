@@ -354,6 +354,7 @@ class SettingsFragment : Fragment() {
         binding.cbExpertMode.isChecked = s.expertMode
         binding.cbConnectionMap.isChecked = s.showConnectionMap
         binding.cbSpeedTest.isChecked = s.showSpeedTest
+        binding.cbTelemostStriping.isChecked = s.telemostStriping
 
         // Expert mode shows advanced features (Logs tab, etc.). Update the
         // bottom-nav in place — recreate() scrambled the selected-tab
@@ -368,6 +369,9 @@ class SettingsFragment : Fragment() {
         }
         binding.cbSpeedTest.setOnCheckedChangeListener { _, checked ->
             viewModel.updateSettings { it.copy(showSpeedTest = checked) }
+        }
+        binding.cbTelemostStriping.setOnCheckedChangeListener { _, checked ->
+            viewModel.updateSettings { it.copy(telemostStriping = checked) }
         }
     }
 

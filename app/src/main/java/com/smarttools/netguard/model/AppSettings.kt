@@ -54,7 +54,15 @@ data class AppSettings(
      * (Settings → Expert mode). Gson defaults the missing field to false,
      * so existing installs start in Simple mode.
      */
-    val expertMode: Boolean = false
+    val expertMode: Boolean = false,
+    /**
+     * Experimental: for multi-room Telemost profiles, split each connection's
+     * bytes across ALL rooms (striping) instead of pinning a connection to one
+     * room (round-robin). Lets a single big transfer use the rooms' aggregate
+     * bandwidth, but needs the stripe-server deployed on the exit. Default OFF
+     * keeps the proven round-robin path; exposed only under Expert mode.
+     */
+    val telemostStriping: Boolean = false
 )
 
 enum class RoutingMode {

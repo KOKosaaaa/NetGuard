@@ -528,7 +528,11 @@ class TunnelVpnService : VpnService() {
                             }
                         )
                         telemostRelay = relay
-                        val ok = relay.start(profile, port, socksUser, socksPass, serviceScope!!, timeoutMs = 30_000)
+                        val ok = relay.start(
+                            profile, port, socksUser, socksPass, serviceScope!!,
+                            timeoutMs = 30_000,
+                            useStriping = settings.telemostStriping
+                        )
                         if (!ok) throw IllegalStateException("Telemost relay failed to reach TUNNEL_CONNECTED")
                         waitForPort(port, timeoutMs = 5000)
                         Log.i(TAG, "Telemost SOCKS5 is listening on port $port")

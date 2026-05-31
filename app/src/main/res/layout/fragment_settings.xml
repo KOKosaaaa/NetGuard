@@ -79,6 +79,13 @@
             android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
             android:layout_marginBottom="4dp" />
 
+        <CheckBox android:id="@+id/cb_telemost_striping" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/telemost_striping" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/telemost_striping_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_traffic_stats_mode"
             android:layout_width="match_parent"
