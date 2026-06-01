@@ -20,7 +20,7 @@ object LogBuffer {
         val message: String
     )
 
-    private const val MAX_ENTRIES = 500
+    private const val MAX_ENTRIES = 2000
     // ArrayDeque so trimming the oldest entry is O(1) instead of O(n) on
     // ArrayList during xray log bursts.
     private val entries = ArrayDeque<LogEntry>(MAX_ENTRIES + 16)
@@ -105,7 +105,24 @@ object LogBuffer {
      */
     fun redactPublic(msg: String): String = redact(msg)
 
+    // High-volume librelay/Telemost lines that carry no diagnostic value but
+    // flood the 500-entry buffer (a single ghost-ridden room emits "peer
+    // restart detected" several times a second), pushing out the manager-level
+    // events we actually need. Dropped here so the log stays readable. The
+    // peer-restart churn is benign on the joiner side (creator-side handles it
+    // via the phantom-tolerant peer lock).
+    private val SPAM = listOf(
+        "peer restart detected",
+        ": <- slotsConfig",
+        "[bind] BOUND slot=",
+        "[bind] UNBOUND slot=",
+        "recv vp8 frame #",
+        "sent frame #",
+        "(unhandled)",
+    )
+
     fun add(level: LogLevel, message: String) {
+        if (level == LogLevel.INFO && SPAM.any { message.contains(it) }) return
         synchronized(entries) {
             entries.addLast(LogEntry(level = level, message = redact(message)))
             while (entries.size > MAX_ENTRIES) entries.removeFirst()
