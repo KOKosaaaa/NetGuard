@@ -30,6 +30,14 @@ const (
 	// resets. Also the retain cap on the sender.
 	MaxReorder = 16 * 1024 * 1024
 
+	// PromoteThreshold: a flow's first PromoteThreshold bytes ride ONE pinned
+	// pipe (like round-robin — reliable, no cross-pipe reorder fragility), so
+	// small/interactive flows (Telegram's many tiny bidirectional conns) just
+	// work. Only once a flow proves bulk does it switch to striping across all
+	// pipes for aggregate speed. This is what lets TG and big downloads
+	// coexist.
+	PromoteThreshold uint64 = 512 * 1024
+
 	// posIntervalMs is how often a receiver reports its cumulative delivered
 	// offset (one tiny frame, NOT per-chunk). Only used so a sender can resend
 	// a dead pipe's still-unconfirmed chunks — not for flow control.
@@ -315,6 +323,48 @@ func (s *session) send(f Frame) int {
 		}
 	}
 	return -1
+}
+
+// sendPinned writes a frame to the flow's pinned home pipe so a small flow
+// rides ONE reliable room (no cross-pipe reorder fragility). Reassigns the
+// home pipe if it died. *homeID is the flow's stable home pipe id (-1 =
+// unassigned); only the flow's tx goroutine calls this, so no lock on it.
+func (s *session) sendPinned(homeID *int, f Frame) int {
+	s.pmu.RLock()
+	pipes := s.pipes
+	s.pmu.RUnlock()
+	if len(pipes) == 0 {
+		return -1
+	}
+	var home *pipe
+	for _, p := range pipes {
+		if p.id == *homeID && !p.dead.Load() {
+			home = p
+			break
+		}
+	}
+	if home == nil {
+		n := len(pipes)
+		start := int(s.cursor.Add(1)-1) % n
+		for i := 0; i < n; i++ {
+			p := pipes[(start+i)%n]
+			if !p.dead.Load() {
+				home = p
+				break
+			}
+		}
+		if home == nil {
+			return -1
+		}
+		*homeID = home.id
+	}
+	if f.Type == FrameData {
+		home.pace(HeaderSize + len(f.Payload))
+	}
+	if err := home.write(f); err != nil {
+		return -1
+	}
+	return home.id
 }
 
 // onPipeDead tells every flow to resend the chunks it had on the dead pipe.

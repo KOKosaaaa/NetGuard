@@ -306,6 +306,36 @@ class StripeMux(
         return -1
     }
 
+    /**
+     * Writes a frame to the flow's pinned home pipe so a small flow rides ONE
+     * reliable room (no cross-pipe reorder fragility — what was breaking TG).
+     * Reassigns the home pipe if it died. Returns the chosen pipe idx, or -1.
+     */
+    fun sendPinned(homeIdx: Int, frame: StripeFrame): Int {
+        val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }
+        if (snapshot.isEmpty()) return -1
+        var home = snapshot.firstOrNull { it.idx == homeIdx && !it.dead }
+        if (home == null) {
+            val start = (pipeCursor.getAndIncrement() and Int.MAX_VALUE) % snapshot.size
+            for (i in snapshot.indices) {
+                val p = snapshot[(start + i) % snapshot.size]
+                if (!p.dead) { home = p; break }
+            }
+        }
+        if (home == null) return -1
+        val wire = frame.encode()
+        return try {
+            synchronized(home.writeLock) {
+                home.out.write(wire)
+                home.out.flush()
+            }
+            home.idx
+        } catch (e: Exception) {
+            home.dead = true
+            -1
+        }
+    }
+
     /** Tells every flow to resend the c2s chunks that rode the dead pipe. */
     private fun onPipeDead(deadIdx: Int) {
         for (flow in flows.values) flow.onPipeDead(deadIdx)

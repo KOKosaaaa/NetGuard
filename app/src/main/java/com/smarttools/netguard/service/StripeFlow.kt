@@ -46,6 +46,7 @@ class StripeFlow(
     private var finReached = false
     private var finSeq: Long = 0
     private var finPid: Int = -1
+    private var homeIdx: Int = -1 // pinned home pipe while c2s is small (touched only by pump thread)
 
     // s2c receive state — touched only by the writer thread, so no lock.
     private val rx = StripeReorder(StripeProtocol.MAX_REORDER)
@@ -120,7 +121,17 @@ class StripeFlow(
                     txNext += n
                     unacked.addLast(ch)
                 }
-                val pid = mux.send(StripeFrame(StripeProtocol.DATA, id, ch.off, data))
+                // Small flows ride one pinned pipe (reliable, like round-robin
+                // — this is what fixes Telegram's many tiny conns); only bulk
+                // flows stripe across all pipes.
+                val f = StripeFrame(StripeProtocol.DATA, id, ch.off, data)
+                val pid = if (ch.off < StripeProtocol.PROMOTE_THRESHOLD) {
+                    val r = mux.sendPinned(homeIdx, f)
+                    if (r >= 0) homeIdx = r
+                    r
+                } else {
+                    mux.send(f)
+                }
                 lock.withLock { ch.pid = pid }
             }
             val fs: Long

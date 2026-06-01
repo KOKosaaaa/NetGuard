@@ -55,6 +55,7 @@ type flow struct {
 	finReached bool
 	finSeq     uint64
 	finPid     int   // pipe the Fin was last sent on (-1 = unsent)
+	homePid    int   // pinned home pipe id while the flow is small (-1 = unassigned)
 	lastPosMs  int64 // unix ms of the last position report we sent (c2s)
 
 	rxDone atomic.Bool
@@ -73,6 +74,7 @@ func newFlow(id uint32, sess *session) *flow {
 		closed:  make(chan struct{}),
 		rx:      NewReorder(MaxReorder),
 		finPid:  -1,
+		homePid: -1,
 	}
 	fl.txCond = sync.NewCond(&fl.txMu)
 	return fl
@@ -269,9 +271,17 @@ func (fl *flow) txReader() {
 			ch := &txChunk{off: off, data: data, pid: -1}
 			fl.unacked = append(fl.unacked, ch)
 			fl.txMu.Unlock()
-			// Blocks on a full/slow pipe (pacing + SCTP backpressure) — this
-			// is our flow control.
-			pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: data})
+			// Small flows ride one pinned pipe (reliable, no cross-pipe gap);
+			// only once a flow proves bulk do we stripe it across all pipes.
+			// Blocks on a full/slow pipe (pacing + SCTP backpressure) = flow
+			// control.
+			f := Frame{Type: FrameData, FlowID: fl.id, Seq: off, Payload: data}
+			var pid int
+			if off < PromoteThreshold {
+				pid = fl.sess.sendPinned(&fl.homePid, f)
+			} else {
+				pid = fl.sess.send(f)
+			}
 			fl.txMu.Lock()
 			ch.pid = pid
 			fl.txMu.Unlock()
