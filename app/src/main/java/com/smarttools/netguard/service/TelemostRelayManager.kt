@@ -4,6 +4,9 @@ import android.util.Log
 import com.smarttools.netguard.model.ServerProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -95,37 +98,42 @@ class TelemostRelayManager(
             return false
         }
 
-        // Spawn each relay on its own internal port. We attempt them serially to
-        // avoid hammering Yandex's signaling API in a burst; per-relay startup
-        // is ~2-5s so 3 in series is fine within our overall timeout budget.
-        var anySuccess = false
-        for ((i, link) in links.withIndex()) {
-            val internalPort = INTERNAL_SOCKS_BASE + i
-            val signalingPort = SIGNALING_PORT_BASE + i
-            val inst = RelayInstance(
-                idx = i,
-                joinLink = link,
-                nativeLibDir = nativeLibDir,
-                socksPort = internalPort,
-                signalingPort = signalingPort,
-                socksUser = socksUser,
-                socksPass = socksPass,
-                onLog = { line -> onLog("[#${i + 1}] $line") },
-                onStatus = onStatus,
-                onTunnelLost = onTunnelLost
-            )
-            val perRelayTimeout = (timeoutMs / links.size).coerceAtLeast(8_000L)
-            val ok = inst.start(scope, perRelayTimeout)
-            if (ok) {
-                instances.add(inst)
-                anySuccess = true
-            } else {
-                onLog("Relay #${i + 1} failed to connect; continuing without it")
-                inst.stop()
-            }
+        // Spawn relays in PARALLEL (was serial, which left slower rooms
+        // un-joined within the timeout — only 3/6 of a multi-x6 would come up,
+        // halving throughput). Each relay now gets the FULL timeout instead of
+        // timeout/N, and a small per-index stagger avoids hammering Yandex's
+        // signaling API in one burst while still overlapping the ~2-5s joins.
+        val perRelayTimeout = timeoutMs.coerceAtLeast(8_000L)
+        val started = coroutineScope {
+            links.mapIndexed { i, link ->
+                async(Dispatchers.IO) {
+                    val inst = RelayInstance(
+                        idx = i,
+                        joinLink = link,
+                        nativeLibDir = nativeLibDir,
+                        socksPort = INTERNAL_SOCKS_BASE + i,
+                        signalingPort = SIGNALING_PORT_BASE + i,
+                        socksUser = socksUser,
+                        socksPass = socksPass,
+                        onLog = { line -> onLog("[#${i + 1}] $line") },
+                        onStatus = onStatus,
+                        onTunnelLost = onTunnelLost
+                    )
+                    delay(i * 250L) // gentle stagger, not serial
+                    if (inst.start(scope, perRelayTimeout)) {
+                        inst
+                    } else {
+                        onLog("Relay #${i + 1} failed to connect; continuing without it")
+                        inst.stop()
+                        null
+                    }
+                }
+            }.awaitAll()
         }
+        // Preserve link order so socksPort list is stable.
+        instances.addAll(started.filterNotNull())
 
-        if (!anySuccess) {
+        if (instances.isEmpty()) {
             onLog("All ${links.size} Telemost relays failed to connect")
             return false
         }
@@ -188,8 +196,12 @@ class TelemostRelayManager(
         @Volatile private var stdinWriter: BufferedWriter? = null
         @Volatile private var tunnelConnected = false
         @Volatile private var sawReady = false
+        @Volatile private var stopped = false
+        @Volatile private var scopeRef: CoroutineScope? = null
 
-        suspend fun start(scope: CoroutineScope, timeoutMs: Long): Boolean {
+        /** Spawns the librelay subprocess + stdout reader. Re-usable by the
+         *  watchdog for respawn. Returns false if the process couldn't start. */
+        private fun spawnProcess(scope: CoroutineScope): Boolean {
             val bin = File(nativeLibDir, "librelay.so")
             if (!bin.exists()) {
                 onLog("librelay.so not found at ${bin.absolutePath}")
@@ -212,10 +224,11 @@ class TelemostRelayManager(
                 onLog("spawn failed: ${e.message}")
                 return false
             }
+            sawReady = false
+            tunnelConnected = false
             process = proc
             stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
             Log.i(TAG, "librelay.so #${idx + 1} started")
-
             scope.launch(Dispatchers.IO) {
                 try {
                     proc.inputStream.bufferedReader().forEachLine { handleLine(it) }
@@ -223,7 +236,12 @@ class TelemostRelayManager(
                     Log.w(TAG, "#${idx + 1} stdout reader exited: ${e.message}")
                 }
             }
+            return true
+        }
 
+        suspend fun start(scope: CoroutineScope, timeoutMs: Long): Boolean {
+            scopeRef = scope
+            if (!spawnProcess(scope)) return false
             val ok = withTimeoutOrNull(timeoutMs) {
                 while (!tunnelConnected) {
                     if (process?.isAlive != true) return@withTimeoutOrNull false
@@ -234,8 +252,41 @@ class TelemostRelayManager(
             if (!ok) {
                 onLog("did not reach TUNNEL_CONNECTED in ${timeoutMs}ms")
                 stop()
+                return false
             }
-            return ok
+            launchWatchdog(scope)
+            return true
+        }
+
+        /** Per-relay watchdog: respawns this relay if its process dies or its
+         *  tunnel stays lost — so one dead Telemost room recovers on its own
+         *  instead of permanently dropping throughput (the old code only
+         *  watched relay #0 and merely logged TUNNEL_LOST). */
+        private fun launchWatchdog(scope: CoroutineScope) {
+            scope.launch(Dispatchers.IO) {
+                var lostSince = 0L
+                while (!stopped) {
+                    delay(3_000)
+                    if (stopped) break
+                    val dead = process?.isAlive != true
+                    val lost = !tunnelConnected
+                    val now = System.currentTimeMillis()
+                    if (lost && lostSince == 0L) lostSince = now
+                    if (!lost) lostSince = 0L
+                    // Respawn if the process exited, or the tunnel has been
+                    // lost for >20s (Yandex room churn that didn't self-heal).
+                    if (dead || (lost && lostSince != 0L && now - lostSince > 20_000)) {
+                        if (stopped) break
+                        onLog("relay #${idx + 1} ${if (dead) "process died" else "tunnel lost >20s"} — respawning")
+                        try { process?.destroyForcibly() } catch (_: Exception) {}
+                        try { stdinWriter?.close() } catch (_: Exception) {}
+                        lostSince = 0L
+                        if (!spawnProcess(scope)) {
+                            delay(5_000) // spawn failed — back off, retry next tick
+                        }
+                    }
+                }
+            }
         }
 
         private fun handleLine(line: String) {
@@ -295,6 +346,7 @@ class TelemostRelayManager(
         }
 
         fun stop() {
+            stopped = true // tell the watchdog to stop respawning
             try { stdinWriter?.close() } catch (_: Exception) {}
             stdinWriter = null
             process?.let { p ->
