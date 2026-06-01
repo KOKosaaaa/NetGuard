@@ -43,10 +43,11 @@ const (
 	// a dead pipe's still-unconfirmed chunks — not for flow control.
 	posIntervalMs int64 = 700
 
-	// pipeRateBytesPerSec paces Data per pipe just under one room's ~1.25 Mbps
-	// ceiling so we don't bloat a room's WebRTC buffer (which inflates latency
-	// and skew).
-	pipeRateBytesPerSec = 140000.0 // ~1.12 Mbps
+	// pipeRateBytesPerSec is a loose per-pipe anti-bufferbloat cap. The old
+	// ~1.1 Mbps value was based on a wrong "1.25 Mbps/room ceiling" guess and
+	// throttled download to 6 Mbps; the live upload hit 48 Mbps (~8/room), so
+	// rooms clearly do far more. Set near the measured per-room capacity.
+	pipeRateBytesPerSec = 1000000.0 // ~8 Mbps/pipe
 
 	// dialTimeout caps how long we wait to connect to the real destination.
 	dialTimeout = 15 * time.Second
