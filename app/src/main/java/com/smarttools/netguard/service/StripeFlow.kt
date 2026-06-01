@@ -48,14 +48,12 @@ class StripeFlow(
     private var finPid: Int = -1
 
     // s2c receive state — touched only by the writer thread, so no lock.
-    private val rx = StripeReorder(StripeProtocol.WINDOW.toInt())
+    private val rx = StripeReorder(StripeProtocol.MAX_REORDER)
     private var rxFinal: Long = 0
     private var rxFinSet = false
-    private var lastAckSent: Long = 0
+    private var lastPosMs: Long = 0
 
-    private val s2cQueue = ArrayBlockingQueue<StripeFrame>(
-        (StripeProtocol.WINDOW / StripeProtocol.CHUNK_SIZE).toInt() + 8
-    )
+    private val s2cQueue = ArrayBlockingQueue<StripeFrame>(512)
     private val POISON = StripeFrame(StripeProtocol.RST, -1, 0, EMPTY)
 
     private val rxDone = AtomicBoolean(false)
@@ -99,13 +97,15 @@ class StripeFlow(
         }
     }
 
-    /** c2s: read the app socket, buffer + stripe each chunk, gate on the window. */
+    /** c2s: read the app socket, retain + stripe each chunk. No window gate —
+     *  the pipe writes block on backpressure; the only gate is a generous
+     *  retain cap so memory stays bounded if position reports stop. */
     private fun c2sPump() {
         val buf = ByteArray(StripeProtocol.CHUNK_SIZE)
         try {
             while (true) {
                 lock.withLock {
-                    while (txNext - txBase >= StripeProtocol.WINDOW && !closed.get()) {
+                    while (txNext - txBase >= StripeProtocol.MAX_REORDER && !closed.get()) {
                         cond.await()
                     }
                 }
@@ -175,7 +175,7 @@ class StripeFlow(
                             clientOut.write(out)
                             clientOut.flush()
                         }
-                        maybeAck()
+                        maybePos()
                         if (checkRxFin()) return
                     }
                     StripeProtocol.FIN -> {
@@ -190,12 +190,11 @@ class StripeFlow(
         }
     }
 
-    private fun maybeAck() {
-        val d = rx.delivered()
-        if (d - lastAckSent >= StripeProtocol.ACK_THRESHOLD) {
-            mux.broadcast(StripeFrame(StripeProtocol.ACK, id, d, EMPTY))
-            lastAckSent = d
-        }
+    private fun maybePos() {
+        val now = System.currentTimeMillis()
+        if (now - lastPosMs < StripeProtocol.POS_INTERVAL_MS) return
+        lastPosMs = now
+        mux.broadcast(StripeFrame(StripeProtocol.ACK, id, rx.delivered(), EMPTY))
     }
 
     private fun checkRxFin(): Boolean {

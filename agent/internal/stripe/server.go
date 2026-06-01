@@ -18,38 +18,32 @@ const (
 	// chunk is the striping unit: consecutive chunks go to different pipes.
 	ChunkSize = 16 * 1024
 
-	// Window bounds the bytes a sender may have outstanding (sent but not
-	// yet ACKed-as-delivered) per flow+direction. It must cover the
-	// bandwidth-delay product across all pipes or it throttles throughput;
-	// it also bounds the receiver's reorder buffer. 512 KiB covers
-	// ~7.5 Mbps aggregate at the high (~0.3s) RTT of a WebRTC relay.
-	Window = 512 * 1024
+	// NO window / per-byte Ack. The room pipes are already reliable +
+	// flow-controlled (WebRTC SCTP), so we don't reimplement TCP on top — that
+	// added a heavy upstream Ack stream that collapsed the thin Telemost
+	// uplink. Reliability + flow control ride the pipes (write backpressure);
+	// we only reorder across pipes and keep a light position report for
+	// dead-room recovery.
 
-	// AckThreshold is how far Delivered must advance before we emit a fresh
-	// cumulative Ack. Eighth-window keeps Acks frequent so the sender's
-	// window stays open (Acks are broadcast on all pipes, so they're cheap).
-	AckThreshold = Window / 8
+	// MaxReorder bounds the receiver's reassembly buffer (cross-pipe latency
+	// skew). Big enough to absorb a slow-but-alive room; if exceeded the flow
+	// resets. Also the retain cap on the sender.
+	MaxReorder = 16 * 1024 * 1024
 
-	// retransmitScan is how often the sender checks for overdue chunks.
-	retransmitScan = 1 * time.Second
+	// posIntervalMs is how often a receiver reports its cumulative delivered
+	// offset (one tiny frame, NOT per-chunk). Only used so a sender can resend
+	// a dead pipe's still-unconfirmed chunks — not for flow control.
+	posIntervalMs int64 = 700
 
 	// pipeRateBytesPerSec paces Data per pipe just under one room's ~1.25 Mbps
-	// ceiling, keeping the session under the ~9 Mbps point where the upstream
-	// Acks collapse.
-	pipeRateBytesPerSec = 125000.0 // ~1.0 Mbps
-
-	// chunkRTO (ms) is how long a chunk may go unacked before it is resent.
-	// Must sit well above the real Ack round-trip over Telemost so a slow but
-	// arriving Ack never triggers a resend; high enough that a healthy flow
-	// never resends, low enough that a lagging-pipe gap clears in a few sec.
-	chunkRTO int64 = 5000
+	// ceiling so we don't bloat a room's WebRTC buffer (which inflates latency
+	// and skew).
+	pipeRateBytesPerSec = 140000.0 // ~1.12 Mbps
 
 	// dialTimeout caps how long we wait to connect to the real destination.
 	dialTimeout = 15 * time.Second
 
-	// flowIdle reaps a flow that has made no progress for this long — the
-	// backstop for a room that died mid-transfer and left a flow with a
-	// permanent gap in its reorder buffer (we have no retransmit).
+	// flowIdle reaps a flow that has made no progress for this long.
 	flowIdle = 90 * time.Second
 )
 

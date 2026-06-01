@@ -60,7 +60,7 @@ type striper struct {
 }
 
 func newStriper(t *testing.T, serverAddr string, k int) *striper {
-	s := &striper{t: t, rx: NewReorder(Window), killed: map[int]bool{}}
+	s := &striper{t: t, rx: NewReorder(MaxReorder), killed: map[int]bool{}}
 	s.cond = sync.NewCond(&s.mu)
 	var sid [16]byte
 	rand.Read(sid[:])
@@ -127,9 +127,9 @@ func (s *striper) readPipe(c net.Conn) {
 			// rx returns contiguous bytes in order, so appending rebuilds the
 			// exact s2c stream for a byte-for-byte compare in the test.
 			s.recv = append(s.recv, out...)
-			// Send our own cumulative ack so the server's tx window advances.
+			// Periodic position report (death-recovery), mirroring the client.
 			d := s.rx.Delivered()
-			if d-s.lastAck >= AckThreshold {
+			if d-s.lastAck >= 64*1024 {
 				s.lastAck = d
 				go s.writeStriped(Frame{Type: FrameAck, FlowID: 1, Seq: d})
 			}
@@ -154,11 +154,7 @@ func (s *striper) sendFlow(dest string, payload []byte) {
 		if end > uint64(len(payload)) {
 			end = uint64(len(payload))
 		}
-		// window gate
 		s.mu.Lock()
-		for end-s.c2sAcked > Window && !s.rst {
-			s.cond.Wait()
-		}
 		rst := s.rst
 		s.mu.Unlock()
 		if rst {

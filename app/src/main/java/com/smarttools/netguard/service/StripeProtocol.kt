@@ -29,8 +29,11 @@ object StripeProtocol {
     // Tuning constants — MUST match the Go server (server.go) or the window
     // accounting desyncs.
     const val CHUNK_SIZE: Int = 16 * 1024
-    const val WINDOW: Long = (512 * 1024).toLong()
-    const val ACK_THRESHOLD: Long = WINDOW / 8
+    // No window/per-byte Ack: the room pipes are already reliable + flow-
+    // controlled, so we only reorder across pipes and send a light position
+    // report. MUST match the Go server (server.go).
+    const val MAX_REORDER: Int = 16 * 1024 * 1024
+    const val POS_INTERVAL_MS: Long = 700
 }
 
 /** One decoded protocol frame. */
