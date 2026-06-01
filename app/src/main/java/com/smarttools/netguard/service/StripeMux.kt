@@ -184,77 +184,133 @@ class StripeMux(
         }
     }
 
-    /** SOCKS5-terminates a tun2socks connection, opens a flow, runs it. */
+    /**
+     * Handles one tun2socks SOCKS5 connection. TCP CONNECT becomes a striped/
+     * pinned flow through the mux. UDP ASSOCIATE (DNS, QUIC — tun2socks runs
+     * with --enable-udprelay) is transparently spliced to a librelay upstream,
+     * exactly like the round-robin LB, so UDP keeps working (this is what was
+     * breaking Telegram: we used to reject everything but CONNECT).
+     */
     private fun handleClient(client: Socket) {
         client.tcpNoDelay = true
-        val dest = try {
-            socks5ServerHandshake(client)
+        try {
+            val din = DataInputStream(client.getInputStream())
+            val out = client.getOutputStream()
+            if (din.readUnsignedByte() != 0x05) { client.close(); return }
+            val nMethods = din.readUnsignedByte()
+            din.skipBytes(nMethods)
+            out.write(byteArrayOf(0x05, 0x00)); out.flush() // NO-AUTH
+            // Request — capture raw bytes so a non-CONNECT can be replayed.
+            if (din.readUnsignedByte() != 0x05) { client.close(); return }
+            val cmd = din.readUnsignedByte()
+            din.readUnsignedByte() // RSV
+            val atyp = din.readUnsignedByte()
+            val addrField: ByteArray
+            val host: String
+            when (atyp) {
+                0x01 -> {
+                    val a = ByteArray(4); din.readFully(a); addrField = a
+                    host = "${a[0].toInt() and 0xFF}.${a[1].toInt() and 0xFF}.${a[2].toInt() and 0xFF}.${a[3].toInt() and 0xFF}"
+                }
+                0x03 -> {
+                    val len = din.readUnsignedByte()
+                    val a = ByteArray(len); din.readFully(a)
+                    addrField = byteArrayOf(len.toByte()) + a
+                    host = String(a, Charsets.US_ASCII)
+                }
+                0x04 -> {
+                    val a = ByteArray(16); din.readFully(a); addrField = a
+                    host = "[" + InetAddress.getByAddress(a).hostAddress + "]"
+                }
+                else -> { client.close(); return }
+            }
+            val p1 = din.readUnsignedByte(); val p2 = din.readUnsignedByte()
+            val port = (p1 shl 8) or p2
+
+            when (cmd) {
+                0x01 -> { // CONNECT -> striped flow
+                    out.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); out.flush()
+                    val id = flowSeq.getAndIncrement()
+                    val flow = StripeFlow(id, client, this)
+                    flows[id] = flow
+                    if (send(StripeFrame(StripeProtocol.OPEN, id, 0, "$host:$port".toByteArray(Charsets.US_ASCII))) < 0) {
+                        flows.remove(id); client.close(); return
+                    }
+                    flow.run()
+                }
+                0x03 -> { // UDP ASSOCIATE -> transparent splice to a librelay upstream
+                    val rawReq = byteArrayOf(0x05, cmd.toByte(), 0x00, atyp.toByte()) +
+                        addrField + byteArrayOf(p1.toByte(), p2.toByte())
+                    spliceToRelay(client, din, out, rawReq)
+                }
+                else -> {
+                    out.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); out.flush()
+                    client.close()
+                }
+            }
         } catch (e: Exception) {
             try { client.close() } catch (_: Exception) {}
-            return
         }
-        if (dest == null) {
-            try { client.close() } catch (_: Exception) {}
-            return
-        }
-        val id = flowSeq.getAndIncrement()
-        val flow = StripeFlow(id, client, this)
-        flows[id] = flow
-        // OPEN must precede DATA so the server learns the destination.
-        if (send(StripeFrame(StripeProtocol.OPEN, id, 0, dest.toByteArray(Charsets.US_ASCII))) < 0) {
-            flows.remove(id)
-            try { client.close() } catch (_: Exception) {}
-            return
-        }
-        flow.run()
     }
 
     /**
-     * Reads the tun2socks SOCKS5 greeting + CONNECT and returns "host:port"
-     * (or null on an unsupported/non-CONNECT request). Replies success
-     * optimistically — the real dial happens on the server; a dial failure
-     * surfaces later as an RST that drops the connection.
+     * Transparently relays a (UDP-associate) SOCKS5 connection to a librelay
+     * upstream: re-handshake with the relay, replay the request, forward the
+     * relay's reply, then pump both ways. The actual UDP datagrams flow
+     * directly between tun2socks and librelay's UDP bind port (from the reply),
+     * so we only carry the control connection.
      */
-    private fun socks5ServerHandshake(client: Socket): String? {
-        val din = DataInputStream(client.getInputStream())
-        val out = client.getOutputStream()
-        val ver = din.readUnsignedByte()
-        if (ver != 0x05) return null
-        val nMethods = din.readUnsignedByte()
-        din.skipBytes(nMethods)
-        out.write(byteArrayOf(0x05, 0x00)) // choose NO-AUTH
-        out.flush()
-        // Request.
-        if (din.readUnsignedByte() != 0x05) return null
-        val cmd = din.readUnsignedByte()
-        din.readUnsignedByte() // RSV
-        val atyp = din.readUnsignedByte()
-        val host: String = when (atyp) {
-            0x01 -> {
-                val a = ByteArray(4); din.readFully(a)
-                "${a[0].toInt() and 0xFF}.${a[1].toInt() and 0xFF}.${a[2].toInt() and 0xFF}.${a[3].toInt() and 0xFF}"
+    private fun spliceToRelay(client: Socket, clientIn: DataInputStream, clientOut: OutputStream, rawReq: ByteArray) {
+        val up = upstreams[(pipeCursor.getAndIncrement() and Int.MAX_VALUE) % upstreams.size]
+        val us = Socket()
+        try {
+            us.tcpNoDelay = true
+            us.connect(up, 8_000)
+            val uout = us.getOutputStream()
+            val uin = DataInputStream(us.getInputStream())
+            uout.write(byteArrayOf(0x05, 0x01, 0x00)); uout.flush()
+            if (uin.readUnsignedByte() != 0x05 || uin.readUnsignedByte() != 0x00) {
+                us.close(); client.close(); return
             }
-            0x03 -> {
-                val len = din.readUnsignedByte()
-                val a = ByteArray(len); din.readFully(a)
-                String(a, Charsets.US_ASCII)
+            uout.write(rawReq); uout.flush()
+            // Relay reply: VER REP RSV ATYP BND.ADDR BND.PORT — read + forward.
+            val head = ByteArray(4); uin.readFully(head)
+            val addrLen = when (head[3].toInt() and 0xFF) {
+                0x01 -> 4; 0x04 -> 16; 0x03 -> uin.readUnsignedByte().let { it }
+                else -> { us.close(); client.close(); return }
             }
-            0x04 -> {
-                val a = ByteArray(16); din.readFully(a)
-                "[" + InetAddress.getByAddress(a).hostAddress + "]"
+            val reply: ByteArray
+            if ((head[3].toInt() and 0xFF) == 0x03) {
+                val rest = ByteArray(addrLen + 2); uin.readFully(rest)
+                reply = head + byteArrayOf(addrLen.toByte()) + rest
+            } else {
+                val rest = ByteArray(addrLen + 2); uin.readFully(rest)
+                reply = head + rest
             }
-            else -> return null
+            clientOut.write(reply); clientOut.flush()
+            // Pump the control connection both ways until either side closes.
+            val t = Thread({ pump(clientIn, uout) }, "stripe-udp-c2u").apply { isDaemon = true; start() }
+            pump(uin, clientOut)
+            t.interrupt()
+        } catch (e: Exception) {
+            // fall through to close
+        } finally {
+            try { us.close() } catch (_: Exception) {}
+            try { client.close() } catch (_: Exception) {}
         }
-        val port = (din.readUnsignedByte() shl 8) or din.readUnsignedByte()
-        if (cmd != 0x01) { // only CONNECT
-            out.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0)) // command not supported
-            out.flush()
-            return null
+    }
+
+    private fun pump(src: java.io.InputStream, dst: OutputStream) {
+        val buf = ByteArray(32 * 1024)
+        try {
+            while (true) {
+                val n = src.read(buf)
+                if (n < 0) break
+                dst.write(buf, 0, n)
+                dst.flush()
+            }
+        } catch (_: Exception) {
         }
-        // Success, BND 0.0.0.0:0.
-        out.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
-        out.flush()
-        return "$host:$port"
     }
 
     /**
