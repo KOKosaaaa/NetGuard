@@ -16,6 +16,7 @@ import java.io.OutputStreamWriter
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 /**
  * Owns one or more librelay.so subprocesses and a local SOCKS5 round-robin
@@ -219,6 +220,14 @@ class TelemostRelayManager(
                 "--ws-port", signalingPort.toString(),
                 "--socks-port", socksPort.toString()
             )
+            // Valid-VP8 carrier mode: frames are real VP8 tag+first-partition
+            // prefix + AEAD data, decodable by the SFU so it forwards at full
+            // video bitrate (~2.5 Mbit/room vs ~1 legacy). Server creators MUST
+            // also run carrier (same env); legacy <-> carrier is incompatible.
+            pb.environment()["WLB_VALID_VP8_TUNNEL"] = "1"
+            // ARQ disabled: multi-flow AIMD over a shared link didn't converge
+            // (overshoot/retransmit storms). Reverted to plain carrier (stable
+            // ~6 Mbit/room, no collapse). ARQ code stays env-gated for future.
             pb.redirectErrorStream(true)
             val proc = try {
                 pb.start()
@@ -348,13 +357,25 @@ class TelemostRelayManager(
             stopped = true // tell the watchdog to stop respawning
             try { stdinWriter?.close() } catch (_: Exception) {}
             stdinWriter = null
-            process?.let { p ->
-                try { p.destroy() } catch (_: Exception) {}
-                try { p.destroyForcibly() } catch (_: Exception) {}
-            }
+            val p = process
             process = null
             tunnelConnected = false
             sawReady = false
+            if (p != null) {
+                // Graceful leave: SIGTERM first so librelay self-kicks off the
+                // Telemost SFU (drops our participant session = no ghost left in
+                // the room). Then give a short grace window for that self-kick
+                // HTTP to land before SIGKILL. Done on a daemon thread so
+                // stopping N relays stays non-blocking (no Nx1.5s serial stall).
+                try { p.destroy() } catch (_: Exception) {}
+                Thread {
+                    try {
+                        if (!p.waitFor(1500, TimeUnit.MILLISECONDS)) p.destroyForcibly()
+                    } catch (_: Exception) {
+                        try { p.destroyForcibly() } catch (_: Exception) {}
+                    }
+                }.apply { isDaemon = true }.start()
+            }
         }
     }
 }
