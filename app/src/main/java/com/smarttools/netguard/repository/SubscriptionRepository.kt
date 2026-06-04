@@ -342,7 +342,9 @@ class SubscriptionRepository(
             val kv = part.trim().split('=', limit = 2)
             if (kv.size == 2 && kv[0].equals("expire", ignoreCase = true)) {
                 val seconds = kv[1].trim().toLongOrNull() ?: return 0L
-                if (seconds <= 0) return 0L
+                // Guard the *1000 against a malicious huge value overflowing
+                // Long into a negative/garbage expiry date.
+                if (seconds <= 0 || seconds > Long.MAX_VALUE / 1000L) return 0L
                 return seconds * 1000L
             }
         }
