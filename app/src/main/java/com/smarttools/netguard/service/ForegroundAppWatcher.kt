@@ -46,6 +46,9 @@ class TriggerWatcherService : Service() {
         // keeps trigger latency under a third of a second while cutting the
         // wakeups by 3x.
         private const val POLL_MS = 300L
+        // While the screen is off we only re-check whether it came back on,
+        // at this cheap cadence — no foreground-event poll happens.
+        private const val SCREEN_OFF_POLL_MS = 2_000L
         private const val NOTIFICATION_ID = 2
         private const val CHANNEL_ID = "trigger_watcher"
 
@@ -154,6 +157,7 @@ class TriggerWatcherService : Service() {
     private suspend fun loop() {
         val app = application as App
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
 
         // Initial check — handle the case when watcher starts while a trigger
         // app is already in the foreground (e.g. user toggled trigger mode
@@ -167,6 +171,16 @@ class TriggerWatcherService : Service() {
 
         var lastCheck = System.currentTimeMillis()
         while (scope?.isActive == true) {
+            // Screen off → the user can't be launching apps, so the foreground
+            // (launcher/lockscreen) won't change. Skip the ~3×/s queryEvents
+            // poll (a binder IPC + event scan) and idle cheaply until the screen
+            // is back — the dominant time the watcher would otherwise burn CPU/
+            // battery 24/7. No leak-window cost: nothing to trigger while off.
+            if (!pm.isInteractive) {
+                delay(SCREEN_OFF_POLL_MS)
+                lastCheck = System.currentTimeMillis()
+                continue
+            }
             val now = System.currentTimeMillis()
             try {
                 val events = usm.queryEvents(lastCheck, now + 1)
