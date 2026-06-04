@@ -59,10 +59,12 @@ data class AppSettings(
      * Experimental: for multi-room Telemost profiles, split each connection's
      * bytes across ALL rooms (striping) instead of pinning a connection to one
      * room (round-robin). Lets a single big transfer use the rooms' aggregate
-     * bandwidth, but needs the stripe-server deployed on the exit. Default OFF
-     * keeps the proven round-robin path; exposed only under Expert mode.
+     * bandwidth, but needs the stripe-server deployed on the exit. Default ON
+     * since the field test showed round-robin single-room collapses on big
+     * transfers (SFU throttles a sustained full-rate room); striping spreads
+     * the load and held ~7.5 Mbit + stable TG. Toggle exposed under Expert mode.
      */
-    val telemostStriping: Boolean = false
+    val telemostStriping: Boolean = true
 )
 
 enum class RoutingMode {

@@ -34,6 +34,13 @@ class TunnelVpnService : VpnService() {
         private const val TAG = "TunnelVpn"
         private const val NOTIFICATION_THROTTLE_MS = 3000L
         private const val CONNECTION_TIMEOUT_MS = 30_000L
+        // Telemost brings up N WebRTC rooms + striping pipes — inherently slow
+        // (~25s on mobile: 12s room grace + 8s pipe confirm + 5s SOCKS bind).
+        // The 30s default would time out mid-setup and trigger a spurious
+        // failover to another profile, spawning a SECOND set of relays on top of
+        // the first (the "6/6 -> 9/9" relay churn). A generous window lets the
+        // first attempt finish so we stay on one set of rooms.
+        private const val TELEMOST_CONNECTION_TIMEOUT_MS = 60_000L
         const val ACTION_START = "com.smarttools.netguard.START"
         const val ACTION_STOP = "com.smarttools.netguard.STOP"
         const val ACTION_START_TRIGGER = "com.smarttools.netguard.START_TRIGGER"
@@ -448,7 +455,18 @@ class TunnelVpnService : VpnService() {
         startTunnelJob?.cancel()
         startTunnelJob = serviceScope?.launch {
             try {
-                withTimeout(CONNECTION_TIMEOUT_MS) {
+                // Pick the connect timeout up front: Telemost's multi-room WebRTC
+                // + striping setup needs far longer than xray/Reality, and a
+                // too-tight timeout causes a spurious failover that churns relays
+                // (spawns a second profile's rooms on top of the first).
+                val connectTimeoutMs = run {
+                    val proto = runCatching {
+                        (application as App).database.profileDao().getById(profileId)?.protocol
+                    }.getOrNull()
+                    if (proto == com.smarttools.netguard.model.Protocol.TELEMOST)
+                        TELEMOST_CONNECTION_TIMEOUT_MS else CONNECTION_TIMEOUT_MS
+                }
+                withTimeout(connectTimeoutMs) {
                     val app = application as App
                     val profile = app.database.profileDao().getById(profileId) ?: run {
                         _connectionState.value = ConnectionState.Error("Profile not found")
@@ -531,6 +549,11 @@ class TunnelVpnService : VpnService() {
                         val ok = relay.start(
                             profile, port, socksUser, socksPass, serviceScope!!,
                             timeoutMs = 30_000,
+                            // Striping is the default for multi-room Telemost (fixes
+                            // the single-room SFU-throttle drop on big transfers and
+                            // aggregates rooms: ~7.5 Mbit down / ~17 up over 6 rooms vs
+                            // ~2.7 single-room). Toggle stays in Expert settings; a
+                            // one-time pref migration (App.kt) flips existing installs on.
                             useStriping = settings.telemostStriping
                         )
                         if (!ok) throw IllegalStateException("Telemost relay failed to reach TUNNEL_CONNECTED")

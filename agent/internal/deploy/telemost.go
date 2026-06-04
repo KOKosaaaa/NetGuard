@@ -60,6 +60,11 @@ StandardOutput=append:/var/log/whitelist-bypass/telemost-%i.log
 StandardError=inherit
 Restart=on-failure
 RestartSec=10
+# Valid-VP8 carrier mode: frames are real VP8 tag+first-partition prefix +
+# AEAD data, decodable by the SFU so it forwards at full bitrate (~2.5 Mbit
+# vs ~1 legacy). MUST match the NetGuard client (also carrier); legacy<->carrier
+# is incompatible.
+Environment=WLB_VALID_VP8_TUNNEL=1
 
 # Per-instance: read the %i-th line of conference-links.txt as -tm-link.
 # sed -n "%iP" prints just that line; the wrapper script keeps things
@@ -84,6 +89,25 @@ LockPersonality=true
 [Install]
 WantedBy=multi-user.target
 `
+
+// telemostMultiClient gates WLB_CARRIER_MUX on deployed creators. Multi-client
+// mode lets several users share one Telemost room (each user demuxed by epoch
+// into its own relay session). It MUST match the NetGuard client's mux setting
+// (TelemostRelayManager) - mux<->single-client framing is incompatible. Default
+// false (one user per room, current behaviour). Flip to true AND enable mux in
+// the app together to activate multi-client.
+const telemostMultiClient = false
+
+// telemostUnit returns the systemd unit text, injecting WLB_CARRIER_MUX=1 when
+// multi-client mode is enabled.
+func renderTelemostUnit() string {
+	if !telemostMultiClient {
+		return telemostUnitTemplate
+	}
+	return strings.Replace(telemostUnitTemplate,
+		"Environment=WLB_VALID_VP8_TUNNEL=1",
+		"Environment=WLB_VALID_VP8_TUNNEL=1\nEnvironment=WLB_CARRIER_MUX=1", 1)
+}
 
 // DeployTelemostRequest is the body of POST /v1/telemost/deploy.
 //
@@ -192,7 +216,7 @@ func DeployTelemost(req *DeployTelemostRequest) tasks.Runner {
 
 		// --- 5. systemd unit + start instances ---
 		h.SetStep("systemd_unit", 75)
-		if err := AtomicWrite(telemostUnitPath, []byte(telemostUnitTemplate), 0o644); err != nil {
+		if err := AtomicWrite(telemostUnitPath, []byte(renderTelemostUnit()), 0o644); err != nil {
 			return h.Fail("E_WRITE_UNIT", err.Error(), false)
 		}
 		if _, err := exec.CommandContext(ctx, "systemctl", "daemon-reload").CombinedOutput(); err != nil {
@@ -287,7 +311,7 @@ func PrepareTelemost() tasks.Runner {
 		_ = os.Chmod(telemostConfDir, 0o750)
 
 		h.SetStep("systemd_unit", 85)
-		if err := AtomicWrite(telemostUnitPath, []byte(telemostUnitTemplate), 0o644); err != nil {
+		if err := AtomicWrite(telemostUnitPath, []byte(renderTelemostUnit()), 0o644); err != nil {
 			return h.Fail("E_WRITE_UNIT", err.Error(), false)
 		}
 		_, _ = exec.CommandContext(ctx, "systemctl", "daemon-reload").CombinedOutput()

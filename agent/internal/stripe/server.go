@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -43,19 +45,30 @@ const (
 	// a dead pipe's still-unconfirmed chunks — not for flow control.
 	posIntervalMs int64 = 700
 
-	// pipeRateBytesPerSec paces Data per pipe at Yandex Telemost's real
-	// DOWNSTREAM per-room ceiling (~1.25 Mbps; upstream is ~23, hence the
-	// 48 Mbps upload). Pushing past it (tried 8) bufferbloats the room, spikes
-	// to ~15 then collapses to 0 and poisons other flows. ~1.25/pipe is the
-	// max that stays steady → ~7.5 Mbps aggregate over 6 rooms, the physics.
-	pipeRateBytesPerSec = 156000.0 // ~1.25 Mbps/pipe
-
 	// dialTimeout caps how long we wait to connect to the real destination.
 	dialTimeout = 15 * time.Second
 
 	// flowIdle reaps a flow that has made no progress for this long.
 	flowIdle = 90 * time.Second
 )
+
+// pipeRateBytesPerSec paces Data per pipe DOWNSTREAM (server→client). Measured
+// 2026-06-04: Telemost's downstream forward cap is a hard ~1.25 Mbps/room for a
+// single striped stream - pushing the pace to 3 or 6 Mbps/pipe made the server
+// emit faster but the phone's goodput COLLAPSED (bufferbloat→loss→RTO: 0.8 Mbps
+// actual vs 6.3 at 1.25). So 1.25 is right for download; aggregate scales only
+// with pipe count. (UPSTREAM/upload is NOT paced here and rides ~2.5 Mbps/pipe,
+// ~11 Mbps over 5 pipes - that's the TG-video-upload path and it's not capped by
+// this value.) Tunable live via WLB_STRIPE_BPS for future substrate changes.
+var pipeRateBytesPerSec = 156000.0 // ~1.25 Mbps/pipe (downstream Telemost cap)
+
+func init() {
+	if v := os.Getenv("WLB_STRIPE_BPS"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 {
+			pipeRateBytesPerSec = n
+		}
+	}
+}
 
 // Server is the exit-side striping multiplexer. It listens on a loopback
 // port that the Telemost creator dials into (one TCP connection per room
@@ -128,6 +141,17 @@ func (s *Server) handlePipe(conn net.Conn) {
 			sess.onPipeDead(p.id)
 		}
 	}()
+
+	// Confirm end-to-end reachability: echo the HELLO back. A pipe's SOCKS
+	// CONNECT is acked locally by librelay BEFORE the carrier actually delivers
+	// it to us, so without this the client could add a black-hole pipe to its
+	// striping set and lose every chunk striped onto it (nothing to reassemble
+	// → the flow stalls and dies). The client only activates a pipe once it
+	// sees this ack, and drops pipes that never confirm.
+	if err := p.write(Frame{Type: FrameHello, FlowID: 0, Seq: 0, Payload: hello.Payload}); err != nil {
+		s.logf("stripe: session %x pipe %d hello-ack failed: %v", sid[:4], pipeIdx, err)
+		return
+	}
 
 	for {
 		f, err := ReadFrame(conn)

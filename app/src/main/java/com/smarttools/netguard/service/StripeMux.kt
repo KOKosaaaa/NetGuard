@@ -4,6 +4,10 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.DataInputStream
 import java.io.IOException
@@ -42,10 +46,26 @@ class StripeMux(
 ) {
     companion object {
         private const val TAG = "StripeMux"
+        // How long openPipe waits for the server's HELLO echo before declaring
+        // a pipe a black hole and dropping it. Generous for slow mobile carrier
+        // round-trips (HELLO out → carrier → creator → stripe-server → echo back).
+        private const val HELLO_ACK_TIMEOUT_MS = 8_000
+        // The watchdog reopens dead pipes so a churny mobile carrier (librelay
+        // rooms restart, idle pipes get dropped) can't drain the pool to zero
+        // and black-hole all traffic. Without it striping works for ~60s then
+        // dies as pipes drop one by one and are never replaced.
+        private const val PIPE_WATCHDOG_INTERVAL_MS = 2_500L
+        // Keepalive cadence in watchdog ticks. Every ~15s an idle pipe gets a
+        // no-op ACK(flow 0) so the carrier/creator doesn't drop it on an idle
+        // timeout - the main cause of pipes dying ~once a minute and dragging
+        // aggregate speed below the rooms×1.25 Mbps ceiling.
+        private const val KEEPALIVE_EVERY_TICKS = 6
+        private val KEEPALIVE_FRAME = StripeFrame(StripeProtocol.ACK, 0, 0, ByteArray(0)).encode()
     }
 
     private var serverSocket: ServerSocket? = null
     private var acceptJob: Job? = null
+    private var watchdogJob: Job? = null
     private val pipes = ArrayList<Pipe>()
     private val pipeCursor = AtomicInteger(0)
     private val flows = ConcurrentHashMap<Int, StripeFlow>()
@@ -70,19 +90,31 @@ class StripeMux(
      * listener. Returns true once at least one pipe is up and the listener is
      * bound. A failed pipe is skipped, mirroring the relay manager's tolerance.
      */
-    fun start(scope: CoroutineScope): Boolean {
+    suspend fun start(scope: CoroutineScope): Boolean {
         if (upstreams.isEmpty()) {
             onLog("StripeMux: no upstreams")
             return false
         }
         this.scope = scope
-        for ((i, up) in upstreams.withIndex()) {
-            val p = try {
-                openPipe(i, up)
-            } catch (e: Exception) {
-                onLog("StripeMux pipe #${i + 1} failed: ${e.message}")
-                null
-            }
+        // Open all pipes CONCURRENTLY. Each openPipe is a blocking SOCKS5
+        // CONNECT + HELLO-ack wait through a room's carrier tunnel to the
+        // stripe-server; doing them serially stacked 6x the (slow) carrier
+        // round-trip. Use coroutineScope (NOT runBlocking — start() runs on a
+        // non-blocking coroutine dispatcher where runBlocking throws
+        // "Cannot block on non-blocking thread"). A failed pipe is skipped.
+        val opened = coroutineScope {
+            upstreams.mapIndexed { i, up ->
+                async(Dispatchers.IO) {
+                    try {
+                        openPipe(i, up)
+                    } catch (e: Exception) {
+                        onLog("StripeMux pipe #${i + 1} failed: ${e.message}")
+                        null
+                    }
+                }
+            }.awaitAll()
+        }
+        for (p in opened) {
             if (p != null) {
                 pipes.add(p)
                 scope.launch(Dispatchers.IO) { pipeReader(p) }
@@ -98,7 +130,9 @@ class StripeMux(
             ss.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), listenPort), 128)
             serverSocket = ss
             acceptJob = scope.launch(Dispatchers.IO) { acceptLoop() }
+            startPipeWatchdog(scope)
             onLog("StripeMux up: ${pipes.size}/${upstreams.size} pipes, listening on :$listenPort")
+            Log.i(TAG, "up: ${pipes.size}/${upstreams.size} pipes confirmed, listening on :$listenPort")
             true
         } catch (e: Exception) {
             onLog("StripeMux bind failed: ${e.message}")
@@ -110,6 +144,8 @@ class StripeMux(
     fun stop() {
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
+        watchdogJob?.cancel()
+        watchdogJob = null
         acceptJob?.cancel()
         acceptJob = null
         flows.values.toList().forEach { it.close() }
@@ -125,6 +161,11 @@ class StripeMux(
         val s = Socket()
         s.tcpNoDelay = true
         s.connect(upstream, 8_000)
+        // Bound the WHOLE handshake (SOCKS5 reply + HELLO ack) with a read
+        // timeout. A dead room's librelay may accept the local TCP connect but
+        // never reply (its carrier tunnel is down), which would otherwise block
+        // this pipe's coroutine forever and stall awaitAll for all pipes.
+        s.soTimeout = HELLO_ACK_TIMEOUT_MS
         val out = s.getOutputStream()
         val din = DataInputStream(s.getInputStream())
         socks5ClientConnect(din, out, stripeHost, stripePort)
@@ -134,6 +175,19 @@ class StripeMux(
         payload[16] = idx.toByte()
         out.write(StripeFrame(StripeProtocol.HELLO, 0, 0, payload).encode())
         out.flush()
+        // Wait for the server's HELLO echo: proof this pipe actually traversed
+        // the carrier to the stripe-server. librelay acks the SOCKS CONNECT
+        // locally before the tunnel delivers it, so a black-hole room would
+        // otherwise look "open" and we'd stripe (and lose) data into it,
+        // stalling every flow. Pipes that don't confirm in time are dropped
+        // (read timeout was armed right after connect, above).
+        val ack = StripeFrame.read(din)
+        if (ack.type != StripeProtocol.HELLO) {
+            throw IOException("pipe #${idx + 1}: expected HELLO ack, got type=${ack.type}")
+        }
+        s.soTimeout = 0 // restore blocking reads for the pipeReader loop
+        onLog("StripeMux pipe #${idx + 1} confirmed end-to-end")
+        Log.i(TAG, "pipe #${idx + 1} confirmed end-to-end (upstream $upstream)")
         return Pipe(idx, s, din, out)
     }
 
@@ -395,6 +449,69 @@ class StripeMux(
     /** Tells every flow to resend the c2s chunks that rode the dead pipe. */
     private fun onPipeDead(deadIdx: Int) {
         for (flow in flows.values) flow.onPipeDead(deadIdx)
+    }
+
+    /**
+     * Keeps the pipe pool replenished. Mobile carriers churn rooms (librelay
+     * restarts, idle pipes get dropped), and a dead pipe is never reused — so
+     * without this the pool drains to zero in ~a minute and every flow
+     * black-holes. Each tick: prune dead pipes, then reopen any upstream idx
+     * that has no live pipe (the relay's SOCKS port is stable across restarts,
+     * so the same upstream address works once the room is back). After adding
+     * pipes, nudge flows to resend chunks that got stuck (pid == -1) when no
+     * pipe was live, so an in-flight transfer recovers instead of stalling.
+     */
+    private fun startPipeWatchdog(scope: CoroutineScope) {
+        watchdogJob = scope.launch(Dispatchers.IO) {
+            var tick = 0
+            while (true) {
+                delay(PIPE_WATCHDOG_INTERVAL_MS)
+                tick++
+                // Keepalive: every ~15s poke each live pipe with a no-op
+                // ACK(flow 0) (server ignores it) so an idle pipe's carrier/SOCKS
+                // connection isn't torn down by an idle timeout. A write failure
+                // flags the pipe dead so the reopen pass below replaces it.
+                if (tick % KEEPALIVE_EVERY_TICKS == 0) {
+                    val live = synchronized(pipes) { ArrayList(pipes) }
+                    for (p in live) {
+                        if (p.dead) continue
+                        try {
+                            synchronized(p.writeLock) { p.out.write(KEEPALIVE_FRAME); p.out.flush() }
+                        } catch (_: Exception) { p.dead = true }
+                    }
+                }
+                // Prune dead pipes (close + drop from pool).
+                synchronized(pipes) {
+                    val dead = pipes.filter { it.dead }
+                    pipes.removeAll(dead)
+                    dead.forEach { try { it.socket.close() } catch (_: Exception) {} }
+                }
+                val liveIdxs = synchronized(pipes) { pipes.filter { !it.dead }.map { it.idx }.toSet() }
+                val missing = upstreams.indices.filter { it !in liveIdxs }
+                if (missing.isEmpty()) continue
+                val reopened = coroutineScope {
+                    missing.map { idx ->
+                        async(Dispatchers.IO) {
+                            try { openPipe(idx, upstreams[idx]) } catch (_: Exception) { null }
+                        }
+                    }.awaitAll()
+                }
+                var added = 0
+                for (p in reopened) {
+                    if (p == null) continue
+                    synchronized(pipes) { pipes.add(p) }
+                    scope.launch(Dispatchers.IO) { pipeReader(p) }
+                    added++
+                }
+                if (added > 0) {
+                    val total = synchronized(pipes) { pipes.count { !it.dead } }
+                    Log.i(TAG, "watchdog reopened $added pipe(s); pool now $total/${upstreams.size}")
+                    // Flush chunks that failed to send (pid == -1) over the
+                    // freshly reopened pipes so a mid-flight transfer recovers.
+                    onPipeDead(-1)
+                }
+            }
+        }
     }
 
     private fun pipeReader(p: Pipe) {

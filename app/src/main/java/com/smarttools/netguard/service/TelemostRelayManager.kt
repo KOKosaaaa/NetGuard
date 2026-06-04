@@ -3,6 +3,7 @@ package com.smarttools.netguard.service
 import android.util.Log
 import com.smarttools.netguard.model.ServerProfile
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -31,6 +32,12 @@ import java.util.concurrent.TimeUnit
  * aggregate bandwidth, while a single big stream is still capped at one
  * Telemost room's per-stream limit.
  */
+// TELEMOST_MULTI_CLIENT gates WLB_CARRIER_MUX on the librelay joiners (multi-
+// client: several users share one room). MUST match the server creators
+// (agent telemostMultiClient) - mux<->single-client framing is incompatible.
+// Default false (one user per room). Flip both (app + agent) together.
+private const val TELEMOST_MULTI_CLIENT = false
+
 class TelemostRelayManager(
     private val nativeLibDir: String,
     private val onLog: (String) -> Unit,
@@ -59,6 +66,11 @@ class TelemostRelayManager(
     }
 
     private val instances = mutableListOf<RelayInstance>()
+    // The in-flight room-join coroutines from the current start(). stop() cancels
+    // them so a repeated start() (connect retry / failover) can't leave orphan
+    // librelay processes spawning in the background — that was inflating a 6-room
+    // profile to 9+ relays (extra dead pipes that never reach a live room).
+    private var spawnDeferreds: List<Deferred<RelayInstance?>> = emptyList()
     private var lb: SocksRoundRobinLb? = null
     private var stripeMux: StripeMux? = null
 
@@ -121,9 +133,19 @@ class TelemostRelayManager(
                     onTunnelLost = onTunnelLost
                 )
                 delay(i * 250L) // gentle stagger, not serial
-                if (inst.start(scope, perRelayTimeout)) inst else { inst.stop(); null }
+                val ok = try {
+                    inst.start(scope, perRelayTimeout)
+                } catch (e: Throwable) {
+                    // Cancelled (a newer start()/stop() fired) or failed mid-spawn:
+                    // kill the just-spawned process so it doesn't linger as an
+                    // orphan relay. Rethrow to keep cancellation semantics.
+                    inst.stop()
+                    throw e
+                }
+                if (ok) inst else { inst.stop(); null }
             }
         }
+        spawnDeferreds = deferreds
         // Bind the LB as soon as everyone's done OR a grace window elapses —
         // we do NOT wait for the slowest/dead room (that's what made connect
         // take ~timeout seconds). Whoever joined within the grace forms the
@@ -136,6 +158,7 @@ class TelemostRelayManager(
             scope.launch { runCatching { d.await() }.getOrNull()?.stop() }
         }
 
+        Log.i(TAG, "rooms joined within grace: ${instances.size}/${links.size} (these become striping upstreams)")
         if (instances.isEmpty()) {
             onLog("All ${links.size} Telemost relays failed to connect")
             return false
@@ -170,6 +193,10 @@ class TelemostRelayManager(
     }
 
     fun stop() {
+        // Cancel any in-flight room-join coroutines from a prior start() FIRST,
+        // so they don't keep spawning librelay processes after we tear down.
+        spawnDeferreds.forEach { it.cancel() }
+        spawnDeferreds = emptyList()
         try { lb?.stop() } catch (_: Exception) {}
         lb = null
         try { stripeMux?.stop() } catch (_: Exception) {}
@@ -225,6 +252,12 @@ class TelemostRelayManager(
             // video bitrate (~2.5 Mbit/room vs ~1 legacy). Server creators MUST
             // also run carrier (same env); legacy <-> carrier is incompatible.
             pb.environment()["WLB_VALID_VP8_TUNNEL"] = "1"
+            // Multi-client: several users share one Telemost room (each demuxed
+            // by epoch into its own relay session). MUST match the server
+            // creators' WLB_CARRIER_MUX (agent telemostMultiClient) - mux<->
+            // single-client framing is incompatible, so flip both together.
+            // Default off = current one-user-per-room behaviour.
+            if (TELEMOST_MULTI_CLIENT) pb.environment()["WLB_CARRIER_MUX"] = "1"
             // ARQ disabled: multi-flow AIMD over a shared link didn't converge
             // (overshoot/retransmit storms). Reverted to plain carrier (stable
             // ~6 Mbit/room, no collapse). ARQ code stays env-gated for future.

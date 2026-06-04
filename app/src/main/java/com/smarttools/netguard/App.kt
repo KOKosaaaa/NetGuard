@@ -38,6 +38,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        migrateStripingDefault()
+
         // Apply Dynamic Colors before any UI is created (Android 12+)
         val settings = loadSettings()
         if (settings.themeMode == ThemeMode.DYNAMIC) {
@@ -99,6 +101,24 @@ class App : Application() {
         return getSharedPreferences("netguard_prefs", MODE_PRIVATE)
     }
 
+    /**
+     * One-time migration: striping is now the default for multi-room Telemost
+     * (it fixes the single-room SFU-throttle drop on big transfers and
+     * aggregates rooms). Existing installs persisted telemost_striping=false
+     * back when striping was experimental/off, so flip them on once. New
+     * installs already default to true and this is a no-op for them after the
+     * flag is set.
+     */
+    private fun migrateStripingDefault() {
+        val prefs = getPreferences()
+        if (!prefs.getBoolean("striping_migration_v1", false)) {
+            prefs.edit()
+                .putBoolean("telemost_striping", true)
+                .putBoolean("striping_migration_v1", true)
+                .apply()
+        }
+    }
+
     fun loadSettings(): AppSettings {
         val prefs = getPreferences()
         return AppSettings(
@@ -141,7 +161,7 @@ class App : Application() {
             ),
             autoBypassRuPackages = prefs.getBoolean("auto_bypass_ru_packages", false),
             expertMode = prefs.getBoolean("expert_mode", false),
-            telemostStriping = prefs.getBoolean("telemost_striping", false)
+            telemostStriping = prefs.getBoolean("telemost_striping", true)
         )
     }
 
