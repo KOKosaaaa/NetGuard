@@ -1714,9 +1714,15 @@ class TunnelVpnService : VpnService() {
             Log.i(TAG, "Telemost network change → clean full relay restart")
             LogBuffer.add(LogBuffer.LogLevel.INFO, "Network changed — restarting Telemost")
             isReconnecting = false
-            reconnectTargetNetwork = null
             stopTunnelProcesses()
             startTunnel(currentProfileId, skipPreflight = true)
+            // Mirror the normal finally's guarantee: never leave the
+            // intentional-kill shield up (it would neuter the next session's
+            // watchdog if startTunnel fails before launchProcessWatchdog), and
+            // clear the reconnect target so future handover events aren't
+            // skipped as "already running".
+            intentionalProcessKill = false
+            reconnectTargetNetwork = null
             return
         }
         try {
