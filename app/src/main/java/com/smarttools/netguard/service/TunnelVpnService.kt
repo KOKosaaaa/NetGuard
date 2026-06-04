@@ -1110,6 +1110,13 @@ class TunnelVpnService : VpnService() {
                 if (settings.enableIpv6) {
                     addAddress("fd00::1", 126)
                     addRoute("::", 0)
+                } else {
+                    // IPv6 disabled: still CAPTURE the v6 default route into the
+                    // TUN so apps can't leak IPv6 around the VPN over the
+                    // underlying link (a device with native IPv6 would otherwise
+                    // route ::/0 directly). With no fd00:: address the captured
+                    // packets have no tunnel path → dropped (blocked, not leaked).
+                    try { addRoute("::", 0) } catch (_: Exception) {}
                 }
             }
             .setMtu(probedMtu)      // probed from underlying link, capped 1280..1500
