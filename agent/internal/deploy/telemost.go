@@ -380,28 +380,40 @@ func createOneRoom(ctx context.Context) error {
 	// Poll the links file every 500ms — the creator writes the URL
 	// early (right after createAndJoinCall returns, before the WebSocket
 	// event loop starts), so this usually fires within 5-10 seconds.
+	// Reap the process in a goroutine so we can detect an EARLY exit (cookies
+	// expired / OOM) immediately instead of polling cmd.ProcessState — that
+	// field is nil until Wait() returns, so the old `ProcessState != nil`
+	// check never fired and a dead creator wasted the full 85s timeout per room
+	// (6 rooms × 85s on bad cookies).
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }()
+
 	deadline := time.Now().Add(85 * time.Second)
 	got := false
+	exited := false
+pollLoop:
 	for time.Now().Before(deadline) {
 		cur, _ := countNonBlankLines(telemostLinksFile)
 		if cur > beforeLines {
 			got = true
 			break
 		}
-		// Sanity-check: did the process die early (e.g. cookies expired,
-		// real OOM)? If yes, surface that instead of timing out.
-		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			break
+		select {
+		case <-waitCh:
+			// Process died before writing a URL — stop waiting, fail fast.
+			exited = true
+			break pollLoop
+		case <-time.After(500 * time.Millisecond):
 		}
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	// Tear down the creator — it's done its job (URL written) and will
-	// otherwise sit on a WebSocket forever holding memory. We ignore
-	// the error from Kill/Wait since the URL is the only success
-	// criterion that matters.
+	// otherwise sit on a WebSocket forever holding memory. Kill is a no-op if
+	// it already exited; drain the reaper so the process is fully reaped.
 	_ = cmd.Process.Kill()
-	_ = cmd.Wait()
+	if !exited {
+		<-waitCh
+	}
 
 	if !got {
 		errOut := strings.TrimSpace(buf.String())
