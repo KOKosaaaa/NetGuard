@@ -291,13 +291,57 @@ class TriggerAppsFragment : Fragment() {
                         Toast.makeText(requireContext(), R.string.trigger_no_profile, Toast.LENGTH_LONG).show()
                     }
                     app.updateTriggerWatcher(true)
-                    if (isAdded) requireActivity().onBackPressedDispatcher.onBackPressed()
+                    // The watcher is a background foreground-service; aggressive
+                    // OEM battery management (Nothing OS / MIUI) kills it, which
+                    // silently breaks auto-VPN-on-app-launch. Ask for the battery
+                    // exemption so it survives. Non-blocking: navigate back either
+                    // way.
+                    maybePromptBatteryExemption {
+                        if (isAdded) requireActivity().onBackPressedDispatcher.onBackPressed()
+                    }
                 }
             }
         } else {
             app.updateTriggerWatcher(false)
             if (isAdded) requireActivity().onBackPressedDispatcher.onBackPressed()
         }
+    }
+
+    /**
+     * If the app is still under battery optimization, ask the user to exempt it
+     * so the trigger watcher (a background FGS) isn't killed by the OEM. Always
+     * calls [onDone] (we never block enabling trigger on this).
+     */
+    private fun maybePromptBatteryExemption(onDone: () -> Unit) {
+        val pm = requireContext().getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        val pkg = requireContext().packageName
+        if (pm.isIgnoringBatteryOptimizations(pkg)) { onDone(); return }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Keep trigger running")
+            .setMessage(
+                "For auto-VPN to work when you open an app, NetGuard's watcher " +
+                    "must keep running in the background. Some phones (Nothing, " +
+                    "Xiaomi, etc.) kill it to save battery.\n\n" +
+                    "Allow NetGuard to run without battery restrictions?"
+            )
+            .setPositiveButton("Allow") { _, _ ->
+                try {
+                    @android.annotation.SuppressLint("BatteryLife")
+                    val i = android.content.Intent(
+                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        android.net.Uri.parse("package:$pkg")
+                    )
+                    startActivity(i)
+                } catch (_: Exception) {
+                    try {
+                        startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                    } catch (_: Exception) {}
+                }
+                onDone()
+            }
+            .setNegativeButton("Skip") { _, _ -> onDone() }
+            .setOnCancelListener { onDone() }
+            .show()
     }
 
     private fun loadApps(): List<AppItem> {

@@ -33,6 +33,11 @@
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Trigger mode: the foreground watcher must survive OEM battery
+         management (Nothing OS / MIUI kill background FGS, which silently
+         breaks auto-VPN-on-app-launch). We prompt for this exemption when the
+         user enables trigger. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".App"
