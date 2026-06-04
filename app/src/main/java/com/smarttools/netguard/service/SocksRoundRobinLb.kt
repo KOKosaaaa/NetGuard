@@ -88,8 +88,13 @@ class SocksRoundRobinLb(
             val client = try {
                 ss.accept()
             } catch (e: IOException) {
-                if (!ss.isClosed) Log.w(TAG, "accept failed: ${e.message}")
-                return
+                if (ss.isClosed) return
+                // A transient accept error (e.g. EMFILE under fd pressure) must
+                // NOT kill the listener — that silently stops forwarding every
+                // future connection. Log, pause, and keep listening.
+                Log.w(TAG, "accept failed (continuing): ${e.message}")
+                try { Thread.sleep(100) } catch (_: InterruptedException) {}
+                continue
             }
             scope.launch(Dispatchers.IO) { handle(client) }
         }
