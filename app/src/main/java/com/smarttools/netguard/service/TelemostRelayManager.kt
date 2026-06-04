@@ -78,6 +78,20 @@ class TelemostRelayManager(
     fun process(): Process? = instances.firstOrNull()?.process
 
     /**
+     * How many relay processes are currently alive. The tunnel watchdog tears
+     * down only when this hits zero (every room dead), NOT on a single relay's
+     * death — a dead room is recovered by its per-relay watchdog and tolerated
+     * by the LB/striping mux, so killing the whole tunnel for one room is wrong.
+     * Returns 1 on a concurrent-modification race (start/stop mid-iteration) so
+     * we never tear down spuriously; the next poll re-reads.
+     */
+    fun aliveCount(): Int = try {
+        instances.count { it.process?.isAlive == true }
+    } catch (_: Exception) {
+        1
+    }
+
+    /**
      * Start N relays (one per link parsed from [profile.address]) and bind the
      * SOCKS5 LB on [exposedSocksPort]. All relays share the same SOCKS auth so
      * the LB stays byte-transparent.

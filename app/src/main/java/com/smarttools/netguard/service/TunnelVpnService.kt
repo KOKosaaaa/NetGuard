@@ -903,20 +903,35 @@ class TunnelVpnService : VpnService() {
         intentionalProcessKill = false
 
         telemostWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
-            val proc = telemostRelay?.process() ?: return@launch
-            try {
-                val exitCode = proc.waitFor()
-                if (intentionalProcessKill || isReconnecting) return@launch
+            // Tear down only when EVERY relay is dead, not on a single relay's
+            // process exit. A dead room is recovered by its own per-relay
+            // watchdog (respawn) and tolerated by the LB/striping mux; the old
+            // code watched relay #0's process and dropped the whole tunnel when
+            // it died, defeating per-room recovery. Poll the alive count and
+            // require it to stay zero across a few ticks (give respawn its
+            // chance) before declaring the tunnel down.
+            val relay = telemostRelay ?: return@launch
+            var deadPolls = 0
+            while (isActive) {
+                delay(3_000)
+                if (intentionalProcessKill || isReconnecting) { deadPolls = 0; continue }
                 val state = _connectionState.value
-                if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
-                    Log.e(TAG, "Telemost relay died (exit $exitCode); tearing down tunnel")
-                    LogBuffer.add(LogBuffer.LogLevel.ERROR, "Telemost relay exited ($exitCode)")
-                    withContext(Dispatchers.Main) {
-                        _connectionState.value = ConnectionState.Error("Telemost relay exited ($exitCode)")
-                        stopTunnel()
+                if (state !is ConnectionState.Connected && state !is ConnectionState.Connecting) return@launch
+                if (relay.aliveCount() == 0) {
+                    deadPolls++
+                    if (deadPolls >= 3) { // ~9s of all-dead → respawn couldn't recover
+                        Log.e(TAG, "All Telemost relays dead; tearing down tunnel")
+                        LogBuffer.add(LogBuffer.LogLevel.ERROR, "All Telemost rooms died")
+                        withContext(Dispatchers.Main) {
+                            _connectionState.value = ConnectionState.Error("All Telemost rooms died")
+                            stopTunnel()
+                        }
+                        return@launch
                     }
+                } else {
+                    deadPolls = 0
                 }
-            } catch (_: Exception) {}
+            }
         }
 
         xrayWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
@@ -1686,6 +1701,24 @@ class TunnelVpnService : VpnService() {
      * packets are just black-holed until the new tunnel is ready.
      */
     private suspend fun restartTunnelProcessesKeepTun() {
+        // Telemost can't keep-tun via the xray path — XrayConfigGenerator
+        // rejects a Telemost profile (throws), which used to fall through to a
+        // full restart but logged a spurious "reconnect failed" on EVERY network
+        // change. Re-establishing the rooms is the reconnect bottleneck anyway,
+        // so branch to a clean full restart. stopTunnelProcesses() tears down
+        // the old relay (its rooms are stranded on the dead network) + tun2socks.
+        val proto = runCatching {
+            (application as App).database.profileDao().getById(currentProfileId)?.protocol
+        }.getOrNull()
+        if (proto == com.smarttools.netguard.model.Protocol.TELEMOST) {
+            Log.i(TAG, "Telemost network change → clean full relay restart")
+            LogBuffer.add(LogBuffer.LogLevel.INFO, "Network changed — restarting Telemost")
+            isReconnecting = false
+            reconnectTargetNetwork = null
+            stopTunnelProcesses()
+            startTunnel(currentProfileId, skipPreflight = true)
+            return
+        }
         try {
             // CRITICAL ORDER: kill processes BEFORE cancelAndJoin'ing watchdogs.
             // The watchdog body suspends in `xrayProcess.waitFor()` — that's a
