@@ -534,6 +534,16 @@ class TunnelVpnService : VpnService() {
                         val (_, _, port) = com.smarttools.netguard.core.CredentialManager.generate()
                         socksPort = port; socksUser = ""; socksPass = ""
 
+                        // Tear down any previous relay manager before replacing it.
+                        // Each startTunnel builds a fresh manager and overwrites
+                        // `telemostRelay`; if the old one isn't stopped here its
+                        // librelay processes orphan and pile up across reconnects
+                        // (seen hitting 20-30, overheating the phone). stop() is
+                        // idempotent, so this is safe even when a caller already
+                        // stopped it.
+                        telemostRelay?.stop()
+                        telemostRelay = null
+
                         val relay = TelemostRelayManager(
                             nativeLibDir = applicationInfo.nativeLibraryDir,
                             onLog = { line -> LogBuffer.add(LogBuffer.LogLevel.INFO, line) },
