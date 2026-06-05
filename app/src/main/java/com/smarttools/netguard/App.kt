@@ -102,19 +102,18 @@ class App : Application() {
     }
 
     /**
-     * One-time migration: striping is now the default for multi-room Telemost
-     * (it fixes the single-room SFU-throttle drop on big transfers and
-     * aggregates rooms). Existing installs persisted telemost_striping=false
-     * back when striping was experimental/off, so flip them on once. New
-     * installs already default to true and this is a no-op for them after the
-     * flag is set.
+     * One-time migration: striping black-holes on mobile carriers (its pipes
+     * don't reach the exit's stripe-server reliably), so it's no longer the
+     * default. An earlier build (migration v1) force-enabled it for everyone;
+     * flip it back off once so those installs fall back to the reliable
+     * round-robin path. Users can still re-enable it manually in Settings.
      */
     private fun migrateStripingDefault() {
         val prefs = getPreferences()
-        if (!prefs.getBoolean("striping_migration_v1", false)) {
+        if (!prefs.getBoolean("striping_migration_v2", false)) {
             prefs.edit()
-                .putBoolean("telemost_striping", true)
-                .putBoolean("striping_migration_v1", true)
+                .putBoolean("telemost_striping", false)
+                .putBoolean("striping_migration_v2", true)
                 .apply()
         }
     }
@@ -161,7 +160,7 @@ class App : Application() {
             ),
             autoBypassRuPackages = prefs.getBoolean("auto_bypass_ru_packages", false),
             expertMode = prefs.getBoolean("expert_mode", false),
-            telemostStriping = prefs.getBoolean("telemost_striping", true)
+            telemostStriping = prefs.getBoolean("telemost_striping", false)
         )
     }
 

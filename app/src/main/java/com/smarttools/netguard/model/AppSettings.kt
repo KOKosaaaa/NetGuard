@@ -62,9 +62,11 @@ data class AppSettings(
      * bandwidth, but needs the stripe-server deployed on the exit. Default ON
      * since the field test showed round-robin single-room collapses on big
      * transfers (SFU throttles a sustained full-rate room); striping spreads
-     * the load and held ~7.5 Mbit + stable TG. Toggle exposed under Expert mode.
+     * the load and held ~7.5 Mbit + stable TG on Wi-Fi. Default OFF: striping
+     * black-holes on mobile carriers (pipes don't reach the stripe-server), so
+     * round-robin is the safe default. Toggle exposed under Expert mode.
      */
-    val telemostStriping: Boolean = true
+    val telemostStriping: Boolean = false
 )
 
 enum class RoutingMode {
