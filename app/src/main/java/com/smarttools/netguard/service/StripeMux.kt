@@ -63,6 +63,7 @@ class StripeMux(
     private var serverSocket: ServerSocket? = null
     private var acceptJob: Job? = null
     private var watchdogJob: Job? = null
+    private var healthPingJob: Job? = null
     // idx -> earliest watchdog tick at which a failed-reopen pipe may be retried.
     private val pipeReopenBackoff = HashMap<Int, Int>()
     private val pipes = ArrayList<Pipe>()
@@ -129,6 +130,7 @@ class StripeMux(
             ss.bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), listenPort), 128)
             serverSocket = ss
             acceptJob = scope.launch(Dispatchers.IO) { acceptLoop() }
+            startHealthPing(scope)
             startPipeWatchdog(scope)
             onLog("StripeMux up: ${pipes.size}/${upstreams.size} pipes, listening on :$listenPort")
             Log.i(TAG, "up: ${pipes.size}/${upstreams.size} pipes confirmed, listening on :$listenPort")
@@ -145,6 +147,8 @@ class StripeMux(
         serverSocket = null
         watchdogJob?.cancel()
         watchdogJob = null
+        healthPingJob?.cancel()
+        healthPingJob = null
         acceptJob?.cancel()
         acceptJob = null
         flows.values.toList().forEach { it.close() }
@@ -474,38 +478,54 @@ class StripeMux(
      * relay's SOCKS port is stable across restarts), then nudge flows to resend
      * chunks stuck with pid == -1 so an in-flight transfer recovers.
      */
+    /**
+     * Per-pipe health ping on its OWN steady timer, decoupled from the watchdog
+     * (whose reopen step blocks on slow carriers). Each tick we send a HELLO on
+     * every live pipe; the server echoes it (PONG) on the SAME pipe. A zombie
+     * room accepts our write locally (so it never errors — the old ACK keepalive
+     * missed it) but the SFU drops it, so no PONG comes back. A pipe silent past
+     * ZOMBIE_TIMEOUT_MS is marked dead; the watchdog then prunes + reopens it and
+     * its in-flight chunks are resent. Because this cadence never stalls behind a
+     * reopen, a few slow rooms can't snowball into a reopen-everything cascade.
+     */
+    private fun startHealthPing(scope: CoroutineScope) {
+        healthPingJob = scope.launch(Dispatchers.IO) {
+            while (true) {
+                delay(PIPE_WATCHDOG_INTERVAL_MS)
+                val now = System.currentTimeMillis()
+                val live = synchronized(pipes) { ArrayList(pipes) }
+                val ping = ByteArray(17).also { System.arraycopy(sessionId, 0, it, 0, 16) }
+                for (p in live) {
+                    if (p.dead) continue
+                    if (now - p.lastPongMs > ZOMBIE_TIMEOUT_MS) {
+                        p.dead = true
+                        onPipeDead(p.idx)
+                        continue
+                    }
+                    ping[16] = p.idx.toByte()
+                    try {
+                        synchronized(p.writeLock) {
+                            p.out.write(StripeFrame(StripeProtocol.HELLO, 0, 0, ping).encode())
+                            p.out.flush()
+                        }
+                    } catch (_: Exception) { p.dead = true }
+                }
+            }
+        }
+    }
+
     private fun startPipeWatchdog(scope: CoroutineScope) {
         watchdogJob = scope.launch(Dispatchers.IO) {
             var tick = 0
             while (true) {
                 delay(PIPE_WATCHDOG_INTERVAL_MS)
                 tick++
-                // Health ping every tick: HELLO on each live pipe; the server
-                // echoes it (PONG) on the SAME pipe. A zombie room accepts our
-                // write locally (never errors — the old keepalive missed it) but
-                // the SFU drops it, so no PONG returns. Past ZOMBIE_TIMEOUT_MS of
-                // silence we mark it dead -> pruned + reopened below, its in-flight
-                // chunks resent — instead of it black-holing ~1/N of every transfer.
-                run {
-                    val now = System.currentTimeMillis()
-                    val live = synchronized(pipes) { ArrayList(pipes) }
-                    val ping = ByteArray(17).also { System.arraycopy(sessionId, 0, it, 0, 16) }
-                    for (p in live) {
-                        if (p.dead) continue
-                        if (now - p.lastPongMs > ZOMBIE_TIMEOUT_MS) {
-                            p.dead = true
-                            onPipeDead(p.idx)
-                            continue
-                        }
-                        ping[16] = p.idx.toByte()
-                        try {
-                            synchronized(p.writeLock) {
-                                p.out.write(StripeFrame(StripeProtocol.HELLO, 0, 0, ping).encode())
-                                p.out.flush()
-                            }
-                        } catch (_: Exception) { p.dead = true }
-                    }
-                }
+                // (Health ping + zombie detection run on their OWN steady timer in
+                // startHealthPing — NOT here. This loop's reopen step below blocks
+                // on openPipe's awaitAll up to HELLO_ACK_TIMEOUT, which under churn
+                // would starve the ping cadence past ZOMBIE_TIMEOUT and false-flag
+                // healthy pipes as zombies — a reopen-everything cascade. Keeping
+                // detection independent of reopen latency is what stops the spiral.)
                 // Prune dead pipes (close + drop from pool).
                 synchronized(pipes) {
                     val dead = pipes.filter { it.dead }

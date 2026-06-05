@@ -579,11 +579,13 @@ class TunnelVpnService : VpnService() {
                         // stopped it.
                         telemostRelay?.stop()
                         telemostRelay = null
-                        // Belt-and-suspenders: stop() only reaches the manager we
-                        // just held. Sweep any librelay orphaned by an earlier
-                        // service-life (system restart that skipped onDestroy) so
-                        // we spawn onto a clean slate and never accumulate stacks.
-                        reapStrayRelays()
+                        // NOTE: do NOT reapStrayRelays() here. stop() above already
+                        // tears down THIS service's relay gracefully (SIGTERM ->
+                        // librelay leaves the SFU cleanly, no ghost participant).
+                        // A reap would SIGKILL those same processes mid-leave. The
+                        // onCreate() reap is the right place for cross-service-life
+                        // orphans (a fresh service owns no relay, so nothing to
+                        // graceful-stop).
 
                         val relay = TelemostRelayManager(
                             nativeLibDir = applicationInfo.nativeLibraryDir,
