@@ -1111,11 +1111,9 @@ class TunnelVpnService : VpnService() {
                     addAddress("fd00::1", 126)
                     addRoute("::", 0)
                 } else {
-                    // IPv6 disabled: still CAPTURE the v6 default route into the
-                    // TUN so apps can't leak IPv6 around the VPN over the
-                    // underlying link (a device with native IPv6 would otherwise
-                    // route ::/0 directly). With no fd00:: address the captured
-                    // packets have no tunnel path → dropped (blocked, not leaked).
+                    // Still capture ::/0 into the TUN so apps can't leak IPv6
+                    // around the VPN; with no fd00:: address those packets are
+                    // dropped (blocked, not leaked).
                     try { addRoute("::", 0) } catch (_: Exception) {}
                 }
             }
@@ -1708,12 +1706,9 @@ class TunnelVpnService : VpnService() {
      * packets are just black-holed until the new tunnel is ready.
      */
     private suspend fun restartTunnelProcessesKeepTun() {
-        // Telemost can't keep-tun via the xray path — XrayConfigGenerator
-        // rejects a Telemost profile (throws), which used to fall through to a
-        // full restart but logged a spurious "reconnect failed" on EVERY network
-        // change. Re-establishing the rooms is the reconnect bottleneck anyway,
-        // so branch to a clean full restart. stopTunnelProcesses() tears down
-        // the old relay (its rooms are stranded on the dead network) + tun2socks.
+        // Telemost can't keep-tun via the xray path (XrayConfigGenerator rejects
+        // it); re-establishing rooms is the bottleneck anyway, so branch to a
+        // clean full restart instead of logging a spurious "reconnect failed".
         val proto = runCatching {
             (application as App).database.profileDao().getById(currentProfileId)?.protocol
         }.getOrNull()

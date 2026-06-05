@@ -46,23 +46,13 @@ class StripeMux(
 ) {
     companion object {
         private const val TAG = "StripeMux"
-        // How long openPipe waits for the server's HELLO echo before declaring
-        // a pipe a black hole and dropping it. Generous for slow mobile carrier
-        // round-trips (HELLO out → carrier → creator → stripe-server → echo back).
+        // Timeout for the server's HELLO echo; generous for slow carrier RTTs.
         private const val HELLO_ACK_TIMEOUT_MS = 8_000
-        // The watchdog reopens dead pipes so a churny mobile carrier (librelay
-        // rooms restart, idle pipes get dropped) can't drain the pool to zero
-        // and black-hole all traffic. Without it striping works for ~60s then
-        // dies as pipes drop one by one and are never replaced.
+        // Watchdog reopens dead pipes; without it the pool drains in ~60s.
         private const val PIPE_WATCHDOG_INTERVAL_MS = 2_500L
-        // Keepalive cadence in watchdog ticks. Every ~15s an idle pipe gets a
-        // no-op ACK(flow 0) so the carrier/creator doesn't drop it on an idle
-        // timeout - the main cause of pipes dying ~once a minute and dragging
-        // aggregate speed below the rooms×1.25 Mbps ceiling.
+        // Every ~15s a no-op ACK(flow 0) keeps an idle pipe from being dropped.
         private const val KEEPALIVE_EVERY_TICKS = 6
-        // After an idx fails to reopen, skip it for this many watchdog ticks so a
-        // permanently-dead room (stale profile link with no creator) isn't
-        // hammered with an 8s HELLO-ack wait every tick.
+        // Skip a failed-reopen idx for N ticks (don't hammer a dead room).
         private const val PIPE_REOPEN_BACKOFF_TICKS = 8
         private val KEEPALIVE_FRAME = StripeFrame(StripeProtocol.ACK, 0, 0, ByteArray(0)).encode()
     }
@@ -102,12 +92,9 @@ class StripeMux(
             return false
         }
         this.scope = scope
-        // Open all pipes CONCURRENTLY. Each openPipe is a blocking SOCKS5
-        // CONNECT + HELLO-ack wait through a room's carrier tunnel to the
-        // stripe-server; doing them serially stacked 6x the (slow) carrier
-        // round-trip. Use coroutineScope (NOT runBlocking — start() runs on a
-        // non-blocking coroutine dispatcher where runBlocking throws
-        // "Cannot block on non-blocking thread"). A failed pipe is skipped.
+        // Open all pipes concurrently (serial stacked 6x the slow carrier RTT).
+        // coroutineScope, NOT runBlocking: start() runs on a non-blocking
+        // dispatcher where runBlocking throws. A failed pipe is skipped.
         val opened = coroutineScope {
             upstreams.mapIndexed { i, up ->
                 async(Dispatchers.IO) {
@@ -168,10 +155,8 @@ class StripeMux(
         try {
             s.tcpNoDelay = true
             s.connect(upstream, 8_000)
-            // Bound the WHOLE handshake (SOCKS5 reply + HELLO ack) with a read
-            // timeout. A dead room's librelay may accept the local TCP connect
-            // but never reply (its carrier tunnel is down), which would
-            // otherwise block this pipe's coroutine forever and stall awaitAll.
+            // Bound the whole handshake (SOCKS5 reply + HELLO ack): a dead room
+            // may accept the TCP connect but never reply, blocking forever.
             s.soTimeout = HELLO_ACK_TIMEOUT_MS
             val out = s.getOutputStream()
             val din = DataInputStream(s.getInputStream())
@@ -182,12 +167,9 @@ class StripeMux(
             payload[16] = idx.toByte()
             out.write(StripeFrame(StripeProtocol.HELLO, 0, 0, payload).encode())
             out.flush()
-            // Wait for the server's HELLO echo: proof this pipe actually
-            // traversed the carrier to the stripe-server. librelay acks the SOCKS
-            // CONNECT locally before the tunnel delivers it, so a black-hole room
-            // would otherwise look "open" and we'd stripe (and lose) data into
-            // it, stalling every flow. Pipes that don't confirm in time are
-            // dropped (read timeout was armed right after connect, above).
+            // Wait for the server's HELLO echo: proof the pipe reached the
+            // stripe-server. librelay acks the SOCKS CONNECT locally before the
+            // tunnel delivers it, so a black-hole room would otherwise look open.
             val ack = StripeFrame.read(din)
             if (ack.type != StripeProtocol.HELLO) {
                 throw IOException("pipe #${idx + 1}: expected HELLO ack, got type=${ack.type}")
@@ -197,9 +179,8 @@ class StripeMux(
             Log.i(TAG, "pipe #${idx + 1} confirmed end-to-end (upstream $upstream)")
             return Pipe(idx, s, din, out)
         } catch (e: Exception) {
-            // Close the socket on ANY failure (SOCKS reject / HELLO-ack timeout /
-            // wrong ack). The watchdog reopens dead idxs repeatedly, so a leaked
-            // socket per failed attempt would exhaust fds over a long session.
+            // Close on any failure; the watchdog retries, so leaked sockets
+            // per failed attempt would exhaust fds over a long session.
             try { s.close() } catch (_: Exception) {}
             throw e
         }
@@ -246,9 +227,8 @@ class StripeMux(
                 ss.accept()
             } catch (e: IOException) {
                 if (ss.isClosed) return
-                // Transient accept error (e.g. EMFILE under fd pressure) must NOT
-                // kill the listener — that would silently stop accepting every
-                // future flow. Log, pause briefly, and keep listening.
+                // Transient accept error (e.g. EMFILE) must not kill the
+                // listener — pause briefly and keep accepting.
                 Log.w(TAG, "accept failed (continuing): ${e.message}")
                 try { Thread.sleep(100) } catch (_: InterruptedException) {}
                 continue
@@ -471,14 +451,11 @@ class StripeMux(
     }
 
     /**
-     * Keeps the pipe pool replenished. Mobile carriers churn rooms (librelay
-     * restarts, idle pipes get dropped), and a dead pipe is never reused — so
-     * without this the pool drains to zero in ~a minute and every flow
-     * black-holes. Each tick: prune dead pipes, then reopen any upstream idx
-     * that has no live pipe (the relay's SOCKS port is stable across restarts,
-     * so the same upstream address works once the room is back). After adding
-     * pipes, nudge flows to resend chunks that got stuck (pid == -1) when no
-     * pipe was live, so an in-flight transfer recovers instead of stalling.
+     * Keeps the pipe pool replenished (carriers churn rooms; a dead pipe is
+     * never reused, so the pool would drain to zero in ~a minute). Each tick:
+     * keepalive, prune dead pipes, reopen any idx with no live pipe (the
+     * relay's SOCKS port is stable across restarts), then nudge flows to resend
+     * chunks stuck with pid == -1 so an in-flight transfer recovers.
      */
     private fun startPipeWatchdog(scope: CoroutineScope) {
         watchdogJob = scope.launch(Dispatchers.IO) {
@@ -486,10 +463,7 @@ class StripeMux(
             while (true) {
                 delay(PIPE_WATCHDOG_INTERVAL_MS)
                 tick++
-                // Keepalive: every ~15s poke each live pipe with a no-op
-                // ACK(flow 0) (server ignores it) so an idle pipe's carrier/SOCKS
-                // connection isn't torn down by an idle timeout. A write failure
-                // flags the pipe dead so the reopen pass below replaces it.
+                // Keepalive: a write failure flags the pipe dead for reopen below.
                 if (tick % KEEPALIVE_EVERY_TICKS == 0) {
                     val live = synchronized(pipes) { ArrayList(pipes) }
                     for (p in live) {

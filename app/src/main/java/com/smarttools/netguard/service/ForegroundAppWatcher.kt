@@ -42,12 +42,9 @@ class TriggerWatcherService : Service() {
 
     companion object {
         private const val TAG = "TriggerWatcher"
-        // 100ms was 10 polls/sec forever — a real battery/CPU drain. 300ms
-        // keeps trigger latency under a third of a second while cutting the
-        // wakeups by 3x.
+        // 300ms: ~0.3s trigger latency, 3x fewer wakeups than the old 100ms.
         private const val POLL_MS = 300L
-        // While the screen is off we only re-check whether it came back on,
-        // at this cheap cadence — no foreground-event poll happens.
+        // Cheap cadence while the screen is off (only re-checks for screen-on).
         private const val SCREEN_OFF_POLL_MS = 2_000L
         private const val NOTIFICATION_ID = 2
         private const val CHANNEL_ID = "trigger_watcher"
@@ -159,10 +156,8 @@ class TriggerWatcherService : Service() {
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
 
-        // Initial check — handle the case when watcher starts while a trigger
-        // app is already in the foreground (e.g. user toggled trigger mode
-        // from inside Telegram). queryEvents only catches transitions, not
-        // the current state, so probe the last few seconds explicitly.
+        // queryEvents only catches transitions; probe the recent past so we
+        // catch a trigger app already in the foreground when the watcher starts.
         val initialFg = currentForegroundPackage(usm, lookbackMs = 10_000L)
         if (initialFg != null) {
             lastForegroundPkg = initialFg
@@ -171,11 +166,8 @@ class TriggerWatcherService : Service() {
 
         var lastCheck = System.currentTimeMillis()
         while (scope?.isActive == true) {
-            // Screen off → the user can't be launching apps, so the foreground
-            // (launcher/lockscreen) won't change. Skip the ~3×/s queryEvents
-            // poll (a binder IPC + event scan) and idle cheaply until the screen
-            // is back — the dominant time the watcher would otherwise burn CPU/
-            // battery 24/7. No leak-window cost: nothing to trigger while off.
+            // Screen off → no app launches possible, so skip the queryEvents
+            // poll and idle cheaply. This is the main 24/7 battery saver.
             if (!pm.isInteractive) {
                 delay(SCREEN_OFF_POLL_MS)
                 lastCheck = System.currentTimeMillis()
@@ -249,11 +241,9 @@ class TriggerWatcherService : Service() {
                 Log.i(TAG, "Trigger '$current' → activate (strict)")
                 TunnelVpnService.activateTrigger(app)
             } else {
-                // Flexible mode: bring up the regular tunnel respecting
-                // perAppMode/perAppList. The trigger list only chooses WHEN
-                // the tunnel comes up, not WHO routes through it.
-                // Reuse the service scope instead of allocating (and leaking)
-                // a fresh CoroutineScope on every trigger event.
+                // Flexible mode: the trigger list only chooses WHEN the tunnel
+                // comes up; perAppMode/perAppList still decide WHO routes.
+                // Reuse the service scope (don't leak a fresh one per event).
                 scope?.launch {
                     val profileId = app.database.profileDao().getSelected()?.id
                         ?: app.getPreferences().getLong("last_profile_id", -1)
