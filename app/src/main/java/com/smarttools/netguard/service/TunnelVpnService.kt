@@ -241,6 +241,42 @@ class TunnelVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        // A fresh service instance owns no relays yet, so any librelay.so still
+        // running belongs to a previous service-life that the system restarted
+        // (Doze/revoke/OOM) without routing through onDestroy. Those orphans -
+        // plus their respawning watchdogs - cook the CPU with the VPN already
+        // off (saw ~30 stacks at 55-60C). Sweep them before we start anew.
+        reapStrayRelays()
+    }
+
+    /**
+     * SIGKILL every librelay.so process owned by this app. Called when we are
+     * (re)building the tunnel from scratch, so no live relay must be preserved.
+     * The code-level TelemostRelayManager.stop() only reaches relays the
+     * CURRENT service object references; a manager leaked by a system-restarted
+     * service-life is unreachable by any handle, so we find its processes via
+     * /proc and kill by PID. Safe: all librelay children share this app's UID.
+     */
+    private fun reapStrayRelays() {
+        try {
+            val procDir = File("/proc")
+            val pidDirs = procDir.listFiles { f ->
+                f.isDirectory && f.name.isNotEmpty() && f.name.all { it.isDigit() }
+            } ?: return
+            var killed = 0
+            val self = android.os.Process.myPid()
+            for (p in pidDirs) {
+                val pid = p.name.toIntOrNull() ?: continue
+                if (pid == self) continue
+                val cmdline = try {
+                    File(p, "cmdline").readBytes().toString(Charsets.UTF_8)
+                } catch (_: Exception) { continue }
+                if (cmdline.contains("librelay.so")) {
+                    try { android.os.Process.killProcess(pid); killed++ } catch (_: Exception) {}
+                }
+            }
+            if (killed > 0) Log.w(TAG, "reapStrayRelays: killed $killed stray librelay process(es)")
+        } catch (_: Exception) {}
     }
 
     /**
@@ -543,6 +579,11 @@ class TunnelVpnService : VpnService() {
                         // stopped it.
                         telemostRelay?.stop()
                         telemostRelay = null
+                        // Belt-and-suspenders: stop() only reaches the manager we
+                        // just held. Sweep any librelay orphaned by an earlier
+                        // service-life (system restart that skipped onDestroy) so
+                        // we spawn onto a clean slate and never accumulate stacks.
+                        reapStrayRelays()
 
                         val relay = TelemostRelayManager(
                             nativeLibDir = applicationInfo.nativeLibraryDir,

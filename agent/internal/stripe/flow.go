@@ -84,6 +84,69 @@ func (fl *flow) start() {
 	fl.touch()
 	go fl.rxLoop()
 	go fl.reaper()
+	go fl.txRetransmit()
+}
+
+// txRetransmit is the timer backstop the design always called for but that was
+// missing: onPipeDead only fires when a pipe's CONNECTION closes, but a
+// Telemost room often goes ZOMBIE — the carrier still accepts our writes
+// locally (so pipe.write succeeds, p.dead stays false, no close event) while
+// the SFU silently drops them. send() keeps round-robining ~1/N of the stream
+// onto that black hole, the receiver's reorder stalls at the first missing
+// offset, and goodput collapses to ~0 with no death event to trigger a resend.
+// So we watch the cumulative Ack (txBase): if it stops advancing while chunks
+// are still unacked, we Go-Back-N resend the whole unacked window across the
+// live pipes (the receiver dedups by offset). Each round reshuffles which pipe
+// carries which chunk, so the healthy pipes drain the window even if one stays
+// a zombie. Bounded: we only resend after sustained no-progress, then wait a
+// full window again before the next round, so a merely-slow Ack never storms.
+func (fl *flow) txRetransmit() {
+	const tick = 200 * time.Millisecond
+	const stallTicks = 3 // ~600ms of zero Ack progress with data outstanding
+	t := time.NewTicker(tick)
+	defer t.Stop()
+	var lastBase uint64
+	stalls := 0
+	for {
+		select {
+		case <-fl.closed:
+			return
+		case <-t.C:
+			fl.txMu.Lock()
+			base := fl.txBase
+			resend := append([]*txChunk(nil), fl.unacked...)
+			resendFin := fl.finReached
+			finSeq := fl.finSeq
+			fl.txMu.Unlock()
+
+			if len(resend) == 0 {
+				lastBase = base
+				stalls = 0
+				continue
+			}
+			if base != lastBase {
+				// Progress is happening — not stalled.
+				lastBase = base
+				stalls = 0
+				continue
+			}
+			stalls++
+			if stalls < stallTicks {
+				continue
+			}
+			stalls = 0 // resend once, then require another stall window
+			for _, ch := range resend {
+				pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
+				fl.txMu.Lock()
+				ch.pid = pid
+				fl.txMu.Unlock()
+			}
+			if resendFin {
+				fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: finSeq})
+			}
+			fl.touch()
+		}
+	}
 }
 
 func (fl *flow) touch()              { fl.lastProg.Store(time.Now().UnixNano()) }

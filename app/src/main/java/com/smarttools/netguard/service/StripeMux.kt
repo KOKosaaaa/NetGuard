@@ -50,11 +50,14 @@ class StripeMux(
         private const val HELLO_ACK_TIMEOUT_MS = 8_000
         // Watchdog reopens dead pipes; without it the pool drains in ~60s.
         private const val PIPE_WATCHDOG_INTERVAL_MS = 2_500L
-        // Every ~15s a no-op ACK(flow 0) keeps an idle pipe from being dropped.
-        private const val KEEPALIVE_EVERY_TICKS = 6
+        // Each tick we ping every pipe with a HELLO; the server echoes it on the
+        // SAME pipe (PONG). A pipe that misses echoes for ZOMBIE_TIMEOUT_MS is a
+        // zombie room (accepts our writes locally so it never errors, but the SFU
+        // silently drops them) — we mark it dead so it's pruned + reopened and its
+        // in-flight chunks resent, instead of black-holing ~1/N of every transfer.
+        private const val ZOMBIE_TIMEOUT_MS = 8_000L
         // Skip a failed-reopen idx for N ticks (don't hammer a dead room).
         private const val PIPE_REOPEN_BACKOFF_TICKS = 8
-        private val KEEPALIVE_FRAME = StripeFrame(StripeProtocol.ACK, 0, 0, ByteArray(0)).encode()
     }
 
     private var serverSocket: ServerSocket? = null
@@ -79,6 +82,9 @@ class StripeMux(
     ) {
         val writeLock = Any()
         @Volatile var dead = false
+        // Wall-clock of the last HELLO echo (PONG) the server bounced back on this
+        // pipe. Initialised to open time so a fresh pipe isn't seen as a zombie.
+        @Volatile var lastPongMs: Long = System.currentTimeMillis()
     }
 
     /**
@@ -286,7 +292,15 @@ class StripeMux(
                     val id = flowSeq.getAndIncrement()
                     val flow = StripeFlow(id, client, this)
                     flows[id] = flow
-                    if (send(StripeFrame(StripeProtocol.OPEN, id, 0, "$host:$port".toByteArray(Charsets.US_ASCII))) < 0) {
+                    // Broadcast OPEN on EVERY live pipe, not one round-robin pipe.
+                    // OPEN bootstraps the whole flow (carries the dest the exit
+                    // dials); a zombie room accepts the write but never delivers
+                    // it, so a single-pipe OPEN that lands on one is lost with no
+                    // retransmit -> the exit never dials -> the download never
+                    // starts (the "data never reaches the stripe-server" stall).
+                    // The exit dedups duplicate OPENs via dialOnce, so flooding
+                    // it on all pipes is safe and makes flow bootstrap robust.
+                    if (broadcast(StripeFrame(StripeProtocol.OPEN, id, 0, "$host:$port".toByteArray(Charsets.US_ASCII))) == 0) {
                         flows.remove(id); client.close(); return
                     }
                     flow.run()
@@ -371,10 +385,11 @@ class StripeMux(
      * so the fastest surviving pipe delivers them and one slow/dead pipe can't
      * delay the peer's window update. Duplicates are harmless (cumulative).
      */
-    fun broadcast(frame: StripeFrame) {
+    fun broadcast(frame: StripeFrame): Int {
         val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }
-        if (snapshot.isEmpty()) return
+        if (snapshot.isEmpty()) return 0
         val wire = frame.encode()
+        var delivered = 0
         for (p in snapshot) {
             if (p.dead) continue
             try {
@@ -382,10 +397,12 @@ class StripeMux(
                     p.out.write(wire)
                     p.out.flush()
                 }
+                delivered++
             } catch (e: Exception) {
                 p.dead = true
             }
         }
+        return delivered
     }
 
     /**
@@ -463,13 +480,29 @@ class StripeMux(
             while (true) {
                 delay(PIPE_WATCHDOG_INTERVAL_MS)
                 tick++
-                // Keepalive: a write failure flags the pipe dead for reopen below.
-                if (tick % KEEPALIVE_EVERY_TICKS == 0) {
+                // Health ping every tick: HELLO on each live pipe; the server
+                // echoes it (PONG) on the SAME pipe. A zombie room accepts our
+                // write locally (never errors — the old keepalive missed it) but
+                // the SFU drops it, so no PONG returns. Past ZOMBIE_TIMEOUT_MS of
+                // silence we mark it dead -> pruned + reopened below, its in-flight
+                // chunks resent — instead of it black-holing ~1/N of every transfer.
+                run {
+                    val now = System.currentTimeMillis()
                     val live = synchronized(pipes) { ArrayList(pipes) }
+                    val ping = ByteArray(17).also { System.arraycopy(sessionId, 0, it, 0, 16) }
                     for (p in live) {
                         if (p.dead) continue
+                        if (now - p.lastPongMs > ZOMBIE_TIMEOUT_MS) {
+                            p.dead = true
+                            onPipeDead(p.idx)
+                            continue
+                        }
+                        ping[16] = p.idx.toByte()
                         try {
-                            synchronized(p.writeLock) { p.out.write(KEEPALIVE_FRAME); p.out.flush() }
+                            synchronized(p.writeLock) {
+                                p.out.write(StripeFrame(StripeProtocol.HELLO, 0, 0, ping).encode())
+                                p.out.flush()
+                            }
                         } catch (_: Exception) { p.dead = true }
                     }
                 }
@@ -517,6 +550,11 @@ class StripeMux(
         try {
             while (true) {
                 val f = StripeFrame.read(p.din)
+                if (f.type == StripeProtocol.HELLO) {
+                    // PONG: the server bounced our health ping on this pipe.
+                    p.lastPongMs = System.currentTimeMillis()
+                    continue
+                }
                 val flow = flows[f.flowId] ?: continue
                 flow.onFrame(f)
             }

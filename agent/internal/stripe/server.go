@@ -159,6 +159,13 @@ func (s *Server) handlePipe(conn net.Conn) {
 			return
 		}
 		p.rd.Add(int64(HeaderSize + len(f.Payload)))
+		if f.Type == FrameHello {
+			// Health ping from the client: bounce it back on THIS pipe so the
+			// client can tell a live pipe from a zombie room (one that accepts
+			// the client's writes locally but whose SFU silently drops them).
+			_ = p.write(f)
+			continue
+		}
 		sess.route(f)
 	}
 }

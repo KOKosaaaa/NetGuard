@@ -63,10 +63,57 @@ class StripeFlow(
 
     @Volatile private var writerThread: Thread? = null
     @Volatile private var pumpThread: Thread? = null
+    @Volatile private var rtxThread: Thread? = null
 
     fun run() {
         writerThread = Thread({ s2cWriter() }, "stripe-s2c-$id").apply { isDaemon = true; start() }
         pumpThread = Thread({ c2sPump() }, "stripe-c2s-$id").apply { isDaemon = true; start() }
+        rtxThread = Thread({ c2sRetransmit() }, "stripe-rtx-$id").apply { isDaemon = true; start() }
+    }
+
+    /**
+     * The timer backstop the c2s doc always called for but that was missing:
+     * onPipeDead only resends when a pipe's CONNECTION closes, but a Telemost
+     * room often goes ZOMBIE — librelay still accepts our writes locally (so the
+     * pipe never errors, never marked dead, no death event) while the SFU
+     * silently drops them. The chunks striped onto it sit unacked forever and
+     * the flow stalls to zero with nothing to trigger a resend. So we watch the
+     * server's cumulative Ack (txBase): if it stops advancing while chunks are
+     * still unacked, we Go-Back-N resend the whole unacked window across the
+     * live pipes (the server dedups by offset). Bounded — only after sustained
+     * no-progress, then a full window's wait before the next round — so a
+     * merely-slow Ack never storms. Mirrors the exit-side stripe-server fix.
+     */
+    private fun c2sRetransmit() {
+        var lastBase = -1L
+        var stalls = 0
+        try {
+            while (!closed.get()) {
+                Thread.sleep(200)
+                val resend: List<TxChunk>
+                val base: Long
+                val rfin: Boolean
+                val fs: Long
+                lock.withLock {
+                    base = txBase
+                    resend = ArrayList(unacked)
+                    rfin = finReached
+                    fs = finSeq
+                }
+                if (resend.isEmpty()) { lastBase = base; stalls = 0; continue }
+                if (base != lastBase) { lastBase = base; stalls = 0; continue }
+                stalls++
+                if (stalls < 3) continue // ~600ms of zero Ack progress with data out
+                stalls = 0 // resend once, then require another stall window
+                for (c in resend) {
+                    val pid = mux.send(StripeFrame(StripeProtocol.DATA, id, c.off, c.data))
+                    lock.withLock { c.pid = pid }
+                }
+                if (rfin) mux.send(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
+            }
+        } catch (_: InterruptedException) {
+        } catch (_: Exception) {
+        }
     }
 
     /** Called from pipe-reader threads. Never blocks on the app socket. */
@@ -232,6 +279,7 @@ class StripeFlow(
         s2cQueue.offer(POISON)
         writerThread?.interrupt()
         pumpThread?.interrupt()
+        rtxThread?.interrupt()
         try { client.close() } catch (_: Exception) {}
         mux.dropFlow(id)
     }
