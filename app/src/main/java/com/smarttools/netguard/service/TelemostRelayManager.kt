@@ -32,10 +32,9 @@ import java.util.concurrent.TimeUnit
  * aggregate bandwidth, while a single big stream is still capped at one
  * Telemost room's per-stream limit.
  */
-// TELEMOST_MULTI_CLIENT gates WLB_CARRIER_MUX on the librelay joiners (multi-
-// client: several users share one room). MUST match the server creators
-// (agent telemostMultiClient) - mux<->single-client framing is incompatible.
-// Default false (one user per room). Flip both (app + agent) together.
+// Gates WLB_CARRIER_MUX (several users share one room). MUST match the server
+// creators (agent telemostMultiClient) - mux<->single-client framing is
+// incompatible, so flip both together. Default false = one user per room.
 private const val TELEMOST_MULTI_CLIENT = false
 
 class TelemostRelayManager(
@@ -49,10 +48,8 @@ class TelemostRelayManager(
         private const val SIGNALING_PORT_BASE = 9001
         private const val INTERNAL_SOCKS_BASE = 38000
 
-        // Pool of plausible Russian first names. Picked at random per join so the
-        // device appears in Telemost participant lists as a normal user, not as
-        // "NetGuard" (which would leak the project name and the bypass technique
-        // to anyone observing the room).
+        // Random Russian name per join so the device shows as a normal user in
+        // participant lists, not "NetGuard" (OpSec: don't leak the technique).
         private val BOT_NAMES = arrayOf(
             "Гоша", "Миша", "Дмитрий", "Александр", "Иван", "Сергей",
             "Андрей", "Николай", "Алексей", "Виктор", "Олег", "Павел",
@@ -66,11 +63,18 @@ class TelemostRelayManager(
     }
 
     private val instances = mutableListOf<RelayInstance>()
-    // The in-flight room-join coroutines from the current start(). stop() cancels
-    // them so a repeated start() (connect retry / failover) can't leave orphan
-    // librelay processes spawning in the background — that was inflating a 6-room
-    // profile to 9+ relays (extra dead pipes that never reach a live room).
+    // In-flight room-join coroutines from the current start(); stop() cancels
+    // them so a repeated start() can't leave orphan librelay processes (which
+    // was inflating a 6-room profile to 9+ relays).
     private var spawnDeferreds: List<Deferred<RelayInstance?>> = emptyList()
+    // Every RelayInstance the current start() created, tracked from the moment
+    // of creation (before its librelay process spawns). `instances` only holds
+    // grace-window joiners; a straggler or failed join still spawned a process,
+    // and if it never entered `instances` the old stop() left it - plus its
+    // respawning watchdog - running forever. Across trigger/reconnect cycles
+    // these piled up (~30 orphan WebRTC stacks seen cooking the CPU with the VPN
+    // already off). stop() kills everything here, so no process outlives a stop.
+    private val allInstances = java.util.Collections.synchronizedList(mutableListOf<RelayInstance>())
     private var lb: SocksRoundRobinLb? = null
     private var stripeMux: StripeMux? = null
 
@@ -78,12 +82,9 @@ class TelemostRelayManager(
     fun process(): Process? = instances.firstOrNull()?.process
 
     /**
-     * How many relay processes are currently alive. The tunnel watchdog tears
-     * down only when this hits zero (every room dead), NOT on a single relay's
-     * death — a dead room is recovered by its per-relay watchdog and tolerated
-     * by the LB/striping mux, so killing the whole tunnel for one room is wrong.
-     * Returns 1 on a concurrent-modification race (start/stop mid-iteration) so
-     * we never tear down spuriously; the next poll re-reads.
+     * Live relay count. The tunnel watchdog tears down only when this hits zero
+     * (a single dead room self-recovers and is tolerated by the LB/mux). Returns
+     * 1 on a concurrent-modification race so we never tear down spuriously.
      */
     fun aliveCount(): Int = try {
         instances.count { it.process?.isAlive == true }
@@ -108,10 +109,8 @@ class TelemostRelayManager(
         socksPass: String,
         scope: CoroutineScope,
         timeoutMs: Long = 30_000,
-        // Opt-in: when true, fan out with the striping mux (one flow split
-        // across ALL rooms) instead of the round-robin LB (one flow pinned to
-        // one room). Requires the stripe-server deployed on the exit. Default
-        // false keeps the proven round-robin path untouched.
+        // Opt-in: fan out with the striping mux (one flow split across ALL
+        // rooms) instead of round-robin LB. Requires stripe-server on the exit.
         useStriping: Boolean = false,
         stripePort: Int = 38500
     ): Boolean {
@@ -124,35 +123,35 @@ class TelemostRelayManager(
             return false
         }
 
-        // Spawn relays in PARALLEL (was serial, which left slower rooms
-        // un-joined within the timeout — only 3/6 of a multi-x6 would come up,
-        // halving throughput). Each relay now gets the FULL timeout instead of
-        // timeout/N, and a small per-index stagger avoids hammering Yandex's
-        // signaling API in one burst while still overlapping the ~2-5s joins.
+        // Spawn relays in parallel (serial left slow rooms un-joined within the
+        // timeout - only 3/6 came up). Each gets the FULL timeout; a per-index
+        // stagger avoids hammering Yandex's signaling API in one burst.
         val perRelayTimeout = timeoutMs.coerceAtLeast(8_000L)
-        // Launch all relays concurrently on the service scope (so stragglers
-        // keep going after we return). Each returns its instance once joined.
-        val deferreds = links.mapIndexed { i, link ->
+        // Create + register every instance synchronously BEFORE spawning, so even
+        // a straggler or a join cancelled mid-spawn is in allInstances and stop()
+        // will kill its process (orphan-relay / overheating fix).
+        val pending = links.mapIndexed { i, link ->
+            RelayInstance(
+                idx = i,
+                joinLink = link,
+                nativeLibDir = nativeLibDir,
+                socksPort = INTERNAL_SOCKS_BASE + i,
+                signalingPort = SIGNALING_PORT_BASE + i,
+                socksUser = socksUser,
+                socksPass = socksPass,
+                onLog = { line -> onLog("[#${i + 1}] $line") },
+                onStatus = onStatus,
+                onTunnelLost = onTunnelLost
+            ).also { allInstances.add(it) }
+        }
+        val deferreds = pending.mapIndexed { i, inst ->
             scope.async(Dispatchers.IO) {
-                val inst = RelayInstance(
-                    idx = i,
-                    joinLink = link,
-                    nativeLibDir = nativeLibDir,
-                    socksPort = INTERNAL_SOCKS_BASE + i,
-                    signalingPort = SIGNALING_PORT_BASE + i,
-                    socksUser = socksUser,
-                    socksPass = socksPass,
-                    onLog = { line -> onLog("[#${i + 1}] $line") },
-                    onStatus = onStatus,
-                    onTunnelLost = onTunnelLost
-                )
                 delay(i * 250L) // gentle stagger, not serial
                 val ok = try {
                     inst.start(scope, perRelayTimeout)
                 } catch (e: Throwable) {
-                    // Cancelled (a newer start()/stop() fired) or failed mid-spawn:
-                    // kill the just-spawned process so it doesn't linger as an
-                    // orphan relay. Rethrow to keep cancellation semantics.
+                    // Cancelled or failed mid-spawn: kill the process so it
+                    // doesn't linger as an orphan. Rethrow to keep cancellation.
                     inst.stop()
                     throw e
                 }
@@ -160,10 +159,8 @@ class TelemostRelayManager(
             }
         }
         spawnDeferreds = deferreds
-        // Bind the LB as soon as everyone's done OR a grace window elapses —
-        // we do NOT wait for the slowest/dead room (that's what made connect
-        // take ~timeout seconds). Whoever joined within the grace forms the
-        // pool; late joiners are discarded so the pool stays stable.
+        // Form the pool from whoever joined within a grace window; don't wait
+        // for the slowest/dead room (that made connect take ~timeout seconds).
         val graceMs = minOf(timeoutMs, 12_000L)
         withTimeoutOrNull(graceMs) { deferreds.awaitAll() }
         instances.addAll(deferreds.mapNotNull { if (it.isCompleted) it.getCompleted() else null })
@@ -207,15 +204,19 @@ class TelemostRelayManager(
     }
 
     fun stop() {
-        // Cancel any in-flight room-join coroutines from a prior start() FIRST,
-        // so they don't keep spawning librelay processes after we tear down.
+        // Cancel in-flight joins FIRST so they don't keep spawning processes.
         spawnDeferreds.forEach { it.cancel() }
         spawnDeferreds = emptyList()
         try { lb?.stop() } catch (_: Exception) {}
         lb = null
         try { stripeMux?.stop() } catch (_: Exception) {}
         stripeMux = null
-        instances.forEach { it.stop() }
+        // Kill EVERY spawned relay, not just the grace-window joiners in
+        // `instances` - stragglers/failed joins also spawned a librelay process
+        // and must not outlive the tunnel (orphan-relay / overheating fix).
+        val all = synchronized(allInstances) { ArrayList(allInstances) }
+        all.forEach { try { it.stop() } catch (_: Exception) {} }
+        allInstances.clear()
         instances.clear()
     }
 
@@ -246,40 +247,38 @@ class TelemostRelayManager(
         /** Spawns the librelay subprocess + stdout reader. Re-usable by the
          *  watchdog for respawn. Returns false if the process couldn't start. */
         private fun spawnProcess(scope: CoroutineScope): Boolean {
+            // Don't spawn if stop() already fired - keeps the watchdog from
+            // resurrecting a process as the tunnel is torn down (orphan fix).
+            if (stopped) return false
             val bin = File(nativeLibDir, "librelay.so")
             if (!bin.exists()) {
                 onLog("librelay.so not found at ${bin.absolutePath}")
                 return false
             }
-            // No SOCKS5 auth on upstreams: the LB is byte-transparent and any
-            // auth attempt can be fragmented across pump reads, causing the
-            // upstream's NegotiateAuth to fail. All sockets are 127.0.0.1
-            // anyway, so auth would only add bug surface without security gain.
+            // No SOCKS5 auth on upstreams: auth can fragment across pump reads
+            // and fail; all sockets are 127.0.0.1 so it adds no security.
             val pb = ProcessBuilder(
                 bin.absolutePath,
                 "--mode", "telemost-headless-joiner",
                 "--ws-port", signalingPort.toString(),
                 "--socks-port", socksPort.toString()
             )
-            // Valid-VP8 carrier mode: frames are real VP8 tag+first-partition
-            // prefix + AEAD data, decodable by the SFU so it forwards at full
-            // video bitrate (~2.5 Mbit/room vs ~1 legacy). Server creators MUST
-            // also run carrier (same env); legacy <-> carrier is incompatible.
+            // Valid-VP8 carrier: frames are real VP8 prefix + AEAD data, so the
+            // SFU forwards at full bitrate (~2.5 Mbit/room). Server creators
+            // MUST run carrier too; legacy <-> carrier is incompatible.
             pb.environment()["WLB_VALID_VP8_TUNNEL"] = "1"
-            // Multi-client: several users share one Telemost room (each demuxed
-            // by epoch into its own relay session). MUST match the server
-            // creators' WLB_CARRIER_MUX (agent telemostMultiClient) - mux<->
-            // single-client framing is incompatible, so flip both together.
-            // Default off = current one-user-per-room behaviour.
             if (TELEMOST_MULTI_CLIENT) pb.environment()["WLB_CARRIER_MUX"] = "1"
-            // ARQ disabled: multi-flow AIMD over a shared link didn't converge
-            // (overshoot/retransmit storms). Reverted to plain carrier (stable
-            // ~6 Mbit/room, no collapse). ARQ code stays env-gated for future.
             pb.redirectErrorStream(true)
             val proc = try {
                 pb.start()
             } catch (e: Exception) {
                 onLog("spawn failed: ${e.message}")
+                return false
+            }
+            // stop() may have raced in during pb.start() - kill the fresh
+            // process instead of tracking it, or it orphans.
+            if (stopped) {
+                try { proc.destroyForcibly() } catch (_: Exception) {}
                 return false
             }
             sawReady = false
@@ -316,22 +315,16 @@ class TelemostRelayManager(
             return true
         }
 
-        /** Per-relay watchdog: respawns this relay if its process dies or its
-         *  tunnel stays lost — so one dead Telemost room recovers on its own
-         *  instead of permanently dropping throughput (the old code only
-         *  watched relay #0 and merely logged TUNNEL_LOST). */
+        /** Per-relay watchdog: respawns this relay if its process dies, so one
+         *  dead room recovers on its own instead of dropping throughput. */
         private fun launchWatchdog(scope: CoroutineScope) {
             scope.launch(Dispatchers.IO) {
                 while (!stopped) {
                     delay(3_000)
                     if (stopped) break
-                    // Respawn ONLY when the process actually died — that relay
-                    // is already gone, so reviving it can only help and won't
-                    // disrupt a live session. We deliberately DON'T respawn on
-                    // mere TUNNEL_LOST: Yandex room churn is usually transient
-                    // and self-heals, and killing+rejoining a still-alive relay
-                    // mid-transfer tore down active connections (showed up as
-                    // the VPN dropping to "reconnecting" during a heavy upload).
+                    // Respawn ONLY on actual process death. NOT on mere
+                    // TUNNEL_LOST: room churn self-heals, and rejoining a live
+                    // relay mid-transfer tore down active connections.
                     if (process?.isAlive != true) {
                         if (stopped) break
                         onLog("relay #${idx + 1} process died — respawning")
@@ -409,11 +402,9 @@ class TelemostRelayManager(
             tunnelConnected = false
             sawReady = false
             if (p != null) {
-                // Graceful leave: SIGTERM first so librelay self-kicks off the
-                // Telemost SFU (drops our participant session = no ghost left in
-                // the room). Then give a short grace window for that self-kick
-                // HTTP to land before SIGKILL. Done on a daemon thread so
-                // stopping N relays stays non-blocking (no Nx1.5s serial stall).
+                // Graceful leave: SIGTERM lets librelay self-kick off the SFU
+                // (no ghost left in the room) before SIGKILL. On a daemon thread
+                // so stopping N relays stays non-blocking.
                 try { p.destroy() } catch (_: Exception) {}
                 Thread {
                     try {
