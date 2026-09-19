@@ -38,7 +38,17 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // Application.onCreate() runs once per OS process. xray lives in the
+        // isolated ":xray" process (XrayService): it only needs the libXray JNI
+        // bindings, NOT the main-app bootstrap below. Running that bootstrap in
+        // :xray crashed it — WorkManager.getInstance() throws there (WorkManager
+        // is not initialized in a secondary process), which sent :xray into a
+        // start/crash loop and the tunnel never came up. Skip everything but the
+        // library load for any non-main process.
+        if (!isMainProcess()) return
+
         migrateStripingDefault()
+        migrateAdaptiveRoutingDefault()
 
         // Apply Dynamic Colors before any UI is created (Android 12+)
         val settings = loadSettings()
@@ -108,6 +118,25 @@ class App : Application() {
      * flip it back off once so those installs fall back to the reliable
      * round-robin path. Users can still re-enable it manually in Settings.
      */
+    /**
+     * True when this is the main app process (not the ":xray" host process).
+     * Reads /proc/self/cmdline (reliable on every API level) rather than the
+     * API-28+ Application.getProcessName(). A secondary process's cmdline is
+     * "<package>:<suffix>"; the main process's is exactly the package name.
+     * Fails open to main behaviour so a read error can never brick the real app.
+     */
+    private fun isMainProcess(): Boolean {
+        val raw = try {
+            java.io.File("/proc/self/cmdline").readBytes().toString(Charsets.UTF_8)
+        } catch (_: Throwable) {
+            return true
+        }
+        // The main process's cmdline is exactly the package name; secondary
+        // processes (here ":xray") carry a ':' in their name. Checking for ':'
+        // avoids parsing the NUL-padded buffer entirely.
+        return !raw.contains(':')
+    }
+
     private fun migrateStripingDefault() {
         val prefs = getPreferences()
         if (!prefs.getBoolean("striping_migration_v2", false)) {
@@ -118,11 +147,22 @@ class App : Application() {
         }
     }
 
+    private fun migrateAdaptiveRoutingDefault() {
+        val prefs = getPreferences()
+        if (!prefs.getBoolean("adaptive_routing_default_v1", false)) {
+            prefs.edit().apply {
+                if (prefs.getString("routing_mode", null) != RoutingMode.DIRECT.name)
+                    putString("routing_mode", RoutingMode.AUTO.name)
+                putBoolean("adaptive_routing_default_v1", true)
+            }.apply()
+        }
+    }
+
     fun loadSettings(): AppSettings {
         val prefs = getPreferences()
         return AppSettings(
             routingMode = safeEnum(
-                prefs.getString("routing_mode", null), RoutingMode.GLOBAL_PROXY
+                prefs.getString("routing_mode", null), RoutingMode.AUTO
             ),
             primaryDns = prefs.getString("primary_dns", "1.1.1.1") ?: "1.1.1.1",
             secondaryDns = prefs.getString("secondary_dns", "8.8.8.8") ?: "8.8.8.8",
@@ -160,7 +200,9 @@ class App : Application() {
             ),
             autoBypassRuPackages = prefs.getBoolean("auto_bypass_ru_packages", false),
             expertMode = prefs.getBoolean("expert_mode", false),
-            telemostStriping = prefs.getBoolean("telemost_striping", false)
+            telemostStriping = prefs.getBoolean("telemost_striping", false),
+            autoSwitchOnThrottle = prefs.getBoolean("auto_switch_on_throttle", true),
+            healthCheckServices = prefs.getStringSet("health_check_services", com.smarttools.netguard.service.HealthTarget.defaults)?.toSet() ?: com.smarttools.netguard.service.HealthTarget.defaults
         )
     }
 
@@ -235,6 +277,8 @@ class App : Application() {
             putBoolean("auto_bypass_ru_packages", settings.autoBypassRuPackages)
             putBoolean("expert_mode", settings.expertMode)
             putBoolean("telemost_striping", settings.telemostStriping)
+            putBoolean("auto_switch_on_throttle", settings.autoSwitchOnThrottle)
+            putStringSet("health_check_services", settings.healthCheckServices)
             apply()
         }
     }

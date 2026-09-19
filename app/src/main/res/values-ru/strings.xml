@@ -128,6 +128,8 @@
     <string name="srv_rule_value_hint">Значение (домен / cidr / geosite / geoip)</string>
     <string name="srv_refresh">Обновить</string>
     <string name="routing">Маршрутизация</string>
+    <string name="routing_auto">Автоматически для сайтов</string>
+    <string name="routing_auto_desc">Первое открытие идёт по сохранённому маршруту или текущему VPN. Доступ напрямую и через VPN сравнивается в фоне, результат хранится неделю. Открытый сеанс сохраняет маршрут; следующий сеанс сможет использовать лучший. При смене сети или сервера проверка повторяется. Прямой доступ использует IP вашего оператора. Скрытые имена сайтов и HTTP/3 используют обычный маршрут. Изменение режима применяется при следующем подключении.</string>
     <string name="routing_global">Глобальный прокси</string>
     <string name="routing_rules">По правилам</string>
     <string name="routing_direct">Прямое соединение</string>
@@ -392,6 +394,8 @@
     <string name="telemost_capacity_unknown">Лимит сервера проверится после первого подключения</string>
     <string name="telemost_striping">Striping Telemost (эксперимент)</string>
     <string name="telemost_striping_desc">Распределяет каждое соединение по ВСЕМ комнатам Telemost, чтобы одна большая загрузка шла на их суммарной скорости. Нужен обновлённый сервер-эксит. Если загрузки зависают - выключи.</string>
+    <string name="auto_switch_throttle">Автоматический выбор сервера</string>
+    <string name="auto_switch_throttle_desc">Меняет сервер при устойчивой потере связи с выбранными сервисами, если нет входящего трафика. Сбой одного сервиса не прерывает работающий VPN. Для проверки нужны минимум два сервиса; пауза между переключениями — 5 минут.</string>
     <string name="save_logs_to_file">Сохранить логи в файл</string>
     <string name="logs_saved">Логи сохранены: %1$s</string>
     <string name="logs_save_failed">Не удалось сохранить логи: %1$s</string>
@@ -464,4 +468,9 @@
     <string name="srv_sni_help">Выбери крупный сайт, который точно не блокируется. Реалити-маска заставит провайдера думать, что ты подключаешься к нему.</string>
     <string name="srv_sni_help_geo">Если сервер за границей — лучше международный сайт (Cloudflare/Microsoft). Российский SNI на зарубежный VPS провайдер режет на лету.</string>
     <string name="srv_sni_title">Под какой сайт маскироваться</string>
+    <string name="health_check_services">Проверяемые сервисы</string>
+    <string name="subscription_timeout_error">Сервер подписки не ответил вовремя. Попробуйте другую сеть или VPN-сервер.</string>
+    <string name="subscription_network_error">Не удалось загрузить подписку. Проверьте соединение или попробуйте другой VPN-сервер.</string>
+    <string name="subscription_format_error">Сервер ответил, но не вернул поддерживаемые профили.</string>
+    <string name="subscription_size_error">Ответ подписки превышает 2 МБ.</string>
 </resources>

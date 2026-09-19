@@ -1,7 +1,7 @@
 package com.smarttools.netguard.model
 
 data class AppSettings(
-    val routingMode: RoutingMode = RoutingMode.GLOBAL_PROXY,
+    val routingMode: RoutingMode = RoutingMode.AUTO,
     val primaryDns: String = "1.1.1.1",
     val secondaryDns: String = "8.8.8.8",
     val dohEnabled: Boolean = false,
@@ -66,10 +66,21 @@ data class AppSettings(
      * black-holes on mobile carriers (pipes don't reach the stripe-server), so
      * round-robin is the safe default. Toggle exposed under Expert mode.
      */
-    val telemostStriping: Boolean = false
+    val telemostStriping: Boolean = false,
+    /**
+     * Auto-switch to a different-endpoint server when the running tunnel is
+     * detected as ТСПУ-throttled (technically Connected but the DPI strangles
+     * throughput to near zero). Default ON: this is the whole point of the
+     * feature, and the detector is conservative (probe-on-suspicion + a
+     * tunnel-bypassing radio control so a weak signal never triggers a switch).
+     * See [com.smarttools.netguard.service.ThrottleDetector].
+     */
+    val autoSwitchOnThrottle: Boolean = true,
+    val healthCheckServices: Set<String> = com.smarttools.netguard.service.HealthTarget.defaults
 )
 
 enum class RoutingMode {
+    AUTO,
     GLOBAL_PROXY,
     RULE_BASED,
     DIRECT

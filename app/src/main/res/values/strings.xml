@@ -122,6 +122,8 @@
     <string name="telemost_capacity_unknown">Server capacity will be checked after the first connect</string>
     <string name="telemost_striping">Telemost striping (experimental)</string>
     <string name="telemost_striping_desc">Split each connection across ALL Telemost rooms so one big download uses their combined speed. Needs the exit server updated. If downloads stall, turn this off.</string>
+    <string name="auto_switch_throttle">Automatic server selection</string>
+    <string name="auto_switch_throttle_desc">Changes server after a sustained outage across selected services with no incoming traffic. A single service failure keeps the VPN connected. Select at least two services; automatic health switches are at least 5 minutes apart.</string>
     <string name="save_logs_to_file">Save logs to file</string>
     <string name="logs_saved">Logs saved: %1$s</string>
     <string name="logs_save_failed">Could not save logs: %1$s</string>
@@ -257,6 +259,8 @@
 
     <!-- Settings -->
     <string name="routing">Routing</string>
+    <string name="routing_auto">Automatic for websites</string>
+    <string name="routing_auto_desc">The first visit opens using the saved route or the current VPN. Direct and VPN access are compared in the background, with results kept for a week. Open sessions keep their route; a later session can use the measured winner. A network or server change triggers a new check. Direct access uses your provider IP. Hidden site names and HTTP/3 use the normal route. Mode changes apply on the next connection.</string>
     <string name="routing_global">Global Proxy</string>
     <string name="routing_rules">Rule-based</string>
     <string name="routing_direct">Direct</string>
@@ -517,4 +521,9 @@
     <!-- About -->
     <string name="created_by">Created by KOKOS</string>
     <string name="github_url">https://github.com/KOKosaaaa</string>
+    <string name="health_check_services">Services to check</string>
+    <string name="subscription_timeout_error">The subscription server did not respond in time. Try another network or VPN server.</string>
+    <string name="subscription_network_error">Could not download the subscription. Check the connection or try another VPN server.</string>
+    <string name="subscription_format_error">The server responded but returned no supported profiles.</string>
+    <string name="subscription_size_error">The subscription response exceeds 2 MB.</string>
 </resources>

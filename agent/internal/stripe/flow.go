@@ -12,9 +12,11 @@ import (
 // own and Telemost rooms drop often). pid is the id of the pipe it was last
 // sent on (-1 = not yet sent), so a pipe death resends only its own chunks.
 type txChunk struct {
-	off  uint64
-	data []byte
-	pid  int // pipe id this chunk was last sent on (-1 = unsent), for dead-pipe resend
+	off     uint64
+	data    []byte
+	sentAt  time.Time
+	retried bool
+	pid     int // pipe id this chunk was last sent on (-1 = unsent), for dead-pipe resend
 }
 
 // flow is one application connection multiplexed over the session's pipes.
@@ -32,6 +34,7 @@ type flow struct {
 	id   uint32
 	sess *session
 
+	destMu   sync.Mutex
 	dest     net.Conn
 	dialOnce sync.Once
 	dialErr  error
@@ -45,8 +48,13 @@ type flow struct {
 	rxFinal     uint64
 	rxFinSet    bool
 	lastAckSent uint64
+	rxDelivered atomic.Uint64
+	ackWanted   atomic.Bool
+	queuedBytes atomic.Int64
 
 	// tx (s2c) state — guarded by txMu/txCond.
+	rto        retransmissionTimer
+	nextRetry  time.Time
 	txMu       sync.Mutex
 	txCond     *sync.Cond
 	txBase     uint64 // cumulative bytes acked by the client (window left edge)
@@ -101,50 +109,38 @@ func (fl *flow) start() {
 // a zombie. Bounded: we only resend after sustained no-progress, then wait a
 // full window again before the next round, so a merely-slow Ack never storms.
 func (fl *flow) txRetransmit() {
-	const tick = 200 * time.Millisecond
-	const stallTicks = 3 // ~600ms of zero Ack progress with data outstanding
-	t := time.NewTicker(tick)
+	t := time.NewTicker(200 * time.Millisecond)
 	defer t.Stop()
-	var lastBase uint64
-	stalls := 0
+	var lastAck time.Time
 	for {
 		select {
 		case <-fl.closed:
 			return
-		case <-t.C:
+		case now := <-t.C:
+			if now.Sub(lastAck) >= 700*time.Millisecond && fl.ackWanted.Swap(false) {
+				fl.sess.broadcast(Frame{Type: FrameAck, FlowID: fl.id, Seq: fl.rxDelivered.Load()})
+				lastAck = now
+			}
 			fl.txMu.Lock()
-			base := fl.txBase
-			resend := append([]*txChunk(nil), fl.unacked...)
-			resendFin := fl.finReached
+			var ch *txChunk
+			if len(fl.unacked) > 0 && !now.Before(fl.nextRetry) && now.Sub(fl.unacked[0].sentAt) >= fl.rto.current() {
+				ch = fl.unacked[0]
+				ch.retried = true
+				fl.rto.backoff()
+				fl.nextRetry = now.Add(fl.rto.current())
+			}
+			fin := fl.finReached
 			finSeq := fl.finSeq
 			fl.txMu.Unlock()
-
-			if len(resend) == 0 {
-				lastBase = base
-				stalls = 0
-				continue
-			}
-			if base != lastBase {
-				// Progress is happening — not stalled.
-				lastBase = base
-				stalls = 0
-				continue
-			}
-			stalls++
-			if stalls < stallTicks {
-				continue
-			}
-			stalls = 0 // resend once, then require another stall window
-			for _, ch := range resend {
+			if ch != nil {
 				pid := fl.sess.send(Frame{Type: FrameData, FlowID: fl.id, Seq: ch.off, Payload: ch.data})
 				fl.txMu.Lock()
 				ch.pid = pid
 				fl.txMu.Unlock()
+				if fin {
+					fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: finSeq})
+				}
 			}
-			if resendFin {
-				fl.sess.send(Frame{Type: FrameFin, FlowID: fl.id, Seq: finSeq})
-			}
-			fl.touch()
 		}
 	}
 }
@@ -170,9 +166,19 @@ func (fl *flow) deliver(f Frame) {
 	case FrameOpen:
 		fl.setDest(string(f.Payload))
 	case FrameData, FrameFin:
+		if fl.isClosed() {
+			return
+		}
+		if fl.queuedBytes.Add(int64(len(f.Payload))) > MaxReorder {
+			fl.queuedBytes.Add(-int64(len(f.Payload)))
+			fl.abort()
+			return
+		}
 		select {
 		case fl.inbound <- f:
-		case <-fl.closed:
+		default:
+			fl.queuedBytes.Add(-int64(len(f.Payload)))
+			fl.abort()
 		}
 	case FrameAck:
 		fl.onAck(f.Seq)
@@ -185,7 +191,19 @@ func (fl *flow) deliver(f Frame) {
 // retransmit buffer. Acks are cumulative, so we take the max.
 func (fl *flow) onAck(cum uint64) {
 	fl.txMu.Lock()
+	if cum > fl.txNext {
+		fl.txMu.Unlock()
+		fl.abort()
+		return
+	}
 	if cum > fl.txBase {
+		for _, ch := range fl.unacked {
+			if !ch.retried && ch.off+uint64(len(ch.data)) <= cum {
+				fl.rto.sample(time.Since(ch.sentAt))
+				break
+			}
+		}
+		fl.nextRetry = time.Now().Add(fl.rto.current())
 		fl.txBase = cum
 		i := 0
 		for i < len(fl.unacked) && fl.unacked[i].off+uint64(len(fl.unacked[i].data)) <= fl.txBase {
@@ -222,7 +240,14 @@ func (fl *flow) setDest(addr string) {
 			if tc, ok := conn.(*net.TCPConn); ok {
 				_ = tc.SetNoDelay(true)
 			}
+			fl.destMu.Lock()
+			if fl.isClosed() {
+				fl.destMu.Unlock()
+				conn.Close()
+				return
+			}
 			fl.dest = conn
+			fl.destMu.Unlock()
 			close(fl.dialed)
 			go fl.txReader()
 		}()
@@ -248,6 +273,7 @@ func (fl *flow) rxLoop() {
 	for {
 		select {
 		case f := <-fl.inbound:
+			fl.queuedBytes.Add(-int64(len(f.Payload)))
 			switch f.Type {
 			case FrameData:
 				out, err := fl.rx.Insert(f.Seq, f.Payload)
@@ -262,7 +288,8 @@ func (fl *flow) rxLoop() {
 					}
 					fl.touch()
 				}
-				fl.maybePos()
+				fl.rxDelivered.Store(fl.rx.Delivered())
+				fl.ackWanted.Store(true)
 				if fl.checkRxFin() {
 					return
 				}
@@ -284,15 +311,6 @@ func (fl *flow) rxLoop() {
 // dead pipe's still-unconfirmed chunks; it does NOT drive flow control (the
 // pipes' own backpressure does that). Broadcast so a dead pipe can't swallow
 // it; at <2/sec the cost is negligible.
-func (fl *flow) maybePos() {
-	now := nowMs()
-	if now-fl.lastPosMs < posIntervalMs {
-		return
-	}
-	fl.lastPosMs = now
-	fl.sess.broadcast(Frame{Type: FrameAck, FlowID: fl.id, Seq: fl.rx.Delivered()})
-}
-
 func (fl *flow) checkRxFin() bool {
 	if !fl.rxFinSet || fl.rx.Delivered() != fl.rxFinal {
 		return false
@@ -331,7 +349,7 @@ func (fl *flow) txReader() {
 			fl.txMu.Lock()
 			off := fl.txNext
 			fl.txNext += uint64(n)
-			ch := &txChunk{off: off, data: data, pid: -1}
+			ch := &txChunk{off: off, data: data, pid: -1, sentAt: time.Now()}
 			fl.unacked = append(fl.unacked, ch)
 			fl.txMu.Unlock()
 			// Small flows ride one pinned pipe (reliable, no cross-pipe gap);
@@ -343,6 +361,14 @@ func (fl *flow) txReader() {
 			if off < PromoteThreshold {
 				pid = fl.sess.sendPinned(&fl.homePid, f)
 			} else {
+				pid = fl.sess.send(f)
+			}
+			for pid < 0 && !fl.isClosed() {
+				select {
+				case <-fl.closed:
+					return
+				case <-time.After(20 * time.Millisecond):
+				}
 				pid = fl.sess.send(f)
 			}
 			fl.txMu.Lock()
@@ -377,6 +403,7 @@ func (fl *flow) onPipeDead(deadID int) {
 	var resend []*txChunk
 	for _, ch := range fl.unacked {
 		if ch.pid == deadID || ch.pid == -1 {
+			ch.retried = true
 			resend = append(resend, ch)
 		}
 	}
@@ -427,7 +454,14 @@ func (fl *flow) reaper() {
 		case <-fl.closed:
 			return
 		case <-t.C:
-			if time.Since(time.Unix(0, fl.lastProgress())) > flowIdle {
+			fl.txMu.Lock()
+			pending := len(fl.unacked) > 0
+			fl.txMu.Unlock()
+			idleLimit := 30 * time.Minute
+			if pending || len(fl.inbound) > 0 {
+				idleLimit = flowIdle
+			}
+			if time.Since(time.Unix(0, fl.lastProgress())) > idleLimit {
 				fl.sess.logf("stripe: flow %d idle-reaped", fl.id)
 				fl.abort()
 				return
@@ -447,9 +481,11 @@ func (fl *flow) close() {
 		fl.txMu.Lock()
 		fl.txCond.Broadcast()
 		fl.txMu.Unlock()
+		fl.destMu.Lock()
 		if fl.dest != nil {
 			_ = fl.dest.Close()
 		}
+		fl.destMu.Unlock()
 		fl.sess.dropFlow(fl.id)
 	})
 }

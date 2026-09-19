@@ -32,7 +32,7 @@ object StripeProtocol {
     // No window/per-byte Ack: the room pipes are already reliable + flow-
     // controlled, so we only reorder across pipes and send a light position
     // report. MUST match the Go server (server.go).
-    const val MAX_REORDER: Int = 16 * 1024 * 1024
+    const val MAX_REORDER: Int = 1024 * 1024
     const val POS_INTERVAL_MS: Long = 700
     // A flow's first PROMOTE_THRESHOLD bytes ride one pinned pipe (reliable,
     // like round-robin) so small/interactive flows (Telegram) just work; only

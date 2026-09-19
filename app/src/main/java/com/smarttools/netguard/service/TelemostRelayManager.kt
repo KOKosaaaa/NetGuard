@@ -1,5 +1,6 @@
 package com.smarttools.netguard.service
 
+import android.os.SystemClock
 import android.util.Log
 import com.smarttools.netguard.model.ServerProfile
 import kotlinx.coroutines.CoroutineScope
@@ -9,7 +10,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.random.Random
 import org.json.JSONObject
 import java.io.BufferedWriter
 import java.io.File
@@ -47,6 +50,32 @@ class TelemostRelayManager(
         private const val TAG = "TelemostRelay"
         private const val SIGNALING_PORT_BASE = 9001
         private const val INTERNAL_SOCKS_BASE = 38000
+        // Per-relay localhost HTTP control port (hot-reload/status). relay i =
+        // CONTROL_PORT_BASE + i. Lets us tell a LIVE bot to reset its carrier
+        // state WITHOUT leaving/rejoining the call (no leave/join burst =
+        // no Yandex anti-abuse), instead of killing+respawning the process.
+        private const val CONTROL_PORT_BASE = 39000
+
+        // --- Anti-throttle pacing -------------------------------------------
+        // Yandex anti-abuse throttles the carrier tunnel when it sees a BURST of
+        // room joins/leaves under one account (e.g. rapid on/off toggling, or all
+        // N rooms rejoining at once). These spread the join events out so a
+        // connect looks like an organic user trickling in, not a bot fleet.
+        //
+        // Join stagger: relay i waits ~i*BASE + rand(0..JITTER) before joining,
+        // so 6 rooms spread over ~9s instead of one ~1.25s burst.
+        private const val JOIN_STAGGER_BASE_MS = 1_500L
+        private const val JOIN_STAGGER_JITTER_MS = 1_200L
+        // Reconnect cooldown: if start() fires within this window of the last
+        // teardown (rapid off->on), wait out the remainder first.
+        private const val RECONNECT_COOLDOWN_MS = 7_000L
+        // Respawn jitter: when the per-room watchdog restarts a dead relay, wait a
+        // random slice so several rooms dying together (network blip) don't all
+        // rejoin in the same instant.
+        private const val RESPAWN_JITTER_MS = 2_500L
+        // Monotonic time of the last stop(), kept at companion scope so a fresh
+        // manager created on reconnect still honors the cooldown across instances.
+        @Volatile private var lastStopElapsedMs = 0L
 
         // Random Russian name per join so the device shows as a normal user in
         // participant lists, not "NetGuard" (OpSec: don't leak the technique).
@@ -114,6 +143,10 @@ class TelemostRelayManager(
         useStriping: Boolean = false,
         stripePort: Int = 38500
     ): Boolean {
+        // Capture how long since the previous teardown BEFORE stop() resets it,
+        // so the reconnect cooldown measures from the user's last disconnect.
+        val sinceLastStop = if (lastStopElapsedMs == 0L) Long.MAX_VALUE
+            else SystemClock.elapsedRealtime() - lastStopElapsedMs
         stop()
         val links = profile.address.split('\n', '\r')
             .map { it.trim() }
@@ -121,6 +154,15 @@ class TelemostRelayManager(
         if (links.isEmpty()) {
             onLog("No Telemost links in profile address")
             return false
+        }
+
+        // Anti-throttle reconnect cooldown: rejoining within RECONNECT_COOLDOWN_MS
+        // of the last teardown (rapid off->on) looks like abuse to Yandex, so wait
+        // out the remainder (+jitter) before any room is touched.
+        if (sinceLastStop in 0 until RECONNECT_COOLDOWN_MS) {
+            val wait = RECONNECT_COOLDOWN_MS - sinceLastStop + Random.nextLong(JOIN_STAGGER_JITTER_MS)
+            onLog("Anti-throttle: reconnecting too soon, waiting ${wait}ms before rejoining")
+            delay(wait)
         }
 
         // Spawn relays in parallel (serial left slow rooms un-joined within the
@@ -137,6 +179,7 @@ class TelemostRelayManager(
                 nativeLibDir = nativeLibDir,
                 socksPort = INTERNAL_SOCKS_BASE + i,
                 signalingPort = SIGNALING_PORT_BASE + i,
+                controlPort = CONTROL_PORT_BASE + i,
                 socksUser = socksUser,
                 socksPass = socksPass,
                 onLog = { line -> onLog("[#${i + 1}] $line") },
@@ -146,7 +189,7 @@ class TelemostRelayManager(
         }
         val deferreds = pending.mapIndexed { i, inst ->
             scope.async(Dispatchers.IO) {
-                delay(i * 250L) // gentle stagger, not serial
+                delay(i * JOIN_STAGGER_BASE_MS + Random.nextLong(JOIN_STAGGER_JITTER_MS)) // anti-throttle stagger + jitter
                 val ok = try {
                     inst.start(scope, perRelayTimeout)
                 } catch (e: Throwable) {
@@ -161,7 +204,10 @@ class TelemostRelayManager(
         spawnDeferreds = deferreds
         // Form the pool from whoever joined within a grace window; don't wait
         // for the slowest/dead room (that made connect take ~timeout seconds).
-        val graceMs = minOf(timeoutMs, 12_000L)
+        // Grace scales with the join stagger so staggered rooms land in the pool
+        // instead of being reaped as stragglers (a reap = join+immediate-leave =
+        // exactly the churn we're trying to avoid).
+        val graceMs = minOf(timeoutMs, JOIN_STAGGER_BASE_MS * links.size + 9_000L)
         withTimeoutOrNull(graceMs) { deferreds.awaitAll() }
         instances.addAll(deferreds.mapNotNull { if (it.isCompleted) it.getCompleted() else null })
         // Reap any straggler that connects after the grace (not in the LB).
@@ -218,6 +264,42 @@ class TelemostRelayManager(
         all.forEach { try { it.stop() } catch (_: Exception) {} }
         allInstances.clear()
         instances.clear()
+        // Stamp the teardown time so the next start() can enforce the reconnect
+        // cooldown (anti-throttle for rapid on/off toggling).
+        lastStopElapsedMs = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Hot-reload every live relay's carrier state WITHOUT leaving/rejoining the
+     * calls. Each librelay exposes a localhost control port (--control-port);
+     * POSTing /reload makes it drain its send/ARQ buffers and close stale SOCKS
+     * conns IN-PLACE, keeping the same peer_id + PeerConnection. So the SFU sees
+     * no leave/join - which is exactly the burst that trips Yandex anti-abuse
+     * when a fleet restarts. Use this instead of stop()+start() to "refresh"
+     * stuck rooms. Returns how many relays acknowledged. Runs off the main thread.
+     */
+    suspend fun reloadAll(): Int = withContext(Dispatchers.IO) {
+        val targets = synchronized(allInstances) { ArrayList(allInstances) }
+        var ok = 0
+        for (inst in targets) {
+            if (inst.process?.isAlive != true) continue
+            try {
+                val conn = (java.net.URL("http://127.0.0.1:${inst.controlPort}/reload")
+                    .openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 2000
+                    readTimeout = 3000
+                }
+                val code = conn.responseCode
+                conn.inputStream.bufferedReader().use { it.readText() }
+                conn.disconnect()
+                if (code == 200) ok++
+            } catch (e: Exception) {
+                onLog("reload :${inst.controlPort} failed: ${e.message}")
+            }
+        }
+        onLog("reloadAll: $ok/${targets.size} relays reset (no rejoin)")
+        ok
     }
 
     /**
@@ -231,12 +313,18 @@ class TelemostRelayManager(
         private val nativeLibDir: String,
         val socksPort: Int,
         private val signalingPort: Int,
+        val controlPort: Int,
         private val socksUser: String,
         private val socksPass: String,
         private val onLog: (String) -> Unit,
         private val onStatus: (String) -> Unit,
         private val onTunnelLost: () -> Unit
     ) {
+        // A stream.wb.ru room link routes through the WB Stream carrier instead of
+        // Telemost: different librelay --mode + per-conn ARQ + JOIN key (roomId vs
+        // joinLink). Same relay/LB plumbing otherwise.
+        private val isWbStream = joinLink.contains("stream.wb.ru", ignoreCase = true)
+
         @Volatile var process: Process? = null
         @Volatile private var stdinWriter: BufferedWriter? = null
         @Volatile private var tunnelConnected = false
@@ -259,15 +347,38 @@ class TelemostRelayManager(
             // and fail; all sockets are 127.0.0.1 so it adds no security.
             val pb = ProcessBuilder(
                 bin.absolutePath,
-                "--mode", "telemost-headless-joiner",
+                "--mode", if (isWbStream) "wbstream-headless-joiner" else "telemost-headless-joiner",
                 "--ws-port", signalingPort.toString(),
-                "--socks-port", socksPort.toString()
+                "--socks-port", socksPort.toString(),
+                "--control-port", controlPort.toString()
             )
             // Valid-VP8 carrier: frames are real VP8 prefix + AEAD data, so the
             // SFU forwards at full bitrate (~2.5 Mbit/room). Server creators
             // MUST run carrier too; legacy <-> carrier is incompatible.
             pb.environment()["WLB_VALID_VP8_TUNNEL"] = "1"
-            if (TELEMOST_MULTI_CLIENT) pb.environment()["WLB_CARRIER_MUX"] = "1"
+            // Phone stays LIGHT (no carrier padding). Padding the phone's upload to a
+            // constant 15000B made EVERY request a heavy burst that competed with the
+            // server's padded (warm) download - two heavy streams between the same
+            // peers makes the SFU briefly cut one => choppy loading. Reliable state:
+            // only the SERVER pads (download warm), phone light. Fast-upload needs an
+            // ADAPTIVE pad (size the upload to the live transfer, not constant-full) -
+            // requires the minimum-pad bisection experiment - tracked, not shipped.
+            // Reliable carrier (ARQ): seq + NACK-driven retransmit + reorder buffer.
+            // Carrier rides a WebRTC VIDEO stream, which DROPS frames under loss - a
+            // single lost frame loses a control msg (e.g. MsgConnectOK) and the whole
+            // SOCKS connection dies (observed: SOCKS CONNECT timeout, then Telegram's
+            // TCP-retransmitted ServerHello dropped as "unknown conn" 77x). ARQ makes
+            // the data layer lossless so proxied TLS survives. MUST match the server.
+            // WB Stream uses per-conn ARQ (WLB_CARRIER_PCARQ: independent reliability
+            // per connID, no cross-conn head-of-line blocking) — MUST match the
+            // server creator. Telemost uses the global single-cursor ARQ. The WB
+            // cold-start warmup gate is applied automatically inside librelay.
+            if (isWbStream) {
+                pb.environment().remove("WLB_CARRIER_ARQ")
+                pb.environment()["WLB_CARRIER_PCARQ"] = "1"
+            } else {
+                pb.environment()["WLB_CARRIER_ARQ"] = "1"
+            }
             pb.redirectErrorStream(true)
             val proc = try {
                 pb.start()
@@ -327,6 +438,11 @@ class TelemostRelayManager(
                     // relay mid-transfer tore down active connections.
                     if (process?.isAlive != true) {
                         if (stopped) break
+                        // Jitter the rejoin so several rooms dying together (a
+                        // network blip) don't all rejoin in the same instant -
+                        // that burst is what trips Yandex's anti-abuse throttle.
+                        delay(Random.nextLong(RESPAWN_JITTER_MS))
+                        if (stopped) break
                         onLog("relay #${idx + 1} process died — respawning")
                         try { stdinWriter?.close() } catch (_: Exception) {}
                         if (!spawnProcess(scope)) {
@@ -373,7 +489,8 @@ class TelemostRelayManager(
             val name = pickDisplayName()
             Log.d(TAG, "#${idx + 1} joining as \"$name\"")
             val json = JSONObject().apply {
-                put("joinLink", joinLink)
+                // WB joiner reads {"roomId": <link/id>}; Telemost reads {"joinLink": <url>}.
+                if (isWbStream) put("roomId", joinLink) else put("joinLink", joinLink)
                 put("displayName", name)
                 put("tunnelMode", "video")
             }.toString()

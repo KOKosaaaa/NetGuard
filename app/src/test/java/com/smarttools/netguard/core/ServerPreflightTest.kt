@@ -42,7 +42,7 @@ class ServerPreflightTest {
     }
 
     @Test
-    fun `closed local port is dead with TCP reason`() = runBlocking {
+    fun `private destination is refused before TCP connect`() = runBlocking {
         // Bind an ephemeral port and close it — the port is now reserved-ish
         // but more importantly NOT listening, so connect will refuse.
         val socket = ServerSocket(0)
@@ -51,18 +51,18 @@ class ServerPreflightTest {
         val r = ServerPreflight.check(base("127.0.0.1", port))
         assertTrue("expected Dead, got $r", r is ServerPreflight.Result.Dead)
         val msg = (r as ServerPreflight.Result.Dead).reason
-        assertTrue("reason should mention TCP: $msg", msg.contains("TCP", ignoreCase = true))
+        assertTrue("reason should mention TCP: $msg", msg.contains("private", ignoreCase = true))
     }
 
     @Test
-    fun `listening local port is ok or slow`() = runBlocking {
+    fun `private destination is refused even if listening`() = runBlocking {
         val socket = ServerSocket(0)
         try {
             val port = socket.localPort
             val r = ServerPreflight.check(base("127.0.0.1", port))
             assertTrue(
-                "expected Ok or Slow, got $r",
-                r is ServerPreflight.Result.Ok || r is ServerPreflight.Result.Slow,
+                "expected private address rejection, got $r",
+                r is ServerPreflight.Result.Dead,
             )
         } finally {
             socket.close()
@@ -72,7 +72,7 @@ class ServerPreflightTest {
     @Test
     fun `udp-only protocol skips tcp probe and accepts dns ok`() = runBlocking {
         val r = ServerPreflight.check(
-            base("localhost", 9999).copy(protocol = Protocol.HYSTERIA2),
+            base("8.8.8.8", 9999).copy(protocol = Protocol.HYSTERIA2),
         )
         assertTrue("expected Ok for UDP-only with resolvable host, got $r", r is ServerPreflight.Result.Ok)
     }

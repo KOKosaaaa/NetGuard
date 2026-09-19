@@ -57,7 +57,7 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
 
     /**
      * Read both arch binaries + install script bundled in assets/.
-     * Both blobs are ~10MB each, so the read happens once per
+     * The installers are decoded on the IO dispatcher, once per
      * Add-Server session and the bytes are dropped as soon as
      * SshBootstrap.run() finishes.
      *
@@ -68,8 +68,8 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
      */
     private suspend fun readAssets(): Triple<Map<String, ByteArray>, String, Unit> = withContext(Dispatchers.IO) {
         val ctx = getApplication<Application>()
-        val amd64 = ctx.assets.open("agent/netguard-agent-amd64").use { it.readBytes() }
-        val arm64 = ctx.assets.open("agent/netguard-agent-arm64").use { it.readBytes() }
+        val amd64 = com.smarttools.netguard.agent.BundledAgent.read(ctx.assets, "amd64")
+        val arm64 = com.smarttools.netguard.agent.BundledAgent.read(ctx.assets, "arm64")
         val script = ctx.assets.open("agent/install.sh").use {
             it.readBytes().toString(Charsets.UTF_8)
         }

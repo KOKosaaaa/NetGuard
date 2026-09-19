@@ -23,7 +23,10 @@ import com.smarttools.netguard.model.TrafficStatsMode
 import com.smarttools.netguard.util.GeoLookup
 import com.smarttools.netguard.util.TrafficFormatter
 import com.smarttools.netguard.viewmodel.MainViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HomeFragment : Fragment() {
 
@@ -521,20 +524,6 @@ class HomeFragment : Fragment() {
             binding.connectionMap.visibility = View.VISIBLE
             binding.connectionMap.setMapImage(R.drawable.world_map)
             binding.connectionMap.setLocations(GeoLookup.getUserLocation(), null)
-            // Fetch precise user location via IP in background — only when the
-            // tunnel is up. ipwho.is otherwise sees the user's real IP, which
-            // is exactly the leak the rest of the app is trying to prevent.
-            viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                val state = com.smarttools.netguard.service.TunnelVpnService.connectionState.value
-                if (state !is com.smarttools.netguard.model.ConnectionState.Connected) return@launch
-                GeoLookup.fetchUserLocation()?.let { loc ->
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        if (_binding != null) {
-                            binding.connectionMap.setLocations(loc, viewModel.selectedProfile.value?.let { GeoLookup.fromProfileName(it.name) })
-                        }
-                    }
-                }
-            }
         }
 
         // Speed test setup
@@ -556,43 +545,6 @@ class HomeFragment : Fragment() {
                         } else {
                             cancelTimer()
                             binding.tvTimer.text = "00:00"
-                        }
-                        // Connection map
-                        if (settings.showConnectionMap) {
-                            when (state) {
-                                is ConnectionState.Connected -> {
-                                    val profile = viewModel.selectedProfile.value
-                                    val serverLoc = profile?.let { GeoLookup.fromProfileName(it.name) }
-                                    if (serverLoc != null) {
-                                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), serverLoc)
-                                        binding.connectionMap.setServerLabel(profile?.name)
-                                        binding.connectionMap.setConnected(true)
-                                    } else if (profile != null) {
-                                        // IP fallback in background
-                                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), null)
-                                        binding.connectionMap.setConnected(false)
-                                        viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            // Telemost profiles store a full URL in address; resolving it as
-                                            // an IP/hostname only spams the log. Fall back to user-only location.
-                                            val loc = if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) null
-                                                      else GeoLookup.fromIp(profile.address)
-                                            if (_binding != null) {
-                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                    if (loc != null) {
-                                                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), loc)
-                                                        binding.connectionMap.setServerLabel(profile.name)
-                                                        binding.connectionMap.setConnected(true)
-                                                    } else {
-                                                        binding.connectionMap.setServerLabel(getString(R.string.location_unknown))
-                                                        binding.connectionMap.setConnected(false)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                else -> binding.connectionMap.setConnected(false)
-                            }
                         }
                         // Speed test visibility
                         if (settings.showSpeedTest) {
@@ -616,8 +568,39 @@ class HomeFragment : Fragment() {
                     }
                 }
                 launch {
-                    viewModel.selectedProfile.collect { profile ->
+                    var mapLookup: Job? = null
+                    viewModel.connectionProfile.collect { (state, profile) ->
+                        // Cancel without joining: a blocking lookup for the old
+                        // server must never delay the new name/marker. Returning
+                        // from withContext is cancellable, so it cannot repaint
+                        // the map after a switch or after this view stops.
+                        mapLookup?.cancel()
                         binding.tvProfileName.text = profile?.name ?: getString(R.string.no_profile_selected)
+                        if (!settings.showConnectionMap) return@collect
+
+                        val connected = state is ConnectionState.Connected && profile != null
+                        val namedLocation = if (connected) profile?.let { GeoLookup.fromProfileName(it.name) } else null
+                        binding.connectionMap.setServerLabel(if (connected) profile?.name else null)
+                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), namedLocation)
+                        binding.connectionMap.setConnected(connected && namedLocation != null)
+                        if (!connected || profile == null) return@collect
+
+                        mapLookup = launch {
+                            val serverLocation = namedLocation ?: withContext(Dispatchers.IO) {
+                                // Telemost addresses contain a meeting URL, not a host.
+                                if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) null
+                                else GeoLookup.fromIp(profile.address)
+                            }
+                            binding.connectionMap.setLocations(GeoLookup.getUserLocation(), serverLocation)
+                            binding.connectionMap.setConnected(serverLocation != null)
+                            // Refresh only during an active connection. This job
+                            // owns both locations; no independent callback can
+                            // replace the active server with the saved selection.
+                            val userLocation = withContext(Dispatchers.IO) { GeoLookup.fetchUserLocation() }
+                            if (userLocation != null) {
+                                binding.connectionMap.setLocations(userLocation, serverLocation)
+                            }
+                        }
                     }
                 }
                 launch {

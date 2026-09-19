@@ -19,7 +19,8 @@ object CredentialManager {
         val user: CharArray,
         val pass: CharArray,
         val port: Int,
-        val httpPort: Int
+        val httpPort: Int,
+        val healthPort: Int
     )
 
     @Volatile
@@ -42,10 +43,15 @@ object CredentialManager {
         while (httpPort == port && guard++ < 10) {
             httpPort = RandomPort.getAvailable()
         }
+        require(httpPort != port) { "Could not allocate distinct proxy ports" }
+        var healthPort = RandomPort.getAvailable()
+        guard = 0
+        while ((healthPort == port || healthPort == httpPort) && guard++ < 20) healthPort = RandomPort.getAvailable()
+        require(healthPort != port && healthPort != httpPort) { "Could not allocate health probe port" }
 
         // Clear any previous credentials before overwriting.
         clear()
-        current = Credentials(userStr.toCharArray(), passChars, port, httpPort)
+        current = Credentials(userStr.toCharArray(), passChars, port, httpPort, healthPort)
 
         return Triple(userStr, String(passChars), port)
     }
@@ -54,6 +60,7 @@ object CredentialManager {
     fun getPass(): String? = current?.pass?.let { String(it) }
     fun getPort(): Int? = current?.port
     fun getHttpPort(): Int? = current?.httpPort
+    fun getHealthPort(): Int? = current?.healthPort
 
     fun clear() {
         current?.let { creds ->

@@ -30,7 +30,7 @@ const (
 	// MaxReorder bounds the receiver's reassembly buffer (cross-pipe latency
 	// skew). Big enough to absorb a slow-but-alive room; if exceeded the flow
 	// resets. Also the retain cap on the sender.
-	MaxReorder = 16 * 1024 * 1024
+	MaxReorder = 1024 * 1024
 
 	// PromoteThreshold: a flow's first PromoteThreshold bytes ride ONE pinned
 	// pipe (like round-robin — reliable, no cross-pipe reorder fragility), so
@@ -114,12 +114,14 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 // handlePipe reads the HELLO, attaches the connection to its session as a
 // pipe, then pumps frames off it for the session's lifetime.
 func (s *Server) handlePipe(conn net.Conn) {
+	_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
 	hello, err := ReadFrame(conn)
 	if err != nil || hello.Type != FrameHello || len(hello.Payload) < 17 {
 		s.logf("stripe: bad hello: err=%v type=%d", err, hello.Type)
 		_ = conn.Close()
 		return
 	}
+	_ = conn.SetReadDeadline(time.Time{})
 	var sid [16]byte
 	copy(sid[:], hello.Payload[:16])
 	pipeIdx := hello.Payload[16]
@@ -195,52 +197,13 @@ func (s *Server) detach(sid [16]byte) {
 // written to the underlying conn atomically since many flow goroutines share
 // the pipe.
 type pipe struct {
-	id      int
-	conn    net.Conn
-	writeMu sync.Mutex
-	dead    atomic.Bool
-	// Diagnostics: cumulative wire bytes out (written to this pipe) and in
-	// (read from it). The session stats loop samples these to show whether
-	// striping spreads load across pipes or collapses onto one.
-	wrote atomic.Int64
-	rd    atomic.Int64
-	// Pacing so we never push Data faster than one Telemost room sustains
-	// (~1.25 Mbps). Overdriving a room saturates its WebRTC channel and
-	// starves the upstream Acks (the in=0 stall above ~9 Mbps). Virtual-
-	// scheduling limiter: each send reserves its slot by advancing paceNext
-	// under the lock, then sleeps outside it — correct under many concurrent
-	// senders (a plain token bucket leaked because sleepers bypassed it).
-	// Control frames (Acks) bypass pacing.
-	paceMu   sync.Mutex
-	paceNext time.Time
-}
-
-// pace blocks until this pipe's rate budget allows n more bytes.
-func (p *pipe) pace(n int) {
-	p.paceMu.Lock()
-	now := time.Now()
-	if p.paceNext.Before(now) {
-		p.paceNext = now
-	}
-	wait := p.paceNext.Sub(now)
-	p.paceNext = p.paceNext.Add(time.Duration(float64(n) / pipeRateBytesPerSec * float64(time.Second)))
-	p.paceMu.Unlock()
-	if wait > 0 {
-		time.Sleep(wait)
-	}
-}
-
-func (p *pipe) write(f Frame) error {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	wire := f.Encode(nil)
-	_, err := p.conn.Write(wire)
-	if err != nil {
-		p.dead.Store(true)
-		return err
-	}
-	p.wrote.Add(int64(len(wire)))
-	return nil
+	id            int
+	conn          net.Conn
+	dead          atomic.Bool
+	wrote, rd     atomic.Int64
+	data, control chan Frame
+	done          chan struct{}
+	closeOnce     sync.Once
 }
 
 // session groups the pipes of one phone and owns its flow table. Outgoing
@@ -306,7 +269,8 @@ func (s *session) statsLoop() {
 }
 
 func (s *session) addPipe(conn net.Conn) *pipe {
-	p := &pipe{id: int(s.pipeSeq.Add(1)), conn: conn}
+	p := &pipe{id: int(s.pipeSeq.Add(1)), conn: conn, data: make(chan Frame, 64), control: make(chan Frame, 64), done: make(chan struct{})}
+	go p.writeLoop()
 	s.pmu.Lock()
 	s.pipes = append(s.pipes, p)
 	s.pmu.Unlock()
@@ -314,6 +278,7 @@ func (s *session) addPipe(conn net.Conn) *pipe {
 }
 
 func (s *session) removePipe(p *pipe) (empty bool) {
+	p.close()
 	s.pmu.Lock()
 	defer s.pmu.Unlock()
 	for i, q := range s.pipes {
@@ -336,7 +301,7 @@ func (s *session) pipeCount() int {
 // the pipe that carried it, or -1 if none could (no usable pipe right now).
 func (s *session) send(f Frame) int {
 	s.pmu.RLock()
-	pipes := s.pipes
+	pipes := append([]*pipe(nil), s.pipes...)
 	n := len(pipes)
 	s.pmu.RUnlock()
 	if n == 0 {
@@ -347,9 +312,6 @@ func (s *session) send(f Frame) int {
 		p := pipes[(start+i)%n]
 		if p.dead.Load() {
 			continue
-		}
-		if f.Type == FrameData {
-			p.pace(HeaderSize + len(f.Payload))
 		}
 		if err := p.write(f); err == nil {
 			return p.id
@@ -364,7 +326,7 @@ func (s *session) send(f Frame) int {
 // unassigned); only the flow's tx goroutine calls this, so no lock on it.
 func (s *session) sendPinned(homeID *int, f Frame) int {
 	s.pmu.RLock()
-	pipes := s.pipes
+	pipes := append([]*pipe(nil), s.pipes...)
 	s.pmu.RUnlock()
 	if len(pipes) == 0 {
 		return -1
@@ -391,11 +353,8 @@ func (s *session) sendPinned(homeID *int, f Frame) int {
 		}
 		*homeID = home.id
 	}
-	if f.Type == FrameData {
-		home.pace(HeaderSize + len(f.Payload))
-	}
 	if err := home.write(f); err != nil {
-		return -1
+		return s.send(f)
 	}
 	return home.id
 }
@@ -446,6 +405,11 @@ func (s *session) route(f Frame) {
 		if f.Type == FrameRst || f.Type == FrameAck {
 			// Nothing to do for a flow we don't have.
 			s.fmu.Unlock()
+			return
+		}
+		if len(s.flows) >= 64 {
+			s.fmu.Unlock()
+			s.send(Frame{Type: FrameRst, FlowID: f.FlowID})
 			return
 		}
 		fl = newFlow(f.FlowID, s)

@@ -75,17 +75,20 @@ class StripeMux(
     @Volatile private var scope: CoroutineScope? = null
 
     /** One physical room pipe: a raw byte tunnel to the stripe-server. */
+    @Volatile private var stopped = false
+    private val opening = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
+
     private class Pipe(
         val idx: Int,
         val socket: Socket,
         val din: DataInputStream,
         val out: OutputStream
     ) {
-        val writeLock = Any()
         @Volatile var dead = false
+        val writer = QueuedPipeWriter(socket, out) { dead = true }
         // Wall-clock of the last HELLO echo (PONG) the server bounced back on this
         // pipe. Initialised to open time so a fresh pipe isn't seen as a zombie.
-        @Volatile var lastPongMs: Long = System.currentTimeMillis()
+        @Volatile var lastPongMs: Long = System.nanoTime() / 1_000_000
     }
 
     /**
@@ -94,6 +97,7 @@ class StripeMux(
      * bound. A failed pipe is skipped, mirroring the relay manager's tolerance.
      */
     suspend fun start(scope: CoroutineScope): Boolean {
+        stopped = false
         if (upstreams.isEmpty()) {
             onLog("StripeMux: no upstreams")
             return false
@@ -116,6 +120,7 @@ class StripeMux(
         }
         for (p in opened) {
             if (p != null) {
+                if (stopped) { p.writer.close(); continue }
                 pipes.add(p)
                 scope.launch(Dispatchers.IO) { pipeReader(p) }
             }
@@ -143,6 +148,8 @@ class StripeMux(
     }
 
     fun stop() {
+        stopped = true
+        opening.forEach { runCatching { it.close() } }; opening.clear()
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
         watchdogJob?.cancel()
@@ -154,7 +161,7 @@ class StripeMux(
         flows.values.toList().forEach { it.close() }
         flows.clear()
         synchronized(pipes) {
-            pipes.forEach { try { it.socket.close() } catch (_: Exception) {} }
+            pipes.forEach { try { it.writer.close() } catch (_: Exception) {} }
             pipes.clear()
         }
     }
@@ -162,7 +169,9 @@ class StripeMux(
     /** Connects one pipe: SOCKS5 no-auth handshake + CONNECT, then HELLO. */
     private fun openPipe(idx: Int, upstream: InetSocketAddress): Pipe {
         val s = Socket()
+        opening.add(s)
         try {
+            check(!stopped)
             s.tcpNoDelay = true
             s.connect(upstream, 8_000)
             // Bound the whole handshake (SOCKS5 reply + HELLO ack): a dead room
@@ -187,13 +196,14 @@ class StripeMux(
             s.soTimeout = 0 // restore blocking reads for the pipeReader loop
             onLog("StripeMux pipe #${idx + 1} confirmed end-to-end")
             Log.i(TAG, "pipe #${idx + 1} confirmed end-to-end (upstream $upstream)")
+            check(!stopped)
             return Pipe(idx, s, din, out)
         } catch (e: Exception) {
             // Close on any failure; the watchdog retries, so leaked sockets
             // per failed attempt would exhaust fds over a long session.
             try { s.close() } catch (_: Exception) {}
             throw e
-        }
+        } finally { opening.remove(s) }
     }
 
     /** Performs a SOCKS5 client CONNECT to host:port over an open socket. */
@@ -222,12 +232,12 @@ class StripeMux(
         if (rep != 0x00) throw IOException("SOCKS5 CONNECT failed: rep=$rep")
         din.readUnsignedByte() // RSV
         when (din.readUnsignedByte()) {
-            0x01 -> din.skipBytes(4)
-            0x03 -> din.skipBytes(din.readUnsignedByte())
-            0x04 -> din.skipBytes(16)
+            0x01 -> din.readFully(ByteArray(4))
+            0x03 -> din.readFully(ByteArray(din.readUnsignedByte()))
+            0x04 -> din.readFully(ByteArray(16))
             else -> throw IOException("SOCKS5 reply bad ATYP")
         }
-        din.skipBytes(2) // BND.PORT
+        din.readFully(ByteArray(2)) // BND.PORT
     }
 
     private fun acceptLoop() {
@@ -257,11 +267,12 @@ class StripeMux(
     private fun handleClient(client: Socket) {
         client.tcpNoDelay = true
         try {
+            client.soTimeout = 8_000
             val din = DataInputStream(client.getInputStream())
             val out = client.getOutputStream()
             if (din.readUnsignedByte() != 0x05) { client.close(); return }
             val nMethods = din.readUnsignedByte()
-            din.skipBytes(nMethods)
+            din.readFully(ByteArray(nMethods))
             out.write(byteArrayOf(0x05, 0x00)); out.flush() // NO-AUTH
             // Request — capture raw bytes so a non-CONNECT can be replayed.
             if (din.readUnsignedByte() != 0x05) { client.close(); return }
@@ -292,6 +303,8 @@ class StripeMux(
 
             when (cmd) {
                 0x01 -> { // CONNECT -> striped flow
+                    if (flows.size >= 64) { client.close(); return }
+                    client.soTimeout = 0
                     out.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); out.flush()
                     val id = flowSeq.getAndIncrement()
                     val flow = StripeFlow(id, client, this)
@@ -337,6 +350,7 @@ class StripeMux(
         try {
             us.tcpNoDelay = true
             us.connect(up, 8_000)
+            us.soTimeout = 8_000
             val uout = us.getOutputStream()
             val uin = DataInputStream(us.getInputStream())
             uout.write(byteArrayOf(0x05, 0x01, 0x00)); uout.flush()
@@ -359,6 +373,7 @@ class StripeMux(
                 reply = head + rest
             }
             clientOut.write(reply); clientOut.flush()
+            us.soTimeout = 0; client.soTimeout = 0
             // Pump the control connection both ways until either side closes.
             val t = Thread({ pump(clientIn, uout) }, "stripe-udp-c2u").apply { isDaemon = true; start() }
             pump(uin, clientOut)
@@ -392,16 +407,11 @@ class StripeMux(
     fun broadcast(frame: StripeFrame): Int {
         val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }
         if (snapshot.isEmpty()) return 0
-        val wire = frame.encode()
         var delivered = 0
         for (p in snapshot) {
             if (p.dead) continue
             try {
-                synchronized(p.writeLock) {
-                    p.out.write(wire)
-                    p.out.flush()
-                }
-                delivered++
+                if (p.writer.offer(frame)) delivered++
             } catch (e: Exception) {
                 p.dead = true
             }
@@ -418,17 +428,12 @@ class StripeMux(
         val snapshot: List<Pipe> = synchronized(pipes) { ArrayList(pipes) }
         val n = snapshot.size
         if (n == 0) return -1
-        val wire = frame.encode()
         val start = (pipeCursor.getAndIncrement() and Int.MAX_VALUE) % n
         for (i in 0 until n) {
             val p = snapshot[(start + i) % n]
             if (p.dead) continue
             try {
-                synchronized(p.writeLock) {
-                    p.out.write(wire)
-                    p.out.flush()
-                }
-                return p.idx
+                if (p.writer.offer(frame)) return p.idx
             } catch (e: Exception) {
                 p.dead = true
             }
@@ -453,13 +458,8 @@ class StripeMux(
             }
         }
         if (home == null) return -1
-        val wire = frame.encode()
         return try {
-            synchronized(home.writeLock) {
-                home.out.write(wire)
-                home.out.flush()
-            }
-            home.idx
+            if (home.writer.offer(frame)) home.idx else send(frame)
         } catch (e: Exception) {
             home.dead = true
             -1
@@ -492,7 +492,7 @@ class StripeMux(
         healthPingJob = scope.launch(Dispatchers.IO) {
             while (true) {
                 delay(PIPE_WATCHDOG_INTERVAL_MS)
-                val now = System.currentTimeMillis()
+                val now = System.nanoTime() / 1_000_000
                 val live = synchronized(pipes) { ArrayList(pipes) }
                 val ping = ByteArray(17).also { System.arraycopy(sessionId, 0, it, 0, 16) }
                 for (p in live) {
@@ -504,10 +504,7 @@ class StripeMux(
                     }
                     ping[16] = p.idx.toByte()
                     try {
-                        synchronized(p.writeLock) {
-                            p.out.write(StripeFrame(StripeProtocol.HELLO, 0, 0, ping).encode())
-                            p.out.flush()
-                        }
+                        p.writer.offer(StripeFrame(StripeProtocol.HELLO, 0, 0, ping.copyOf()))
                     } catch (_: Exception) { p.dead = true }
                 }
             }
@@ -530,7 +527,7 @@ class StripeMux(
                 synchronized(pipes) {
                     val dead = pipes.filter { it.dead }
                     pipes.removeAll(dead)
-                    dead.forEach { try { it.socket.close() } catch (_: Exception) {} }
+                    dead.forEach { try { it.writer.close() } catch (_: Exception) {} }
                 }
                 val liveIdxs = synchronized(pipes) { pipes.filter { !it.dead }.map { it.idx }.toSet() }
                 // Skip idxs that are backed off after a recent failed reopen.
@@ -550,8 +547,9 @@ class StripeMux(
                         pipeReopenBackoff[idx] = tick + PIPE_REOPEN_BACKOFF_TICKS
                         continue
                     }
+                    if (stopped) { p.writer.close(); continue }
                     pipeReopenBackoff.remove(idx)
-                    synchronized(pipes) { pipes.add(p) }
+                    synchronized(pipes) { if (stopped) p.writer.close() else pipes.add(p) }
                     scope.launch(Dispatchers.IO) { pipeReader(p) }
                     added++
                 }
@@ -572,7 +570,7 @@ class StripeMux(
                 val f = StripeFrame.read(p.din)
                 if (f.type == StripeProtocol.HELLO) {
                     // PONG: the server bounced our health ping on this pipe.
-                    p.lastPongMs = System.currentTimeMillis()
+                    p.lastPongMs = System.nanoTime() / 1_000_000
                     continue
                 }
                 val flow = flows[f.flowId] ?: continue
@@ -583,6 +581,7 @@ class StripeMux(
             // flow resend the c2s chunks it had on this pipe over a live one.
         } finally {
             p.dead = true
+            p.writer.close()
             onPipeDead(p.idx)
         }
     }

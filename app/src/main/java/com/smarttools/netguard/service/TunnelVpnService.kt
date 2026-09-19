@@ -41,6 +41,11 @@ class TunnelVpnService : VpnService() {
         // the first (the "6/6 -> 9/9" relay churn). A generous window lets the
         // first attempt finish so we stay on one set of rooms.
         private const val TELEMOST_CONNECTION_TIMEOUT_MS = 60_000L
+        // Minimum gap between two throttle-driven auto-switches. Guards against
+        // thrashing if the detector keeps firing (e.g. every candidate is being
+        // throttled the moment it connects). The per-network quarantine set is
+        // the primary guard; this is the time-based backstop.
+        private const val MIN_THROTTLE_SWITCH_INTERVAL_MS = 300_000L
         const val ACTION_START = "com.smarttools.netguard.START"
         const val ACTION_STOP = "com.smarttools.netguard.STOP"
         const val ACTION_START_TRIGGER = "com.smarttools.netguard.START_TRIGGER"
@@ -60,6 +65,10 @@ class TunnelVpnService : VpnService() {
         private val _isTriggerTunnel = MutableStateFlow(false)
         val isTriggerTunnel: StateFlow<Boolean> = _isTriggerTunnel.asStateFlow()
 
+        /** Only published after the local proxy is ready; cleared before shutdown. */
+        @Volatile var subscriptionProxy: com.smarttools.netguard.core.SubscriptionProxy? = null
+            private set
+
         private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
         val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
@@ -70,8 +79,9 @@ class TunnelVpnService : VpnService() {
          * — and stop it instead of showing "connected, no server". Distinct
          * from the *selected* profile: trigger mode can run a non-selected one.
          */
-        @Volatile var activeProfileId: Long = -1L
-            private set
+        private val _activeProfileId = MutableStateFlow(-1L)
+        val activeProfileIdFlow: StateFlow<Long> = _activeProfileId.asStateFlow()
+        val activeProfileId: Long get() = _activeProfileId.value
 
         private val _trafficStats = MutableStateFlow(TrafficSnapshot(0L, 0L, 0L, 0L))
         val trafficStats: StateFlow<TrafficSnapshot> = _trafficStats.asStateFlow()
@@ -163,12 +173,27 @@ class TunnelVpnService : VpnService() {
     private var serviceScope: CoroutineScope? = null
     @Volatile
     private var trafficMonitor: TrafficMonitor? = null
+    // xray now runs as JNI threads inside the isolated `:xray` process
+    // (XrayService), not as a forked native process — see XrayService for why
+    // (phantom-process killing). So there is no java.lang.Process handle for it;
+    // liveness is observed by polling its local SOCKS port instead.
     @Volatile
-    private var xrayProcess: Process? = null
+    private var currentSocksPort: Int = 0
     @Volatile
-    private var tun2socksProcess: Process? = null
-    // Owned process is inside the manager; this reference lets us stop it
-    // from stopTunnelProcesses() and lets the watchdog peek at liveness.
+    private var xrayBound: Boolean = false
+    private val xrayConnection = object : android.content.ServiceConnection {
+        // We only bind to pin :xray's process priority (BIND_IMPORTANT) while the
+        // tunnel is up; XrayService.onBind returns null, so these are no-ops.
+        override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {}
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {}
+    }
+    // hev-socks5-tunnel replaces badvpn-tun2socks: it runs IN-PROCESS (JNI),
+    // not as a child process, because it carries UDP through a real SOCKS5
+    // UDP-ASSOCIATE (full-cone) instead of badvpn's flaky --enable-udprelay —
+    // that's what makes Telegram/WebRTC voice+video calls work. TProxyStartService
+    // blocks for the tunnel's whole life, so it owns a dedicated thread.
+    @Volatile
+    private var hevRunning: Boolean = false
     @Volatile
     private var telemostRelay: TelemostRelayManager? = null
     @Volatile
@@ -217,6 +242,29 @@ class TunnelVpnService : VpnService() {
     private val failoverMaxAttempts = 14
     @Volatile
     private var showSpeedNotification = false
+
+    // ТСПУ soft-throttle auto-switch. The detector watches the live tunnel and,
+    // on a confirmed throttle (Connected but strangled), asks us to switch to a
+    // different-endpoint server. `throttledThisNetwork` is a per-network-session
+    // quarantine: profiles confirmed throttled on the CURRENT network so we do
+    // not bounce straight back to them. It is cleared on a genuine user-initiated
+    // start and on a network handover (a new network = a fresh DPI policy).
+    @Volatile
+    private var throttleDetector: ThrottleDetector? = null
+    @Volatile private var healthSession = 0L
+    @Volatile private var lifecycleEpoch = 0L
+    @Volatile private var failoverJob: Job? = null
+    private var retryBackoffMs = 30_000L
+    private var establishedMtu = 1500
+    private var establishedDnsKey = ""
+    private val throttledThisNetwork = java.util.concurrent.CopyOnWriteArraySet<Long>()
+    // True while a throttle-driven switch is the reason we are (re)starting the
+    // tunnel — keeps the per-network quarantine from being wiped by the start.
+    @Volatile
+    private var throttleSwitchInProgress = false
+    @Volatile
+    private var lastThrottleSwitchAt = 0L
+
     @Volatile
     private var xrayWatchdogJob: Job? = null
     @Volatile
@@ -315,6 +363,10 @@ class TunnelVpnService : VpnService() {
                 return START_NOT_STICKY
             }
             ACTION_START -> {
+                failoverJob?.cancel(); failoverJob = null
+                startTunnelJob?.cancel(); isStarting = false
+                failoverInProgress = false; throttleSwitchInProgress = false
+                retryBackoffMs = 30_000L
                 val profileId = intent.getLongExtra(EXTRA_PROFILE_ID, -1)
                 if (profileId == -1L) {
                     Log.e(TAG, "No profile ID provided")
@@ -457,16 +509,23 @@ class TunnelVpnService : VpnService() {
         return START_STICKY
     }
 
-    private fun startTunnel(profileId: Long, skipPreflight: Boolean = false) {
+    @Synchronized private fun startTunnel(profileId: Long, skipPreflight: Boolean = false) {
         if (isStarting) {
             Log.w(TAG, "startTunnel called while already starting, ignoring")
             return
         }
+        val epoch = ++lifecycleEpoch
         // Reset failover ledger on any user-initiated start. The ledger is
         // additive only inside one auto-failover chain; once the user picks
         // a profile manually we forget the previous chain entirely.
         if (!failoverInProgress) {
             failoverTried.clear()
+        }
+        // The per-network throttle quarantine survives a throttle-switch chain
+        // (so we keep climbing away from throttled servers) but resets on any
+        // genuinely fresh start the user initiated.
+        if (!failoverInProgress && !throttleSwitchInProgress) {
+            throttledThisNetwork.clear()
         }
         failoverTried.add(profileId)
         // Cancel old watchdogs BEFORE killing processes — otherwise they
@@ -476,21 +535,24 @@ class TunnelVpnService : VpnService() {
         telemostWatchdogJob?.cancel()
         // Clean up any existing connection before starting new one
         unregisterNetworkCallback()
-        stopTunnelProcesses()
+        stopTunnelProcesses(keepTun = failoverInProgress || throttleSwitchInProgress)
 
         _connectionState.value = ConnectionState.Connecting
         LogBuffer.add(LogBuffer.LogLevel.INFO, "Starting tunnel...")
         currentProfileId = profileId
-        activeProfileId = profileId
+        _activeProfileId.value = profileId
         isStarting = true
         // Fresh session — reset crash counter so a new connect attempt isn't
         // pre-loaded with attempts from a previous handover.
         xrayRestartAttempts = 0
         isReconnecting = false
 
-        startTunnelJob?.cancel()
+        val previousStartup = startTunnelJob
+        previousStartup?.cancel()
         startTunnelJob = serviceScope?.launch {
             try {
+                previousStartup?.join()
+                ensureActive()
                 // Pick the connect timeout up front: Telemost's multi-room WebRTC
                 // + striping setup needs far longer than xray/Reality, and a
                 // too-tight timeout causes a spurious failover that churns relays
@@ -548,12 +610,16 @@ class TunnelVpnService : VpnService() {
                     //    cannot leak their real IP while xray is starting.
                     //    Packets queued into TUN have nowhere to go until
                     //    tun2socks attaches → black-holed (desired for trigger).
-                    val fd = establishVpn(profile, settings) ?: run {
+                    val oldFd = synchronized(fdLock) { vpnFd }
+                    ensureActive()
+                    val fd = oldFd?.takeIf { it.fileDescriptor.valid() && establishedDnsKey == tunnelDnsKey(profile, settings) }
+                        ?: establishVpn(profile, settings) ?: run {
                         _connectionState.value = ConnectionState.Error("VPN permission denied")
                         stopTunnel()
                         return@withTimeout
                     }
                     synchronized(fdLock) { vpnFd = fd }
+                    if (oldFd !== fd) runCatching { oldFd?.close() }
 
                     // 2-5. Bring up the proxy that exposes a local SOCKS5 for tun2socks.
                     //      For Telemost-bypass profiles we spawn librelay.so directly
@@ -623,27 +689,20 @@ class TunnelVpnService : VpnService() {
                             useSocksInbound = true
                         )
 
-                        // 4. Write xray config atomically (temp + rename) to prevent corruption
-                        val configFile = File(filesDir, "config.json")
-                        val tempFile = File(filesDir, "config.json.tmp")
-                        tempFile.writeText(config.json)
-                        tempFile.renameTo(configFile)
-                        Log.i(TAG, "Config written, SOCKS port=${config.socksPort}")
+                        // 4. Start xray-core in the isolated :xray process (JNI).
+                        //    Config is handed over inline — no config.json on disk.
+                        val xraySocksPort = config.socksPort
+                            ?: throw IllegalStateException("SOCKS port not generated")
+                        startXrayService(config.json)
+                        currentSocksPort = xraySocksPort
 
-                        // 5. Start xray-core process, ensure config deleted even on failure
-                        try {
-                            startXrayProcess(configFile)
+                        // 4a. Wait for xray to bind the SOCKS port. Cross-process
+                        //     start is a touch slower than the old in-process fork,
+                        //     so allow a longer window.
+                        waitForPort(xraySocksPort, timeoutMs = 10000)
+                        Log.i(TAG, "Xray is listening on port $xraySocksPort")
 
-                            // 5a. Wait for xray to bind the SOCKS port
-                            waitForPort(config.socksPort ?: throw IllegalStateException("SOCKS port not generated"), timeoutMs = 5000)
-                            Log.i(TAG, "Xray is listening on port ${config.socksPort}")
-                        } finally {
-                            // 5b. Delete config from disk — xray already read it into memory
-                            configFile.delete()
-                            Log.i(TAG, "Config file deleted from disk")
-                        }
-
-                        socksPort = config.socksPort ?: throw IllegalStateException("SOCKS port not generated")
+                        socksPort = xraySocksPort
                         socksUser = config.socksUser ?: throw IllegalStateException("SOCKS user not generated")
                         socksPass = config.socksPass ?: throw IllegalStateException("SOCKS pass not generated")
                     }
@@ -661,6 +720,7 @@ class TunnelVpnService : VpnService() {
                     trafficMonitor = TrafficMonitor().also { monitor ->
                         monitor.start(serviceScope!!) { snapshot ->
                             _trafficStats.value = snapshot
+                            // Feed the soft-throttle detector (no-op unless armed).
                             if (showSpeedNotification) {
                                 val now = System.currentTimeMillis()
                                 if (now - lastNotificationUpdate >= NOTIFICATION_THROTTLE_MS) {
@@ -681,11 +741,12 @@ class TunnelVpnService : VpnService() {
                     // Update notification from "Connecting..." to "Connected"
                     NotificationHelper.showConnectedNotification(this@TunnelVpnService)
                     VpnWidget.updateAllWidgets(applicationContext)
-                    // Successful tunnel resets the failover ledger so a future
-                    // unrelated failure doesn't reuse the in-progress chain.
+                    // A listening proxy is not proof of service reachability.
+                    // Preserve the attempted set until a health round succeeds.
                     failoverInProgress = false
-                    failoverTried.clear()
-                    failoverTried.add(profileId)
+                    throttleSwitchInProgress = false
+                    armServiceHealth(profile, socksPort, socksUser, socksPass)
+
                     Log.i(TAG, "Tunnel started for ${profile.name}")
                 }
             } catch (e: TimeoutCancellationException) {
@@ -701,7 +762,7 @@ class TunnelVpnService : VpnService() {
                 Log.e(TAG, "Failed to start tunnel", e)
                 handleConnectFailure(e.message ?: "Unknown error", profileId)
             } finally {
-                isStarting = false
+                if (lifecycleEpoch == epoch) isStarting = false
             }
         }
     }
@@ -720,61 +781,106 @@ class TunnelVpnService : VpnService() {
      * SYN packets at L3 before they reach our infrastructure, so no profile we
      * try will work — surfacing "Server unreachable" repeatedly is misleading.
      */
-    private fun maybeWhitelistHint(reason: String): String {
-        val lower = reason.lowercase()
-        val refused = lower.contains("econnrefused") || lower.contains("connection refused")
-        val timeout = lower.contains("timed out") || lower.contains("etimedout")
-        val burned = failoverTried.size >= 3
-        return if (burned && (refused || timeout)) {
-            "БС-режим? Все серверы недоступны на L3 (RST/timeout). " +
-                "VPN не пройдёт пока оператор не снимет белые списки. " +
-                "Попробуй Wi-Fi. ($reason)"
-        } else reason
+    private fun handleConnectFailure(reason: String, failedProfileId: Long) {
+        scheduleAutoSwitch(failedProfileId, reason)
     }
 
-    private fun handleConnectFailure(reason: String, failedProfileId: Long) {
-        VpnWidget.updateAllWidgets(applicationContext)
-        if (failoverTried.size >= failoverMaxAttempts) {
-            val finalMsg = maybeWhitelistHint(reason)
-            Log.w(TAG, "Failover budget exhausted (${failoverTried.size}/$failoverMaxAttempts); giving up: $finalMsg")
-            _connectionState.value = ConnectionState.Error(finalMsg)
-            failoverInProgress = false
-            failoverTried.clear()
-            stopTunnel()
-            return
-        }
-        serviceScope?.launch {
-            try {
-                val app = application as App
-                val failed = app.database.profileDao().getById(failedProfileId)
-                val candidates = if (failed != null && failed.subscriptionId > 0) {
-                    app.database.profileDao().getBySubscription(failed.subscriptionId)
-                } else {
-                    app.database.profileDao().getAll()
-                }
-                val next = candidates.firstOrNull { it.id !in failoverTried }
-                    ?: app.database.profileDao().getAll().firstOrNull { it.id !in failoverTried }
-                if (next == null) {
-                    val finalMsg = maybeWhitelistHint(reason)
-                    Log.w(TAG, "No failover candidates left; surfacing error: $finalMsg")
-                    _connectionState.value = ConnectionState.Error(finalMsg)
-                    failoverInProgress = false
-                    failoverTried.clear()
-                    stopTunnel()
-                    return@launch
-                }
-                LogBuffer.add(LogBuffer.LogLevel.WARN, "Failover → ${next.name} (after \"$reason\")")
-                Log.i(TAG, "Auto-failover to profile ${next.id} (${next.name}); attempt ${failoverTried.size + 1}/$failoverMaxAttempts")
-                failoverInProgress = true
-                stopTunnelProcesses()
-                startTunnel(next.id)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failover lookup failed", e)
-                _connectionState.value = ConnectionState.Error(reason)
-                failoverInProgress = false
-                stopTunnel()
+    private fun underlyingNetworkKey(): String? = runCatching {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        pickUnderlyingNetwork(cm, null, null)?.toString()
+    }.getOrNull()
+
+    private fun armServiceHealth(profile: ServerProfile, socksPort: Int, user: String, pass: String) {
+        subscriptionProxy = if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) {
+            com.smarttools.netguard.core.SubscriptionProxy(java.net.Proxy.Type.SOCKS, socksPort)
+        } else {
+            CredentialManager.getHttpPort()?.let {
+                com.smarttools.netguard.core.SubscriptionProxy(java.net.Proxy.Type.HTTP, it, user, pass)
             }
         }
+        throttleDetector?.stop()
+        val token = ++healthSession
+        val port = if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) socksPort
+            else CredentialManager.getHealthPort() ?: socksPort
+        throttleDetector = ThrottleDetector(
+            scope = serviceScope ?: return,
+            probe = SocksServiceProbe(port, user, pass),
+            settings = { (application as App).loadSettings() },
+            network = { underlyingNetworkKey() },
+            receivedBytes = { trafficStats.value.rxBytes },
+            onHealthy = {
+                if (healthSession == token && currentProfileId == profile.id) {
+                    failoverTried.clear(); failoverTried.add(profile.id)
+                    retryBackoffMs = 30_000L
+                    failoverJob?.cancel(); failoverJob = null
+                }
+            },
+            onThrottle = { failed ->
+                if (healthSession == token && currentProfileId == profile.id && connectionState.value is ConnectionState.Connected) {
+                    scheduleAutoSwitch(profile.id, "Устойчивая потеря связи: " + failed.joinToString { it.title }, healthFailure = true)
+                }
+            }
+        ).also { it.arm() }
+    }
+
+    @Synchronized private fun scheduleAutoSwitch(failedProfileId: Long, reason: String, healthFailure: Boolean = false) {
+        if (currentProfileId != failedProfileId || activeProfileId < 0 || failoverJob?.isActive == true) return
+        val epoch = lifecycleEpoch
+        val startup = startTunnelJob
+        val rxAtDecision = trafficStats.value.rxBytes
+        failoverTried.add(failedProfileId)
+        val pending = serviceScope?.launch(start = CoroutineStart.LAZY) {
+            try {
+                startup?.join() // The failed start must release its isStarting guard first.
+                val app = application as App
+                while (isActive && epoch == lifecycleEpoch && currentProfileId == failedProfileId) {
+                    if (!app.loadSettings().autoSwitchOnThrottle) {
+                        if (connectionState.value !is ConnectionState.Connected) {
+                            LogBuffer.add(LogBuffer.LogLevel.ERROR, reason)
+                            stopTunnel()
+                        }
+                        return@launch
+                    }
+                    while (isActive && underlyingNetworkKey() == null) delay(5_000)
+                    ensureActive()
+                    val enabledSubs = app.database.subscriptionDao().getAll().filter { it.enabled }.map { it.id }.toSet()
+                    val profiles = app.database.profileDao().getAll().filter { it.subscriptionId == 0L || it.subscriptionId in enabledSubs }
+                    val current = profiles.firstOrNull { it.id == failedProfileId }
+                    val candidates = profiles.sortedWith(compareBy<ServerProfile> { if (it.subscriptionId == current?.subscriptionId) 0 else 1 }
+                        .thenBy { if (it.lastPingMs > 0) it.lastPingMs else Int.MAX_VALUE })
+                    val next = candidates.firstOrNull { it.id !in failoverTried }
+                    if (next == null) {
+                        LogBuffer.add(LogBuffer.LogLevel.WARN, "Серверы пока недоступны. Повтор через ${retryBackoffMs / 1000} с")
+                        delay(retryBackoffMs)
+                        retryBackoffMs = (retryBackoffMs * 2).coerceAtMost(300_000)
+                        failoverTried.clear()
+                        continue
+                    }
+                    // Keep checks alive during the cooldown: recovery cancels this job.
+                    val interval = if (healthFailure) MIN_THROTTLE_SWITCH_INTERVAL_MS else 30_000L
+                    val wait = interval - (android.os.SystemClock.elapsedRealtime() - lastThrottleSwitchAt)
+                    if (lastThrottleSwitchAt > 0 && wait > 0) delay(wait)
+                    ensureActive()
+                    if (epoch != lifecycleEpoch || !app.loadSettings().autoSwitchOnThrottle) return@launch
+                    if (healthFailure && trafficStats.value.rxBytes - rxAtDecision >= 1024) return@launch
+                    lastThrottleSwitchAt = android.os.SystemClock.elapsedRealtime()
+                    LogBuffer.add(LogBuffer.LogLevel.WARN, "$reason → ${next.name}")
+                    failoverInProgress = true
+                    throttleSwitchInProgress = true
+                    failoverJob = null
+                    startTunnel(next.id, skipPreflight = true)
+                    return@launch
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { Log.e(TAG, "Auto-switch failed", e) }
+        } ?: return
+        failoverJob = pending
+        pending.start()
+    }
+
+    private fun isDottedQuad(s: String): Boolean {
+        val parts = s.split('.')
+        return parts.size == 4 && parts.all { (it.toIntOrNull() ?: -1) in 0..255 }
     }
 
     private fun copyGeoFiles() {
@@ -797,138 +903,169 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun startXrayProcess(configFile: File) {
-        val xrayBin = File(applicationInfo.nativeLibraryDir, "libxray.so")
-        if (!xrayBin.exists()) throw IllegalStateException("xray binary not found at ${xrayBin.absolutePath}")
-
-        val pb = ProcessBuilder(
-            xrayBin.absolutePath,
-            "run",
-            "-config", configFile.absolutePath
-        )
-        pb.directory(filesDir)
-        pb.environment()["XRAY_LOCATION_ASSET"] = filesDir.absolutePath
-        pb.redirectErrorStream(true)
-
-        xrayProcess = pb.start()
-        Log.i(TAG, "Xray process started, pid=${getPid(xrayProcess!!)}")
-
-        // Log xray stdout/stderr in background. Redact BEFORE Log.d so server
-        // addresses / UUIDs / passwords don't end up in raw logcat.
-        serviceScope?.launch(Dispatchers.IO) {
+    /**
+     * Start xray-core inside the isolated `:xray` process (XrayService) via the
+     * libXray JNI bindings. Replaces the old ProcessBuilder fork of libxray.so,
+     * which Android 12+ phantom-killed. The config JSON is handed over inline
+     * (no config.json on disk); geodata is read from filesDir (datDir).
+     *
+     * This only *issues* the start. Readiness is observed by the caller via
+     * waitForPort() on the SOCKS port — xray binds it in the :xray process and
+     * loopback is shared across our same-UID processes. We also bind the service
+     * with BIND_IMPORTANT so the :xray process inherits this foreground service's
+     * priority and isn't reclaimed under memory pressure.
+     */
+    private fun startXrayService(configJson: String) {
+        val startIntent = Intent(this, XrayService::class.java).apply {
+            action = XrayService.ACTION_START
+            putExtra(XrayService.EXTRA_DAT_DIR, filesDir.absolutePath)
+            putExtra(XrayService.EXTRA_CONFIG_JSON, configJson)
+        }
+        startService(startIntent)
+        if (!xrayBound) {
             try {
-                xrayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                    val safe = LogBuffer.redactPublic(line)
-                    Log.d("XrayCore", safe)
-                    LogBuffer.add(LogBuffer.parseXrayLevel(line), line)
-                }
+                bindService(
+                    Intent(this, XrayService::class.java),
+                    xrayConnection,
+                    Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT
+                )
+                xrayBound = true
             } catch (e: Exception) {
-                Log.w(TAG, "Error reading xray output: ${e.message}")
+                Log.w(TAG, "bind XrayService failed (priority pin only): ${e.message}")
             }
         }
+        Log.i(TAG, "XrayService START issued (:xray process)")
+    }
+
+    /**
+     * Stop xray in the :xray process and release the priority-pin binding.
+     * Idempotent — safe to call from every teardown path that used to
+     * destroy the xray Process.
+     */
+    private fun stopXrayService() {
+        subscriptionProxy = null
+        try {
+            startService(Intent(this, XrayService::class.java).apply { action = XrayService.ACTION_STOP })
+        } catch (_: Exception) {}
+        if (xrayBound) {
+            try { unbindService(xrayConnection) } catch (_: Exception) {}
+            xrayBound = false
+        }
+        currentSocksPort = 0
+    }
+
+    private var adaptiveSites: AdaptiveSiteProxy? = null
+
+    private fun siteFrontend(port: Int, user: String, pass: String): LocalSocks {
+        adaptiveSites?.close()
+        adaptiveSites = null
+        val normal = LocalSocks(port, user, pass)
+        val settings = (application as App).loadSettings()
+        if (settings.routingMode != com.smarttools.netguard.model.RoutingMode.AUTO) return normal
+        // Site names are stored only in encrypted, backup-excluded app storage.
+        // A keystore problem may disable persistence, but must not prevent VPN use.
+        val prefs = runCatching {
+            val key = androidx.security.crypto.MasterKey.Builder(this)
+                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
+            androidx.security.crypto.EncryptedSharedPreferences.create(this, "site_routes_enc", key,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+        }.getOrElse {
+            LogBuffer.add(LogBuffer.LogLevel.WARN, "[routing] Site cache available only for this session")
+            null
+        }
+        val boot = android.provider.Settings.Global.getInt(contentResolver, android.provider.Settings.Global.BOOT_COUNT, 0)
+        val profileId = currentProfileId
+        val rules = SiteBypassRules(settings.bypassDomains, settings.bypassIps)
+        val health = if (user.isEmpty()) normal else normal.copy(port = CredentialManager.getHealthPort() ?: port)
+        val transport = SiteRouteTransport(normal, health, protect = { socket -> protect(socket) }, resolve = { host ->
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = pickUnderlyingNetwork(cm, null, null)
+            (network?.getAllByName(host) ?: java.net.InetAddress.getAllByName(host)).toList()
+        })
+        return AdaptiveSiteProxy(transport,
+            contextKey = { "$boot|$profileId|${underlyingNetworkKey() ?: "offline"}" },
+            loadCache = { prefs?.getString("routes", null) },
+            saveCache = { json -> prefs?.edit()?.putString("routes", json)?.apply(); Unit },
+            routeAllowed = rules::allows
+        ).also {
+            adaptiveSites = it
+            LogBuffer.add(LogBuffer.LogLevel.INFO, "[routing] Automatic site routes enabled; cache TTL 7 days")
+        }.endpoint
     }
 
     private suspend fun startTun2socksProcess(fd: ParcelFileDescriptor, port: Int, user: String, pass: String) {
-        val tun2socksBin = File(applicationInfo.nativeLibraryDir, "libtun2socks.so")
-        if (!tun2socksBin.exists()) throw IllegalStateException("tun2socks binary not found at ${tun2socksBin.absolutePath}")
+        // hev-socks5-tunnel (in-process, JNI) — replaces badvpn-tun2socks. It takes
+        // the TUN fd directly (no Unix-socket SCM_RIGHTS handoff) and carries UDP
+        // through a real SOCKS5 UDP-ASSOCIATE with full-cone semantics, which is
+        // what makes Telegram/WebRTC voice+video calls work through the tunnel
+        // (badvpn's --enable-udprelay mangled the NAT mapping and dropped them).
+        //
+        // tunnel.mtu must match the TUN MTU set by VpnService.Builder; tunnel.ipv4
+        // mirrors the interface address added there (10.10.10.1). Empty user/pass =
+        // no SOCKS5 auth (Telemost round-robin LB path).
+        val tunMtu = establishedMtu
+        val extDir = getExternalFilesDir(null) ?: filesDir
+        val hevLog = File(extDir, "hev.log").absolutePath
+        val frontend = siteFrontend(port, user, pass)
+        val cfg = buildHevConfig(frontend.port, tunMtu, frontend.user, frontend.password, hevLog)
+        val cfgFile = File(filesDir, "hev.yml")
+        cfgFile.writeText(cfg)
+        // Diagnostic copy of the exact config, pullable via `adb pull` (a release
+        // build's private files/ is not run-as accessible).
+        try { File(extDir, "hev.yml").writeText(cfg) } catch (_: Exception) {}
+        val cfgPath = cfgFile.absolutePath
+        // getFd() (NOT detachFd): the native side uses but does not close the fd;
+        // the VpnService keeps ownership and closes the PFD after stopHevTunnel().
+        val tunFd = fd.fd
 
-        val sockPath = File(filesDir, "sock_path").absolutePath
-        // tun2socks --tunmtu must match the TUN MTU set by VpnService.Builder,
-        // otherwise the helper fragments above the link MTU and we lose the
-        // benefit of probing the underlying network.
-        val tunMtu = probeUnderlyingMtu()
-
-        // badvpn-tun2socks: receives TUN fd via Unix domain socket.
-        // FIXME(security): --username/--password are visible in /proc/<pid>/cmdline.
-        // SELinux + hidepid hide this from other apps on stock Android, but same-uid
-        // processes and root can read it. Migrate to stdin pipe or fd-based creds
-        // once the tun2socks fork supports it (see README security-hardening section).
-        // Empty user/pass = no SOCKS5 auth. Used by the Telemost path because the
-        // local round-robin LB is byte-transparent and SOCKS5 auth fragments
-        // across upstreams unreliably; the loopback binding alone enforces
-        // isolation there.
-        val args = mutableListOf(
-            tun2socksBin.absolutePath,
-            "--netif-ipaddr", "10.10.10.2",
-            "--netif-netmask", "255.255.255.252",
-            "--socks-server-addr", "127.0.0.1:$port",
-            "--tunmtu", tunMtu.toString(),
-            "--sock-path", sockPath,
-            "--enable-udprelay",
-            "--loglevel", "notice"
-        )
-        val authed = user.isNotEmpty()
-        if (authed) {
-            // FIXME(security): --username/--password are visible in /proc/<pid>/cmdline.
-            // SELinux + hidepid hide this from other apps on stock Android, but same-uid
-            // processes and root can read it. Migrate to stdin pipe or fd-based creds
-            // once the tun2socks fork supports it.
-            args.addAll(listOf("--username", user, "--password", pass))
+        // TProxyStartService spawns hev's native worker threads (lwip/timer/event)
+        // and RETURNS immediately — it does NOT block for the tunnel's lifetime.
+        // (An earlier version ran it on a Java thread and treated the thread's
+        // normal return as "hev exited", tearing down a working tunnel.) Call it
+        // inline; it is stopped later via TProxyStopService.
+        try {
+            hev.sockstun.TProxyService.TProxyStartService(cfgPath, tunFd)
+            hevRunning = true
+        } catch (e: Throwable) {
+            throw IllegalStateException("hev-socks5-tunnel failed to start: ${e.message}", e)
         }
-        val pb = ProcessBuilder(args)
-        pb.directory(filesDir)
-        pb.redirectErrorStream(true)
-
-        tun2socksProcess = pb.start()
-        Log.i(TAG, "tun2socks started, sock=$sockPath, socks=127.0.0.1:$port, auth=$authed")
-
-        // Log output in background. Same redaction story as xray.
-        serviceScope?.launch(Dispatchers.IO) {
-            try {
-                tun2socksProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                    val safe = LogBuffer.redactPublic(line)
-                    Log.d("tun2socks", safe)
-                    LogBuffer.add(LogBuffer.LogLevel.INFO, "[tun2socks] $line")
-                }
-            } catch (e: Exception) {
-                if (e !is kotlinx.coroutines.CancellationException) {
-                    Log.w(TAG, "Error reading tun2socks output: ${e.message}")
-                }
-            }
-        }
-
-        // Send TUN fd to tun2socks via Unix socket
-        sendTunFd(sockPath, fd)
+        Log.i(TAG, "hev-socks5-tunnel started, fd=$tunFd, socks=127.0.0.1:$port, udp=udp, auth=${user.isNotEmpty()}")
+        LogBuffer.add(LogBuffer.LogLevel.INFO, "[tun2socks] hev-socks5-tunnel up (udp relay)")
     }
 
-    private suspend fun sendTunFd(sockPath: String, fd: ParcelFileDescriptor) {
-        // Tight poll: tun2socks usually creates the socket within ~50ms.
-        // Use suspend delay() so we don't block a Dispatchers.IO worker.
-        var connected = false
-        for (attempt in 1..40) {
-            delay(50)
-            val sockFile = File(sockPath)
-            if (sockFile.exists()) {
-                connected = true
-                break
-            }
-        }
-        if (!connected) {
-            // Socket never appeared — tun2socks almost certainly failed to
-            // start. Fail loudly so the tunnel start aborts and failover/
-            // recovery kicks in, instead of reporting "Connected" with a TUN
-            // whose packets nobody drains ("connected but no traffic").
-            throw IllegalStateException(
-                "tun2socks control socket $sockPath never appeared (process failed to start?)")
-        }
+    /** Stop the in-process hev-socks5-tunnel. Idempotent; safe when not running. */
+    private fun stopHevTunnel() {
+        adaptiveSites?.close()
+        adaptiveSites = null
+        if (!hevRunning) return
+        hevRunning = false
+        try { hev.sockstun.TProxyService.TProxyStopService() } catch (_: Throwable) {}
+    }
 
-        val sock = android.net.LocalSocket()
-        try {
-            sock.connect(android.net.LocalSocketAddress(sockPath, android.net.LocalSocketAddress.Namespace.FILESYSTEM))
-            sock.setFileDescriptorsForSend(arrayOf(fd.fileDescriptor))
-            sock.outputStream.write(42) // dummy byte triggers SCM_RIGHTS
-            sock.outputStream.flush()
-            Log.i(TAG, "TUN fd sent to tun2socks via Unix socket")
-        } finally {
-            try { sock.close() } catch (_: Exception) {}
-        }
-        // Confirm tun2socks survived the handoff. If it died right after
-        // accepting the fd, nothing drains the TUN — surface it as a failure
-        // rather than a silent black-hole.
-        delay(100)
-        if (tun2socksProcess?.isAlive != true) {
-            throw IllegalStateException(
-                "tun2socks exited right after receiving the TUN fd; check its log")
+    private fun buildHevConfig(port: Int, mtu: Int, user: String, pass: String, logFile: String): String {
+        // Single-quoted YAML scalars; double any embedded quote for safety.
+        fun q(s: String) = s.replace("'", "''")
+        // Mirror SocksTun's fd-passing shape: misc carries task-stack-size (+ a
+        // debug log to app-external storage so we can pull the native failure
+        // reason), the tunnel section carries ONLY mtu. Do NOT set
+        // tunnel.name/ipv4/ipv6 — the interface is already configured by
+        // VpnService.Builder and comes in via the fd.
+        return buildString {
+            append("misc:\n")
+            append("  task-stack-size: 86016\n")
+            append("  log-level: warn\n")
+            append("  log-file: '").append(q(logFile)).append("'\n")
+            append("tunnel:\n")
+            append("  mtu: ").append(mtu).append('\n')
+            append("socks5:\n")
+            append("  port: ").append(port).append('\n')
+            append("  address: '127.0.0.1'\n")
+            append("  udp: 'udp'\n")
+            if (user.isNotEmpty()) {
+                append("  username: '").append(q(user)).append("'\n")
+                append("  password: '").append(q(pass)).append("'\n")
+            }
         }
     }
 
@@ -988,30 +1125,37 @@ class TunnelVpnService : VpnService() {
         }
 
         xrayWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
-            try {
-                val exitCode = xrayProcess?.waitFor() ?: return@launch
-                if (intentionalProcessKill || isReconnecting) return@launch
+            // xray runs in the :xray process now, so there's no Process.waitFor()
+            // to block on. Poll its local SOCKS port instead: if it stops
+            // accepting connections while we believe we're up, xray is gone —
+            // recover. Skipped for the Telemost path (currentSocksPort stays 0
+            // there; its own relay watchdog above handles liveness).
+            val port = currentSocksPort
+            if (port <= 0) return@launch
+            var deadPolls = 0
+            while (isActive) {
+                delay(3_000)
+                if (intentionalProcessKill || isReconnecting) { deadPolls = 0; continue }
                 val state = _connectionState.value
-                if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
-                    Log.e(TAG, "Xray died (exit $exitCode); attempting recover")
-                    withContext(Dispatchers.Main) { recoverXrayCrash(exitCode) }
-                }
-            } catch (_: Exception) {}
-        }
-        tun2socksWatchdogJob = serviceScope?.launch(Dispatchers.IO) {
-            try {
-                val exitCode = tun2socksProcess?.waitFor() ?: return@launch
-                if (intentionalProcessKill || isReconnecting) return@launch
-                val state = _connectionState.value
-                if (isActive && (state is ConnectionState.Connected || state is ConnectionState.Connecting)) {
-                    Log.e(TAG, "tun2socks died (exit $exitCode)")
-                    withContext(Dispatchers.Main) {
-                        _connectionState.value = ConnectionState.Error("tun2socks exited ($exitCode)")
-                        stopTunnel()
+                if (state !is ConnectionState.Connected && state !is ConnectionState.Connecting) return@launch
+                val alive = try {
+                    java.net.Socket().use { it.connect(java.net.InetSocketAddress("127.0.0.1", port), 400) }
+                    true
+                } catch (_: Exception) { false }
+                if (!alive) {
+                    deadPolls++
+                    if (deadPolls >= 2) { // ~6s of unreachable SOCKS → xray dead
+                        Log.e(TAG, "Xray SOCKS $port unreachable; attempting recover")
+                        withContext(Dispatchers.Main) { recoverXrayCrash(-1) }
+                        return@launch
                     }
-                }
-            } catch (_: Exception) {}
+                } else deadPolls = 0
+            }
         }
+        // hev-socks5-tunnel runs in its own native worker threads — no Java thread
+        // to poll and no Process to waitFor, so there is nothing to watchdog here.
+        // xray liveness is covered by xrayWatchdogJob above.
+        tun2socksWatchdogJob = null
     }
 
     @Volatile private var xrayRestartAttempts = 0
@@ -1056,11 +1200,10 @@ class TunnelVpnService : VpnService() {
                 xrayWatchdogJob?.cancel()
                 tun2socksWatchdogJob?.cancel()
                 telemostWatchdogJob?.cancel()
-                trafficMonitor?.stop(); trafficMonitor = null
-                tun2socksProcess?.let { p -> try { p.destroy() } catch (_: Exception) {}; try { p.destroyForcibly() } catch (_: Exception) {} }
-                tun2socksProcess = null
-                xrayProcess?.let { p -> try { p.destroy() } catch (_: Exception) {}; try { p.destroyForcibly() } catch (_: Exception) {} }
-                xrayProcess = null
+                throttleDetector?.stop(); throttleDetector = null; trafficMonitor?.stop(); trafficMonitor = null
+                stopHevTunnel()
+                stopXrayService()
+                subscriptionProxy = null
                 CredentialManager.clear()
                 NotificationHelper.showQuarantineNotification(this)
             } else {
@@ -1087,20 +1230,18 @@ class TunnelVpnService : VpnService() {
                 // Kill tun2socks too — it'll need new SOCKS creds.
                 tun2socksWatchdogJob?.cancel()
                 telemostWatchdogJob?.cancel()
-                tun2socksProcess?.let { p -> try { p.destroy() } catch (_: Exception) {} ; try { p.destroyForcibly() } catch (_: Exception) {} }
-                tun2socksProcess = null
+                stopHevTunnel()
+                subscriptionProxy = null
                 CredentialManager.clear()
 
                 val config = XrayConfigGenerator.generate(profile, settings, useSocksInbound = true)
-                val configFile = File(filesDir, "config.json")
-                File(filesDir, "config.json.tmp").apply {
-                    writeText(config.json)
-                    renameTo(configFile)
-                }
-                try {
-                    startXrayProcess(configFile)
-                    waitForPort(config.socksPort ?: throw IllegalStateException("port"), 5000)
-                } finally { configFile.delete() }
+                val recoverSocksPort = config.socksPort ?: throw IllegalStateException("port")
+                // Restart xray cleanly in the :xray process (stop the dead
+                // instance first — libXray holds a single global instance).
+                stopXrayService()
+                startXrayService(config.json)
+                currentSocksPort = recoverSocksPort
+                waitForPort(recoverSocksPort, 10000)
 
                 val fd = synchronized(fdLock) { vpnFd?.takeIf { it.fileDescriptor.valid() } } ?: run {
                     stopTunnel(); return@launch
@@ -1118,6 +1259,7 @@ class TunnelVpnService : VpnService() {
                 xrayRecovering = false
                 _connectionState.value = ConnectionState.Connected()
                 NotificationHelper.showConnectedNotification(this@TunnelVpnService)
+                armServiceHealth(profile, recoverSocksPort, config.socksUser ?: "", config.socksPass ?: "")
                 // Decay restart counter after a successful run
                 kotlinx.coroutines.delay(60_000)
                 xrayRestartAttempts = 0
@@ -1140,7 +1282,7 @@ class TunnelVpnService : VpnService() {
         val standard = 1500
         return try {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val net = cm.activeNetwork ?: return standard
+            val net = pickUnderlyingNetwork(cm, null, null) ?: return standard
             val lp = cm.getLinkProperties(net) ?: return standard
             val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) lp.mtu else 0
             if (raw <= 0) standard else raw.coerceIn(1280, standard)
@@ -1150,10 +1292,17 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    private fun tunnelDnsKey(profile: ServerProfile, settings: AppSettings): String =
+        if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST)
+            "relay:${profile.dns.ifEmpty { settings.primaryDns }}:${settings.secondaryDns}"
+        else "xray"
+
     private fun establishVpn(profile: ServerProfile, settings: AppSettings): ParcelFileDescriptor? {
         val primaryDns = profile.dns.ifEmpty { settings.primaryDns }
         val secondaryDns = settings.secondaryDns
         val probedMtu = probeUnderlyingMtu()
+        establishedMtu = probedMtu
+        establishedDnsKey = tunnelDnsKey(profile, settings)
         Log.i(TAG, "TUN MTU = $probedMtu (probed)")
 
         val builder = Builder()
@@ -1180,37 +1329,16 @@ class TunnelVpnService : VpnService() {
                 }
             }
 
-        // In quarantine (no xray running) we deliberately omit DNS servers
-        // so trigger apps' DNS resolver fails fast (EAI_AGAIN). With DNS
-        // servers set, packets just sit in TUN for ~30s until kernel timeout
-        // — that's why apps say "Connecting…" instead of "No network".
-        // When the tunnel becomes active, xray ignores DNS-server hints
-        // anyway (we route through SOCKS5).
-        // Add DNS unless we're in quarantine without an active tunnel.
-        // Prewarm runs xray, so DNS is needed.
-        //
-        // VpnService.Builder.addDnsServer applies SYSTEM-WIDE — including
-        // to apps that are in the disallowed-app list. So we must pick DNS
-        // servers that are reachable from BOTH the VPN exit AND the user's
-        // local ISP (otherwise excluded apps lose DNS). 1.1.1.1 (Cloudflare)
-        // is blocked by some RU ISPs → blacklisted apps fail to resolve.
-        //
-        // Strategy: pick the user-configured DNS first, then add 77.88.8.8
-        // (Yandex Public DNS) as a guaranteed-RU-reachable fallback.
-        // Whether to set Builder DNS at all. Skipping it lets blacklisted
-        // apps fall back to their own network's DNS (router/ISP), which
-        // always works locally. xray inbound has DNS sniffing enabled, so
-        // in-VPN apps still resolve through the tunnel even without
-        // Builder DNS.
-        val hasBlacklist = triggerPackage == null && !quarantineMode && !prewarmMode &&
-            settings.perAppMode == PerAppMode.BLACKLIST &&
-            settings.perAppList.isNotEmpty()
-        if ((!quarantineMode || triggerActive || prewarmMode) && !hasBlacklist) {
-            try { builder.addDnsServer("77.88.8.8") } catch (_: Exception) {}
-            try { builder.addDnsServer("8.8.8.8") } catch (_: Exception) {}
-            Log.i(TAG, "DNS list: 77.88.8.8, 8.8.8.8")
-        } else if (hasBlacklist) {
-            Log.i(TAG, "BLACKLIST mode: no Builder DNS — apps use their own network DNS")
+        if (!quarantineMode || triggerActive || prewarmMode) {
+            if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) {
+                // Telemost has no Xray DNS inbound; DNS goes through its SOCKS tunnel.
+                listOf(primaryDns, secondaryDns).distinct().forEach { dns ->
+                    if (isDottedQuad(dns) || dns.contains(':') && !dns.contains('/')) runCatching { builder.addDnsServer(dns) }
+                }
+            } else {
+                // Intercepted by the DNS outbound; resolver selection is in Xray.
+                builder.addDnsServer("10.10.10.2")
+            }
         }
 
         val trigger = triggerPackage
@@ -1225,7 +1353,7 @@ class TunnelVpnService : VpnService() {
                 return null
             }
             var added = 0
-            pkgs.forEach { pkg ->
+            pkgs.filter { it != packageName }.forEach { pkg ->
                 try {
                     builder.addAllowedApplication(pkg)
                     added++
@@ -1253,7 +1381,7 @@ class TunnelVpnService : VpnService() {
         } else {
             when (settings.perAppMode) {
                 PerAppMode.WHITELIST -> {
-                    settings.perAppList.forEach { pkg ->
+                    settings.perAppList.filter { it != packageName }.forEach { pkg ->
                         try { builder.addAllowedApplication(pkg) } catch (e: Exception) {
                             Log.w(TAG, "Package not found for whitelist: $pkg")
                         }
@@ -1493,19 +1621,17 @@ class TunnelVpnService : VpnService() {
                 val current = lastPublishedNetwork
                 val isOurUnderlying = (network == current)
 
-                // 1) Cellular tower-loss recovery: same Network, regained
-                //    validation. xray's TCP sockets through this transport
-                //    died during the gap and won't recover on their own.
+                // Android's connectivity check can fail while our existing
+                // tunnel still carries traffic. Regaining VALIDATED on the
+                // SAME network is not evidence that its TCP sessions died.
                 if (isOurUnderlying
                     && prev != null
                     && !prev.validated
                     && nowValidated
                     && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
                 ) {
-                    Log.i(TAG, "aux: cellular underlying $network regained validation — reconnecting")
-                    LogBuffer.add(LogBuffer.LogLevel.INFO, "Сеть восстановлена — переподключение…")
+                    Log.i(TAG, "aux: cellular underlying $network regained validation; keeping existing sessions")
                     publishUnderlyingNetworks(preferred = network)
-                    scheduleReconnect("cellular re-validated $network", network, cm)
                     return
                 }
 
@@ -1514,7 +1640,7 @@ class TunnelVpnService : VpnService() {
                     && prev != null
                     && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
                     && newSubId != prev.subId
-                    && (prev.subId != -1 || newSubId != -1)
+                    && prev.subId >= 0 && newSubId >= 0
                 ) {
                     Log.i(TAG, "aux: SIM swap on underlying ${prev.subId} → $newSubId")
                     scheduleReconnect("SIM swap on underlying", network, cm)
@@ -1802,18 +1928,16 @@ class TunnelVpnService : VpnService() {
             //      watchdog coroutine already finished.
             intentionalProcessKill = true
 
+            // New network => fresh DPI policy. Drop the detector and wipe the
+            // per-network throttle quarantine; it will be rebuilt on the new net.
+            throttleDetector?.stop()
+            throttleDetector = null
+            throttledThisNetwork.clear()
             trafficMonitor?.stop()
             trafficMonitor = null
-            tun2socksProcess?.let { p ->
-                try { p.destroy() } catch (_: Exception) {}
-                try { p.destroyForcibly() } catch (_: Exception) {}
-            }
-            tun2socksProcess = null
-            xrayProcess?.let { p ->
-                try { p.destroy() } catch (_: Exception) {}
-                try { p.destroyForcibly() } catch (_: Exception) {}
-            }
-            xrayProcess = null
+            stopHevTunnel()
+            stopXrayService()
+            subscriptionProxy = null
             CredentialManager.clear()
 
             // Now safe to join — processes are dead, watchdogs have already
@@ -1845,24 +1969,16 @@ class TunnelVpnService : VpnService() {
                     useSocksInbound = true
                 )
 
-                val configFile = File(filesDir, "config.json")
-                val tempFile = File(filesDir, "config.json.tmp")
-                tempFile.writeText(config.json)
-                tempFile.renameTo(configFile)
-
-                // Restart xray, ensure config deleted even on failure. From this
-                // point onwards new processes are ours — drop the intentional-kill
-                // shield so a real crash of the new process is still observable.
+                // Restart xray in the :xray process. From this point onwards the
+                // new instance is ours — drop the intentional-kill shield so a
+                // real crash of it is still observable.
                 intentionalProcessKill = false
-                try {
-                    startXrayProcess(configFile)
-                    waitForPort(
-                        config.socksPort ?: throw IllegalStateException("socksPort null"),
-                        timeoutMs = 5000
-                    )
-                } finally {
-                    configFile.delete()
-                }
+                val reconnectSocksPort = config.socksPort
+                    ?: throw IllegalStateException("socksPort null")
+                stopXrayService()
+                startXrayService(config.json)
+                currentSocksPort = reconnectSocksPort
+                waitForPort(reconnectSocksPort, timeoutMs = 10000)
 
                 yield()
                 // Reuse existing TUN fd for tun2socks (validate it's still open).
@@ -1901,6 +2017,7 @@ class TunnelVpnService : VpnService() {
                 xrayRestartAttempts = 0
                 isReconnecting = false
                 reconnectTargetNetwork = null
+                armServiceHealth(profile, socksPort, socksUser, socksPass)
                 Log.i(TAG, "Tunnel reconnected without TUN restart (no IP leak)")
             }
         } catch (e: TimeoutCancellationException) {
@@ -1937,24 +2054,21 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun stopTunnelProcesses() {
+    private fun stopTunnelProcesses(keepTun: Boolean = false) {
+        subscriptionProxy = null
+        healthSession++
         intentionalProcessKill = true
+        throttleDetector?.stop()
+        throttleDetector = null
         trafficMonitor?.stop()
         trafficMonitor = null
-        tun2socksProcess?.let { p ->
-            try { p.destroy() } catch (_: Exception) {}
-            try { p.destroyForcibly() } catch (_: Exception) {}
-        }
-        tun2socksProcess = null
-        xrayProcess?.let { p ->
-            try { p.destroy() } catch (_: Exception) {}
-            try { p.destroyForcibly() } catch (_: Exception) {}
-        }
-        xrayProcess = null
+        stopHevTunnel()
+        stopXrayService()
         telemostRelay?.stop()
         telemostRelay = null
+        subscriptionProxy = null
         CredentialManager.clear()
-        synchronized(fdLock) {
+        if (!keepTun) synchronized(fdLock) {
             vpnFd?.close()
             vpnFd = null
         }
@@ -1973,13 +2087,13 @@ class TunnelVpnService : VpnService() {
         telemostWatchdogJob?.cancel()
         unregisterNetworkCallback()
         // Don't kill an existing TUN if we already have one — only kill processes.
+        throttleDetector?.stop(); throttleDetector = null
         trafficMonitor?.stop(); trafficMonitor = null
-        tun2socksProcess?.let { p -> try { p.destroy() } catch (_: Exception) {}; try { p.destroyForcibly() } catch (_: Exception) {} }
-        tun2socksProcess = null
-        xrayProcess?.let { p -> try { p.destroy() } catch (_: Exception) {}; try { p.destroyForcibly() } catch (_: Exception) {} }
-        xrayProcess = null
+        stopHevTunnel()
+        stopXrayService()
         telemostRelay?.stop()
         telemostRelay = null
+        subscriptionProxy = null
         CredentialManager.clear()
 
         serviceScope?.launch {
@@ -2060,7 +2174,7 @@ class TunnelVpnService : VpnService() {
                         return@withTimeout
                     }
                     currentProfileId = profile.id
-                    activeProfileId = profile.id
+                    _activeProfileId.value = profile.id
                     app.getPreferences().edit()
                         .putLong("last_profile_id", profile.id)
                         .putString("last_profile_name", profile.name)
@@ -2085,16 +2199,13 @@ class TunnelVpnService : VpnService() {
 
                     copyGeoFiles()
                     val config = XrayConfigGenerator.generate(profile, settings, useSocksInbound = true)
-                    val configFile = File(filesDir, "config.json")
-                    val tempFile = File(filesDir, "config.json.tmp")
-                    tempFile.writeText(config.json)
-                    tempFile.renameTo(configFile)
-                    try {
-                        startXrayProcess(configFile)
-                        waitForPort(config.socksPort ?: throw IllegalStateException("SOCKS port"), 5000)
-                    } finally { configFile.delete() }
+                    val triggerSocksPort = config.socksPort ?: throw IllegalStateException("SOCKS port")
+                    stopXrayService()
+                    startXrayService(config.json)
+                    currentSocksPort = triggerSocksPort
+                    waitForPort(triggerSocksPort, 10000)
 
-                    val socksPort = config.socksPort ?: throw IllegalStateException("SOCKS port")
+                    val socksPort = triggerSocksPort
                     val socksUser = config.socksUser ?: throw IllegalStateException("SOCKS user")
                     val socksPass = config.socksPass ?: throw IllegalStateException("SOCKS pass")
                     startTun2socksProcess(newFd, socksPort, socksUser, socksPass)
@@ -2114,6 +2225,7 @@ class TunnelVpnService : VpnService() {
                     _connectionState.value = ConnectionState.Connected()
                     NotificationHelper.showConnectedNotification(this@TunnelVpnService)
                     VpnWidget.updateAllWidgets(applicationContext)
+                    armServiceHealth(profile, socksPort, socksUser, socksPass)
                     Log.i(TAG, "Trigger activated on quarantine TUN")
                 }
             } catch (e: Exception) {
@@ -2125,9 +2237,10 @@ class TunnelVpnService : VpnService() {
                 xrayWatchdogJob?.cancel()
                 tun2socksWatchdogJob?.cancel()
                 telemostWatchdogJob?.cancel()
-                trafficMonitor?.stop(); trafficMonitor = null
-                tun2socksProcess?.destroyForcibly(); tun2socksProcess = null
-                xrayProcess?.destroyForcibly(); xrayProcess = null
+                throttleDetector?.stop(); throttleDetector = null; trafficMonitor?.stop(); trafficMonitor = null
+                stopHevTunnel()
+                stopXrayService()
+                subscriptionProxy = null
                 CredentialManager.clear()
                 // Make sure quarantineMode stays true so next activate works.
                 quarantineMode = true
@@ -2153,10 +2266,9 @@ class TunnelVpnService : VpnService() {
         tun2socksWatchdogJob?.cancel()
         telemostWatchdogJob?.cancel()
         trafficMonitor?.stop(); trafficMonitor = null
-        tun2socksProcess?.let { p -> try { p.destroy() } catch (_: Exception) {}; try { p.destroyForcibly() } catch (_: Exception) {} }
-        tun2socksProcess = null
-        xrayProcess?.let { p -> try { p.destroy() } catch (_: Exception) {}; try { p.destroyForcibly() } catch (_: Exception) {} }
-        xrayProcess = null
+        stopHevTunnel()
+        stopXrayService()
+        subscriptionProxy = null
         CredentialManager.clear()
         File(filesDir, "config.json").delete()
         _trafficStats.value = TrafficSnapshot(0L, 0L, 0L, 0L)
@@ -2194,7 +2306,17 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun stopTunnel() {
+    @Synchronized private fun stopTunnel() {
+        subscriptionProxy = null
+        lifecycleEpoch++
+        healthSession++
+        failoverJob?.cancel(); failoverJob = null
+        startTunnelJob?.cancel(); startTunnelJob = null
+        reconnectJob?.cancel(); reconnectJob = null
+        xrayWatchdogJob?.cancel(); tun2socksWatchdogJob?.cancel(); telemostWatchdogJob?.cancel()
+        isStarting = false
+        currentProfileId = -1L
+        telemostRelay?.stop(); telemostRelay = null
         // User (or onRevoke / onDestroy) asked us to fully stop. Drop any
         // in-progress failover state — if they reconnect later we want a
         // fresh budget, not stale ledger entries from the previous chain.
@@ -2205,26 +2327,24 @@ class TunnelVpnService : VpnService() {
         // stale "restart in flight" flag left set by a recover path that bailed
         // out through stopTunnel().
         xrayRecovering = false
-        activeProfileId = -1L
+        _activeProfileId.value = -1L
         reconnectTargetNetwork = null
+        throttleSwitchInProgress = false
+        lastThrottleSwitchAt = 0L
+        throttledThisNetwork.clear()
         unregisterNetworkCallback()
+        throttleDetector?.stop()
+        throttleDetector = null
         trafficMonitor?.stop()
         trafficMonitor = null
 
-        // Kill tun2socks
-        tun2socksProcess?.let { p ->
-            try { p.destroy() } catch (_: Exception) {}
-            try { p.destroyForcibly() } catch (_: Exception) {}
-        }
-        tun2socksProcess = null
+        // Kill tun2socks (hev-socks5-tunnel, in-process)
+        stopHevTunnel()
 
         // Kill xray
-        xrayProcess?.let { p ->
-            try { p.destroy() } catch (_: Exception) {}
-            try { p.destroyForcibly() } catch (_: Exception) {}
-        }
-        xrayProcess = null
+        stopXrayService()
 
+        subscriptionProxy = null
         CredentialManager.clear()
 
         synchronized(fdLock) {

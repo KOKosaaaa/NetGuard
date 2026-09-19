@@ -21,6 +21,18 @@
 -keep class * extends androidx.room.RoomDatabase$Callback
 -dontwarn androidx.room.paging.**
 
+# SQLCipher — JNI looks these up by name; R8 must not rename/strip them or the
+# encrypted DB fails to open in release builds.
+-keep class net.sqlcipher.** { *; }
+-keep interface net.sqlcipher.** { *; }
+-dontwarn net.sqlcipher.**
+
+# hev-socks5-tunnel — libhev-socks5-tunnel.so registers its natives in
+# JNI_OnLoad via RegisterNatives, resolving the class by the literal string
+# "hev/sockstun/TProxyService". If R8 renames or strips it, System.loadLibrary
+# throws and the tunnel can't start. Keep the class and its native methods.
+-keep class hev.sockstun.TProxyService { *; }
+
 # OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**

@@ -143,6 +143,7 @@ class SettingsFragment : Fragment() {
                         }
                         binding.rgRouting.check(
                             when (s.routingMode) {
+                                RoutingMode.AUTO -> R.id.rb_auto
                                 RoutingMode.GLOBAL_PROXY -> R.id.rb_global
                                 RoutingMode.RULE_BASED -> R.id.rb_rules
                                 RoutingMode.DIRECT -> R.id.rb_direct
@@ -279,6 +280,7 @@ class SettingsFragment : Fragment() {
                 viewModel.updateSettings { s ->
                     s.copy(
                         routingMode = when (checkedId) {
+                            R.id.rb_auto -> RoutingMode.AUTO
                             R.id.rb_global -> RoutingMode.GLOBAL_PROXY
                             R.id.rb_rules -> RoutingMode.RULE_BASED
                             R.id.rb_direct -> RoutingMode.DIRECT
@@ -355,6 +357,7 @@ class SettingsFragment : Fragment() {
         binding.cbConnectionMap.isChecked = s.showConnectionMap
         binding.cbSpeedTest.isChecked = s.showSpeedTest
         binding.cbTelemostStriping.isChecked = s.telemostStriping
+        binding.cbAutoSwitchThrottle.isChecked = s.autoSwitchOnThrottle
 
         // Expert mode shows advanced features (Logs tab, etc.). Update the
         // bottom-nav in place — recreate() scrambled the selected-tab
@@ -372,6 +375,20 @@ class SettingsFragment : Fragment() {
         }
         binding.cbTelemostStriping.setOnCheckedChangeListener { _, checked ->
             viewModel.updateSettings { it.copy(telemostStriping = checked) }
+        }
+        binding.btnHealthServices.setOnClickListener {
+            val targets = com.smarttools.netguard.service.HealthTarget.entries
+            val checked = targets.map { it.name in viewModel.settings.value.healthCheckServices }.toBooleanArray()
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.health_check_services)
+                .setMultiChoiceItems(targets.map { it.title }.toTypedArray(), checked) { _, which, value -> checked[which] = value }
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    viewModel.updateSettings { it.copy(healthCheckServices = targets.filterIndexed { i, _ -> checked[i] }.map { it.name }.toSet()) }
+                }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        }
+        binding.cbAutoSwitchThrottle.setOnCheckedChangeListener { _, checked ->
+            viewModel.updateSettings { it.copy(autoSwitchOnThrottle = checked) }
         }
     }
 

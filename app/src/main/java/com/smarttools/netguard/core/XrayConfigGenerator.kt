@@ -75,7 +75,7 @@ object XrayConfigGenerator {
         val root = JsonObject()
 
         root.add("log", buildLog())
-        root.add("dns", buildDns(settings))
+        root.add("dns", buildDns(if (profile.dns.isNotBlank()) settings.copy(primaryDns = profile.dns) else settings))
 
         // No API, no stats — prevents data leakage via gRPC/REST (keys omitted entirely)
 
@@ -100,7 +100,11 @@ object XrayConfigGenerator {
         // every reconnect when RANDOM mode is on.
         val fingerprint = resolveFingerprint(profile, settings)
         root.add("outbounds", buildOutbounds(profile, settings, fingerprint))
-        root.add("routing", buildRouting(settings))
+        val routing = buildRouting(settings)
+        if (profile.xrayConfigJson.isNotBlank()) {
+            applyImportedConfig(root, routing, profile)
+        }
+        root.add("routing", routing)
 
         return GeneratedConfig(
             json = root.toString(),
@@ -108,6 +112,58 @@ object XrayConfigGenerator {
             socksUser = socksUser,
             socksPass = socksPass
         )
+    }
+
+    private fun applyImportedConfig(root: JsonObject, routing: JsonObject, profile: ServerProfile) {
+        val imported = com.google.gson.JsonParser.parseString(profile.xrayConfigJson).asJsonObject
+        val graph = imported.getAsJsonArray("outbounds")?.deepCopy()
+            ?: throw IllegalArgumentException("JSON profile has no outbounds")
+        val proxies = graph.filter { it.isJsonObject && it.asJsonObject.get("protocol")?.asString in
+            setOf("vless", "vmess", "trojan", "shadowsocks") }.map { it.asJsonObject }
+        val primary = proxies.firstOrNull { it.get("tag")?.asString == "proxy" } ?: proxies.firstOrNull()
+            ?: throw IllegalArgumentException("JSON profile has no supported proxy")
+        val primaryTag = primary.get("tag")?.asString?.takeIf { it.isNotBlank() } ?: "subscription-proxy"
+        primary.addProperty("tag", primaryTag)
+        val tags = graph.mapNotNull { it.asJsonObject.get("tag")?.asString }
+        require(tags.distinct().size == tags.size && tags.none { it.startsWith("netguard-") }) {
+            "Conflicting outbound tags in JSON profile"
+        }
+        // Preserve complete settings/streamSettings and detour outbounds. Inbounds,
+        // API and file-based logging from the subscription are never installed.
+        val own = root.getAsJsonArray("outbounds")
+        val out = JsonArray().apply {
+            add(primary)
+            graph.filter { it !== primary }.forEach { add(it) }
+            own.filter { it.asJsonObject.get("tag").asString != "proxy" }.forEach {
+                val ob = it.asJsonObject
+                val tag = ob.get("tag").asString
+                if (!tag.startsWith("netguard-")) ob.addProperty("tag", "netguard-$tag")
+                add(ob)
+            }
+        }
+        root.add("outbounds", out)
+        val rules = routing.getAsJsonArray("rules")
+        for (rule in rules) {
+            val obj = rule.asJsonObject
+            when (obj.get("outboundTag")?.asString) {
+                "proxy" -> obj.addProperty("outboundTag", primaryTag)
+                "direct" -> obj.addProperty("outboundTag", "netguard-direct")
+                "block" -> obj.addProperty("outboundTag", "netguard-block")
+            }
+        }
+        imported.getAsJsonObject("routing")?.let { original ->
+            val merged = JsonArray()
+            // Keep app-owned health/DNS rules ahead of provider routing.
+            rules.take(3).forEach { merged.add(it) }
+            original.getAsJsonArray("rules")?.forEach { merged.add(it.deepCopy()) }
+            rules.drop(3).forEach { merged.add(it) }
+            routing.add("rules", merged)
+            original.get("balancers")?.let { routing.add("balancers", it.deepCopy()) }
+        }
+        for (key in listOf("policy", "transport", "observatory", "burstObservatory")) {
+            imported.get(key)?.let { root.add(key, it.deepCopy()) }
+        }
+        imported.getAsJsonObject("dns")?.get("hosts")?.let { root.getAsJsonObject("dns").add("hosts", it.deepCopy()) }
     }
 
     private fun buildLog(): JsonObject {
@@ -118,13 +174,16 @@ object XrayConfigGenerator {
         }
     }
 
+    private fun dohAddress(address: String): String =
+        if (address.startsWith("https://")) address else "https://${if (address.contains(':')) "[$address]" else address}/dns-query"
+
     private fun buildDns(settings: AppSettings): JsonObject {
         return JsonObject().apply {
             val servers = JsonArray()
             if (settings.dohEnabled) {
                 // Primary: DoH through proxy — encrypted and tunneled
                 val dohServer = JsonObject().apply {
-                    addProperty("address", "https+local://${settings.primaryDns}/dns-query")
+                    addProperty("address", dohAddress(settings.primaryDns))
                     add("domains", JsonArray())
                 }
                 servers.add(dohServer)
@@ -136,9 +195,8 @@ object XrayConfigGenerator {
                 servers.add(primaryServer)
             }
             // Secondary DNS fallback
-            servers.add(com.google.gson.JsonPrimitive(settings.secondaryDns))
-            // Localhost fallback for internal resolution
-            servers.add(com.google.gson.JsonPrimitive("localhost"))
+            servers.add(com.google.gson.JsonPrimitive(if (settings.dohEnabled)
+                dohAddress(settings.secondaryDns) else settings.secondaryDns))
             add("servers", servers)
             addProperty("queryStrategy", if (settings.enableIpv6) "UseIP" else "UseIPv4")
             addProperty("disableCache", false)
@@ -198,6 +256,12 @@ object XrayConfigGenerator {
         return JsonArray().apply {
             add(socksInbound)
             add(httpInbound)
+            // Same auth, separate tag: probes always traverse the chosen proxy,
+            // even when user routing rules bypass the tested destination.
+            add(socksInbound.deepCopy().apply {
+                addProperty("tag", "health-in")
+                addProperty("port", CredentialManager.getHealthPort())
+            })
         }
     }
 
@@ -206,6 +270,11 @@ object XrayConfigGenerator {
         outbounds.add(buildProxyOutbound(profile, settings, fingerprint))
         outbounds.add(buildDirectOutbound())
         outbounds.add(buildBlockOutbound())
+        outbounds.add(JsonObject().apply {
+            addProperty("tag", "netguard-dns")
+            addProperty("protocol", "dns")
+            add("settings", JsonObject())
+        })
         if (settings.tlsFragmentEnabled) {
             outbounds.add(buildFragmentOutbound(settings))
         }
@@ -221,13 +290,14 @@ object XrayConfigGenerator {
             Protocol.HYSTERIA2 -> buildHysteria2Outbound(profile, fingerprint)
             Protocol.TELEMOST -> throw IllegalStateException("Telemost profile must not reach XrayConfigGenerator; use TelemostRelayManager")
         }
+        val streamSettings = outbound.getAsJsonObject("streamSettings")
+        val socketOptions = streamSettings?.getAsJsonObject("sockopt") ?: JsonObject()
+        if (streamSettings != null) streamSettings.add("sockopt", socketOptions)
         // TLS Fragment: route proxy's TCP through the fragment outbound
-        if (settings.tlsFragmentEnabled) {
+        if (settings.tlsFragmentEnabled && profile.protocol != Protocol.HYSTERIA2) {
             val stream = outbound.getAsJsonObject("streamSettings")
             if (stream != null) {
-                stream.add("sockopt", JsonObject().apply {
-                    addProperty("dialerProxy", "fragment")
-                })
+                socketOptions.addProperty("dialerProxy", "fragment")
             }
         }
         return outbound
@@ -237,16 +307,17 @@ object XrayConfigGenerator {
         return JsonObject().apply {
             addProperty("tag", "fragment")
             addProperty("protocol", "freedom")
-            add("settings", JsonObject())
+            add("settings", JsonObject().apply {
+                add("fragment", JsonObject().apply {
+                    addProperty("packets", settings.tlsFragmentPackets)
+                    addProperty("length", settings.tlsFragmentLength)
+                    addProperty("interval", settings.tlsFragmentInterval)
+                })
+            })
             add("streamSettings", JsonObject().apply {
                 addProperty("security", "none")
                 add("sockopt", JsonObject().apply {
                     addProperty("tcpKeepAliveIdle", 100)
-                    add("fragment", JsonObject().apply {
-                        addProperty("packets", settings.tlsFragmentPackets)
-                        addProperty("length", settings.tlsFragmentLength)
-                        addProperty("interval", settings.tlsFragmentInterval)
-                    })
                 })
             })
         }
@@ -336,49 +407,34 @@ object XrayConfigGenerator {
     }
 
     private fun buildHysteria2Outbound(profile: ServerProfile, fingerprint: String): JsonObject {
-        // xray-core's hysteria2 outbound expects:
-        //   - settings.servers[].password (auth)
-        //   - settings.obfs (NOT in streamSettings)
-        //   - streamSettings.network must NOT be "hysteria2" (xray treats that
-        //     as an unknown transport — see GitHub issue #2). Hysteria2's UDP
-        //     transport is implicit in the outbound itself; streamSettings only
-        //     carries TLS config.
+        require(profile.hysteriaObfs.isBlank() || profile.hysteriaObfs == "salamander") { "Unsupported Hysteria obfuscation" }
         return JsonObject().apply {
             addProperty("tag", "proxy")
-            addProperty("protocol", "hysteria2")
+            addProperty("protocol", "hysteria")
             add("settings", JsonObject().apply {
-                add("servers", JsonArray().apply {
-                    add(JsonObject().apply {
-                        addProperty("address", profile.address)
-                        addProperty("port", profile.port)
-                        if (profile.hysteriaAuth.isNotEmpty()) {
-                            addProperty("password", profile.hysteriaAuth)
-                        }
-                    })
-                })
-                if (profile.hysteriaObfs.isNotEmpty()) {
-                    add("obfs", JsonObject().apply {
-                        addProperty("type", profile.hysteriaObfs)
-                        addProperty("password", profile.hysteriaObfsPassword)
-                    })
-                }
+                addProperty("version", 2)
+                addProperty("address", profile.address)
+                addProperty("port", profile.port)
             })
-            // streamSettings is only needed for TLS — hysteria2 always uses
-            // QUIC over UDP, no transport selection.
-            if (profile.security != SecurityType.NONE) {
-                add("streamSettings", JsonObject().apply {
-                    addProperty("security", "tls")
-                    add("tlsSettings", JsonObject().apply {
-                        if (profile.sni.isNotEmpty()) addProperty("serverName", profile.sni)
-                        if (profile.alpn.isNotEmpty()) {
-                            add("alpn", JsonArray().apply {
-                                profile.alpn.split(",").forEach { add(it.trim()) }
-                            })
-                        }
-                        addProperty("allowInsecure", profile.allowInsecure)
-                    })
+            add("streamSettings", JsonObject().apply {
+                addProperty("network", "hysteria")
+                addProperty("security", "tls")
+                add("hysteriaSettings", JsonObject().apply {
+                    addProperty("version", 2)
+                    addProperty("auth", profile.hysteriaAuth)
                 })
-            }
+                add("tlsSettings", JsonObject().apply {
+                    addProperty("serverName", profile.sni.ifEmpty { profile.address })
+                    addProperty("allowInsecure", profile.allowInsecure)
+                    if (profile.alpn.isNotEmpty()) add("alpn", JsonArray().apply { profile.alpn.split(",").forEach { add(it.trim()) } })
+                })
+                if (profile.hysteriaObfs == "salamander") add("finalmask", JsonObject().apply {
+                    add("udp", JsonArray().apply { add(JsonObject().apply {
+                        addProperty("type", "salamander")
+                        add("settings", JsonObject().apply { addProperty("password", profile.hysteriaObfsPassword) })
+                    }) })
+                })
+            })
         }
     }
 
@@ -434,9 +490,14 @@ object XrayConfigGenerator {
                     })
                 }
                 TransportType.SPLIT_HTTP -> {
-                    add("splithttpSettings", JsonObject().apply {
+                    addProperty("network", "xhttp")
+                    add("xhttpSettings", JsonObject().apply {
                         addProperty("path", profile.path.ifEmpty { "/" })
                         addProperty("host", profile.host.ifEmpty { profile.address })
+                        if (profile.mode.isNotEmpty()) addProperty("mode", profile.mode)
+                        if (profile.xhttpExtra.isNotBlank()) {
+                            add("extra", com.google.gson.JsonParser.parseString(profile.xhttpExtra).asJsonObject)
+                        }
                     })
                 }
                 TransportType.KCP -> {
@@ -546,6 +607,11 @@ object XrayConfigGenerator {
             // when no domain-based routing rule matches — prevents system DNS leaks
             addProperty("domainStrategy", "IPIfNonMatch")
             add("rules", JsonArray().apply {
+                add(JsonObject().apply {
+                    addProperty("type", "field")
+                    add("inboundTag", JsonArray().apply { add("health-in"); add("http-in"); add("dns-out") })
+                    addProperty("outboundTag", "proxy")
+                })
                 // CRITICAL: block any reverse connections to localhost through proxy
                 add(JsonObject().apply {
                     addProperty("type", "field")
@@ -560,7 +626,7 @@ object XrayConfigGenerator {
                 // Prevents apps from making direct DNS queries that leak real IP
                 add(JsonObject().apply {
                     addProperty("type", "field")
-                    addProperty("outboundTag", "proxy")
+                    addProperty("outboundTag", "netguard-dns")
                     addProperty("port", "53")
                 })
 
@@ -609,7 +675,7 @@ object XrayConfigGenerator {
                 }
 
                 when (settings.routingMode) {
-                    RoutingMode.GLOBAL_PROXY -> {
+                    RoutingMode.AUTO, RoutingMode.GLOBAL_PROXY -> {
                         add(JsonObject().apply {
                             addProperty("type", "field")
                             addProperty("outboundTag", "proxy")

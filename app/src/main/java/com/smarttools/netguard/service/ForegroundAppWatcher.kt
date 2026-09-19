@@ -93,13 +93,20 @@ class TriggerWatcherService : Service() {
             return START_NOT_STICKY
         }
 
+        // Must call startForeground() promptly after startForegroundService(), or
+        // Android throws ForegroundServiceDidNotStartInTime and kills the whole app.
+        // Do it BEFORE the permission check, which can early-return (that early-out
+        // without startForeground was crashing the app on installs where USAGE_STATS
+        // isn't granted yet).
+        startForegroundCompat()
+
         if (!hasUsageStatsPermission(this)) {
             Log.w(TAG, "PACKAGE_USAGE_STATS not granted, exiting")
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        startForegroundCompat()
         if (loopJob?.isActive != true) {
             val s = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             scope = s

@@ -5,22 +5,25 @@ import android.os.Build
 import android.provider.Settings
 import com.smarttools.netguard.BuildConfig
 import com.smarttools.netguard.core.ProfileParser
+import com.smarttools.netguard.core.SubscriptionFetcher
+import com.smarttools.netguard.core.SubscriptionFetchRoute
+import com.smarttools.netguard.core.SubscriptionFormatException
+import com.smarttools.netguard.core.SubscriptionSizeException
+import com.smarttools.netguard.core.SubscriptionHttpException
+import com.smarttools.netguard.service.TunnelVpnService
+import com.smarttools.netguard.R
+import okhttp3.Headers
+import java.net.SocketTimeoutException
 import com.smarttools.netguard.database.ProfileDao
 import com.smarttools.netguard.database.SubscriptionDao
 import com.smarttools.netguard.model.Subscription
-import com.smarttools.netguard.util.AddressValidator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import okhttp3.CertificatePinner
-import okhttp3.Dns
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.IOException
-import java.net.URL
 import java.security.MessageDigest
-import java.util.concurrent.TimeUnit
 
 class SubscriptionRepository(
     private val subDao: SubscriptionDao,
@@ -44,58 +47,27 @@ class SubscriptionRepository(
         // hex, lowercase, 64 chars
         digest.joinToString("") { "%02x".format(it) }
     }
-    /**
-     * Network interceptor validates every request (including redirects)
-     * to prevent SSRF via redirect chain: HTTPS → HTTP or → private IP.
-     */
-    private val redirectSafetyInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val url = request.url
-        if (url.scheme != "https") {
-            throw IOException("Redirect to non-HTTPS URL blocked: ${url.scheme}://${url.host}")
-        }
-        validateHost(url.host)
-        chain.proceed(request)
-    }
-
-    /**
-     * DNS rebinding guard. Without this, an attacker controlling the DNS
-     * response for a subscription host can return a public IP on the first
-     * (URL-validation) lookup and a private IP on the second (OkHttp connect)
-     * lookup — TOCTOU, SSRF into the device's LAN. We perform the system
-     * lookup ourselves and drop any private/reserved addresses before OkHttp
-     * ever sees them, so the connect phase is forced to use an address that
-     * already passed [AddressValidator].
-     */
-    private val safeDns = object : Dns {
-        override fun lookup(hostname: String): List<java.net.InetAddress> {
-            val resolved = Dns.SYSTEM.lookup(hostname)
-            val safe = resolved.filterNot { AddressValidator.isPrivateOrReserved(it) }
-            if (safe.isEmpty()) {
-                throw IOException("All resolved addresses for $hostname are private/reserved")
+    private val httpClient = SubscriptionFetcher.newClient()
+    private val fetcher = SubscriptionFetcher(
+        routes = {
+            buildList {
+                TunnelVpnService.subscriptionProxy?.let { proxy ->
+                    add(SubscriptionFetchRoute { SubscriptionFetcher.throughProxy(httpClient, proxy) })
+                }
+                add(SubscriptionFetchRoute { httpClient })
             }
-            return safe
-        }
-    }
-
-    /**
-     * Subscription URLs are user-supplied — we don't control their CAs, so
-     * we don't pin them. Validation falls back to the Android system
-     * truststore. If you want to pin a self-hosted endpoint you control,
-     * extend this with `.add("your.host", "sha256/…")` (sha256 of the
-     * Subject Public Key Info in DER, base64-encoded).
-     */
-    private val certificatePinner = CertificatePinner.Builder().build()
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .dns(safeDns)
-        .addNetworkInterceptor(redirectSafetyInterceptor)
-        .certificatePinner(certificatePinner)
-        .build()
+        },
+        headers = {
+            Headers.Builder()
+                .add("x-hwid", hwid)
+                .add("x-device-os", "Android")
+                .add("x-ver-os", Build.VERSION.RELEASE ?: "")
+                .add("x-device-model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+                .add("x-app-version", BuildConfig.VERSION_NAME)
+                .build()
+        },
+        userAgents = listOf("Happ/3.0.0", "NetGuard/${BuildConfig.VERSION_NAME}"),
+    )
 
     fun getAllFlow(): Flow<List<Subscription>> = subDao.getAllFlow()
 
@@ -112,103 +84,26 @@ class SubscriptionRepository(
         subDao.delete(sub)
     }
 
-    /**
-     * Validate hostname is not a private/internal address.
-     * Used by both initial URL check and redirect interceptor.
-     */
-    private fun validateHost(host: String) {
-        val cleaned = host.removeSurrounding("[", "]")
-        if (cleaned.equals("localhost", ignoreCase = true)) {
-            throw IOException("Private/loopback address blocked: $cleaned")
-        }
-        if (AddressValidator.isPrivateOrReserved(cleaned)) {
-            throw IOException("Private/reserved address blocked: $cleaned")
-        }
-    }
-
-    /**
-     * Validate subscription URL to prevent SSRF attacks.
-     * Only HTTPS allowed, no private/internal IPs.
-     * Public so callers (ViewModel, config import) can run the same check
-     * BEFORE inserting into the DB — otherwise a junk URL leaves a permanent
-     * row that the periodic update worker keeps trying to fetch.
-     */
     fun validateUrl(url: String) {
-        val parsed = try {
-            URL(url)
-        } catch (e: Exception) {
-            throw IllegalArgumentException("Invalid URL: ${e.message}")
-        }
-
-        require(parsed.protocol == "https") { "Only HTTPS subscription URLs are supported" }
-        validateHost(parsed.host)
+        SubscriptionFetcher.validateUrl(url)
     }
 
     suspend fun updateSubscription(sub: Subscription): Result<Int> = withContext(Dispatchers.IO) {
         try {
             validateUrl(sub.url)
 
-            // Remnawave / XTLS Subscription Standard headers — same set
-            // that Happ and v2RayTun send. Lets the server show real device
-            // info ('Samsung SM-A056E · Android 14') instead of guessing.
-            val request = Request.Builder()
-                .url(sub.url)
-                .header("User-Agent", "NetGuard/${BuildConfig.VERSION_NAME}")
-                .header("x-hwid", hwid)
-                .header("x-device-os", "Android")
-                .header("x-ver-os", Build.VERSION.RELEASE ?: "")
-                .header("x-device-model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
-                .header("x-app-version", BuildConfig.VERSION_NAME)
-                .get()
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            @Suppress("RedundantExplicitType")
-            var expireMs: Long = 0L
-            var usedBytes: Long = 0L
-            var totalBytes: Long = 0L
-            var supportUrl = ""
-            var webPageUrl = ""
-            var announce = ""
-            var serverTitle: String? = null
-            val body = response.use { resp ->
-                if (!resp.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${resp.code}"))
-                }
-                val userinfo = resp.header("subscription-userinfo")
-                expireMs = parseExpireFromHeaders(userinfo)
-                val (used, total) = parseTrafficFromHeaders(userinfo)
-                usedBytes = used
-                totalBytes = total
-                supportUrl = (resp.header("support-url") ?: "").trim().take(URL_LIMIT)
-                webPageUrl = (resp.header("profile-web-page-url") ?: "").trim().take(URL_LIMIT)
-                announce = (decodeProfileTitle(resp.header("announce")) ?: "").take(ANNOUNCE_LIMIT)
-                val rawTitleHeader = resp.header("profile-title")
-                serverTitle = decodeProfileTitle(rawTitleHeader)
-                android.util.Log.i(
-                    "SubscriptionRepository",
-                    "fetch ok host=${java.net.URL(sub.url).host} " +
-                        "raw-profile-title=${rawTitleHeader ?: "<missing>"} " +
-                        "decoded=${serverTitle ?: "<null>"} " +
-                        "userRenamed=${sub.userRenamed} " +
-                        "used=$usedBytes total=$totalBytes " +
-                        "support='${supportUrl}' web='${webPageUrl}' announce-len=${announce.length}"
-                )
-                val respBody = resp.body ?: return@withContext Result.failure(Exception("Empty response"))
-                // Limit response to 2MB to prevent OOM from malicious servers
-                val maxBytes = 2L * 1024 * 1024
-                val contentLength = respBody.contentLength()
-                if (contentLength > maxBytes) {
-                    return@withContext Result.failure(Exception("Response too large: ${contentLength / 1024}KB"))
-                }
-                val source = respBody.source()
-                source.request(maxBytes + 1)
-                if (source.buffer.size > maxBytes) {
-                    return@withContext Result.failure(Exception("Response too large"))
-                }
-                source.readUtf8()
-            }
+            val downloaded = fetcher.fetch(sub.url)
+            val headers = downloaded.headers
+            val userinfo = headers["subscription-userinfo"]
+            val expireMs = parseExpireFromHeaders(userinfo)
+            val (usedBytes, totalBytes) = parseTrafficFromHeaders(userinfo)
+            val supportUrl = headers["support-url"].orEmpty().trim().take(URL_LIMIT)
+            val webPageUrl = headers["profile-web-page-url"].orEmpty().trim().take(URL_LIMIT)
+            val announce = decodeProfileTitle(headers["announce"]).orEmpty().take(ANNOUNCE_LIMIT)
+            val serverTitle = decodeProfileTitle(headers["profile-title"])
+            val body = downloaded.body
             val result = ProfileParser.parseSubscription(body)
+            coroutineContext.ensureActive()
 
             if (result.profiles.isEmpty()) {
                 return@withContext Result.failure(Exception("No profiles found"))
@@ -238,10 +133,6 @@ class SubscriptionRepository(
                 !titleSnapshot.isNullOrBlank() -> titleSnapshot.take(SUB_NAME_LIMIT)
                 else -> fragmentFromUrl(sub.url)?.take(SUB_NAME_LIMIT) ?: sub.name
             }
-            android.util.Log.i(
-                "SubscriptionRepository",
-                "resolved name='$resolvedName' (was='${sub.name}')"
-            )
             subDao.update(
                 sub.copy(
                     name = resolvedName,
@@ -257,8 +148,18 @@ class SubscriptionRepository(
             )
 
             Result.success(profiles.size)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Result.failure(e)
+            val message = when (e) {
+                is SocketTimeoutException -> context.getString(R.string.subscription_timeout_error)
+                is SubscriptionFormatException -> context.getString(R.string.subscription_format_error)
+                is SubscriptionSizeException -> context.getString(R.string.subscription_size_error)
+                is SubscriptionHttpException -> "HTTP ${e.status}"
+                is IOException -> context.getString(R.string.subscription_network_error)
+                else -> e.message ?: context.getString(R.string.subscription_network_error)
+            }
+            Result.failure(IOException(message, e))
         }
     }
 

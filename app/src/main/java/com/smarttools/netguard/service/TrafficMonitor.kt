@@ -1,76 +1,30 @@
 package com.smarttools.netguard.service
 
-import android.net.TrafficStats
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 
 class TrafficMonitor {
-
-    private companion object {
-        private const val TAG = "TrafficMonitor"
-    }
-
     private var monitorJob: Job? = null
-    private var startRx: Long = 0
-    private var startTx: Long = 0
-    private var prevRx: Long = 0
-    private var prevTx: Long = 0
 
-    fun start(
-        scope: CoroutineScope,
-        onUpdate: (TunnelVpnService.TrafficSnapshot) -> Unit
-    ) {
+    fun start(scope: CoroutineScope, onUpdate: (TunnelVpnService.TrafficSnapshot) -> Unit) {
+        stop()
         monitorJob = scope.launch {
-            try {
-                startRx = TrafficStats.getTotalRxBytes()
-                startTx = TrafficStats.getTotalTxBytes()
-                prevRx = startRx
-                prevTx = startTx
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "Failed to init traffic stats", e)
-                return@launch
-            }
-
+            val counter = TrafficRateCounter()
             while (isActive) {
                 try {
-                    delay(2000)
-                    val nowRx = TrafficStats.getTotalRxBytes()
-                    val nowTx = TrafficStats.getTotalTxBytes()
-
-                    val speedRx = if (nowRx >= prevRx) nowRx - prevRx else 0
-                    val speedTx = if (nowTx >= prevTx) nowTx - prevTx else 0
-
-                    // Handle counter reset (system reboot): re-anchor start values
-                    if (nowRx < startRx) startRx = nowRx
-                    if (nowTx < startTx) startTx = nowTx
-                    val totalRx = nowRx - startRx
-                    val totalTx = nowTx - startTx
-
-                    prevRx = nowRx
-                    prevTx = nowTx
-
-                    onUpdate(
-                        TunnelVpnService.TrafficSnapshot(
-                            rxBytes = totalRx,
-                            txBytes = totalTx,
-                            rxSpeed = speedRx,
-                            txSpeed = speedTx
-                        )
-                    )
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    android.util.Log.e(TAG, "Error in traffic monitor loop", e)
-                }
+                    // JNI layout: tx packets, tx bytes, rx packets, rx bytes.
+                    // Count TUN traffic only; excluded apps never affect this.
+                    val stats = hev.sockstun.TProxyService.TProxyGetStats()
+                    if (stats != null && stats.size >= 4 && stats[1] >= 0 && stats[3] >= 0) {
+                        val s = counter.sample(stats[3], stats[1], System.nanoTime())
+                        onUpdate(TunnelVpnService.TrafficSnapshot(s.rxBytes, s.txBytes, s.rxPerSecond, s.txPerSecond))
+                    }
+                } catch (e: CancellationException) { throw e }
+                catch (_: LinkageError) { return@launch }
+                catch (_: Exception) { /* Keep last sample while native stats are unavailable. */ }
+                delay(2000)
             }
         }
     }
 
-    fun stop() {
-        monitorJob?.cancel()
-        monitorJob = null
-    }
+    fun stop() { monitorJob?.cancel(); monitorJob = null }
 }

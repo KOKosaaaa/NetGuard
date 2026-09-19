@@ -87,6 +87,17 @@
             android:layout_marginBottom="4dp" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_health_services" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/health_check_services"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+        <CheckBox android:id="@+id/cb_auto_switch_throttle" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/auto_switch_throttle" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/auto_switch_throttle_desc" android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginStart="32dp"
+            android:layout_marginBottom="4dp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_traffic_stats_mode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -258,6 +269,8 @@
             android:id="@+id/rg_routing"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
+            <RadioButton android:id="@+id/rb_auto" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="@string/routing_auto" />
             <RadioButton android:id="@+id/rb_global" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:text="@string/routing_global" />
             <RadioButton android:id="@+id/rb_rules" android:layout_width="wrap_content"
@@ -265,6 +278,14 @@
             <RadioButton android:id="@+id/rb_direct" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:text="@string/routing_direct" />
         </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/routing_auto_desc"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="4dp" />
 
         <View android:layout_width="match_parent" android:layout_height="1dp"
             android:background="?attr/colorOutline" android:layout_marginVertical="16dp" />

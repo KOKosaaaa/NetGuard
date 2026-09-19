@@ -7,6 +7,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.smarttools.netguard.core.DatabaseKeyManager
+import net.sqlcipher.database.SQLiteDatabase
+import net.sqlcipher.database.SupportFactory
 import com.smarttools.netguard.agent.ChainDao
 import com.smarttools.netguard.agent.ChainEntity
 import com.smarttools.netguard.agent.ChainHopEntity
@@ -24,7 +27,7 @@ import java.io.File
         ChainEntity::class,
         ChainHopEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -159,22 +162,48 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profiles ADD COLUMN xhttpExtra TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE profiles ADD COLUMN xrayConfigJson TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        private const val DB_META_PREFS = "netguard_db_meta"
+        private const val KEY_DB_ENCRYPTED = "db_encrypted"
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    // If old encrypted DB exists, delete it — can't read without key
-                    deleteEncryptedIfNeeded(context)
+                    val appCtx = context.applicationContext
+                    val passphrase = DatabaseKeyManager.getPassphrase(appCtx)
+                    // Crash-safe, one-time plaintext→encrypted migration. Runs
+                    // BEFORE Room opens the file and never destroys the plaintext
+                    // original until an encrypted copy is verified openable.
+                    // Returns whether the on-disk DB is now ENCRYPTED.
+                    val encrypted = migrateToEncryptedIfNeeded(appCtx, passphrase)
 
-                    Room.databaseBuilder(
-                        context.applicationContext,
+                    val builder = Room.databaseBuilder(
+                        appCtx,
                         AppDatabase::class.java,
                         DB_NAME
                     )
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
-                        .fallbackToDestructiveMigration()
+                    // CRITICAL: only attach the SQLCipher factory when the file is
+                    // actually encrypted. If the migration failed we are still on a
+                    // plaintext DB — opening it with SupportFactory(passphrase)
+                    // would fail to decrypt and fallbackToDestructiveMigration would
+                    // then WIPE the user's profiles. Falling back to a plaintext
+                    // open keeps the data (degraded, unencrypted) instead of losing
+                    // it. SupportFactory may zero its passphrase array, so pass a copy.
+                    if (encrypted) {
+                        builder.openHelperFactory(SupportFactory(passphrase.copyOf()))
+                    }
+
+                    builder
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                         .build()
                         .also { INSTANCE = it }
                 }
@@ -182,29 +211,147 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * If the existing database is encrypted (from a previous version),
-         * delete it so Room can create a fresh unencrypted one.
-         * Profiles will be re-fetched from subscriptions.
+         * Migrate an existing PLAINTEXT `netguard.db` to a SQLCipher-encrypted
+         * file, once. Uses the official `sqlcipher_export()` recipe.
+         *
+         * Safety contract — there must be NO data-loss path:
+         *  - The plaintext original is read-only here and is deleted ONLY after
+         *    the encrypted copy is (a) fully exported and (b) re-opened with the
+         *    passphrase and verified to carry the `profiles` table + matching
+         *    user_version.
+         *  - On ANY failure we keep the plaintext DB untouched and simply return;
+         *    the app continues to run on plaintext (the prior state) rather than
+         *    losing the user's 20+ profiles and server bearer tokens.
+         *  - A `.plainbak` copy is left for one version as an extra safety net.
+         *
+         * @return true when the on-disk DB is ENCRYPTED (caller must open it with
+         *   the SQLCipher factory); false when it is still plaintext (caller must
+         *   open it WITHOUT the factory, or destructive-fallback would wipe data).
          */
-        private fun deleteEncryptedIfNeeded(context: Context) {
-            val dbFile = context.getDatabasePath(DB_NAME)
-            if (!dbFile.exists()) return
+        private fun migrateToEncryptedIfNeeded(context: Context, passphrase: ByteArray): Boolean {
+            val meta = context.getSharedPreferences(DB_META_PREFS, Context.MODE_PRIVATE)
+            if (meta.getBoolean(KEY_DB_ENCRYPTED, false)) return true
 
-            val isReadable = try {
-                android.database.sqlite.SQLiteDatabase.openDatabase(
-                    dbFile.path, null,
-                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-                ).use { true }
+            val plainFile = context.getDatabasePath(DB_NAME)
+            if (!plainFile.exists()) {
+                // Fresh install: the DB will be created encrypted from scratch.
+                meta.edit().putBoolean(KEY_DB_ENCRYPTED, true).commit()
+                return true
+            }
+
+            SQLiteDatabase.loadLibs(context)
+
+            // Is the existing file actually plaintext? Opening with an empty key
+            // succeeds only on an unencrypted DB; on an already-encrypted file it
+            // throws, in which case there is nothing to migrate.
+            if (!isPlaintextDb(plainFile)) {
+                meta.edit().putBoolean(KEY_DB_ENCRYPTED, true).commit()
+                return true
+            }
+
+            val passStr = String(passphrase, Charsets.UTF_8)
+            val encFile = context.getDatabasePath("$DB_NAME.enc")
+            try {
+                encFile.delete()
+                File(encFile.path + "-wal").delete()
+                File(encFile.path + "-shm").delete()
+
+                var srcVersion = 0
+                // openOrCreateDatabase(file, "", null) is the EXACT form the
+                // official SQLCipher "encrypt a plaintext database" recipe uses.
+                // The 4-arg openDatabase(.., OPEN_READWRITE) form fails the
+                // subsequent `ATTACH … KEY` with CANTOPEN on 4.5.x (the attach
+                // target is created without the codec/create semantics it needs).
+                val src = SQLiteDatabase.openOrCreateDatabase(plainFile, "", null)
+                try {
+                    srcVersion = src.version
+                    // passStr is [A-Za-z0-9] only (DatabaseKeyManager CHARSET), so
+                    // single-quote string interpolation is injection-safe here.
+                    src.rawExecSQL("ATTACH DATABASE '${encFile.absolutePath}' AS encrypted KEY '$passStr'")
+                    src.rawExecSQL("SELECT sqlcipher_export('encrypted')")
+                    src.rawExecSQL("PRAGMA encrypted.user_version = $srcVersion")
+                    src.rawExecSQL("DETACH DATABASE encrypted")
+                } finally {
+                    src.close()
+                }
+
+                if (!verifyEncrypted(encFile, passStr, srcVersion)) {
+                    Log.e(TAG, "Encrypted copy failed verification — keeping plaintext DB")
+                    encFile.delete()
+                    return false
+                }
+
+                // Swap. Back up plaintext first; never reach a state with neither.
+                val bak = File(plainFile.path + ".plainbak")
+                bak.delete()
+                plainFile.copyTo(bak, overwrite = true)
+                File(plainFile.path + "-wal").delete()
+                File(plainFile.path + "-shm").delete()
+                File(plainFile.path + "-journal").delete()
+                if (!plainFile.delete()) {
+                    Log.e(TAG, "Could not delete plaintext DB — aborting swap, staying plaintext")
+                    encFile.delete()
+                    return false
+                }
+                if (!encFile.renameTo(plainFile)) {
+                    Log.e(TAG, "rename enc→main failed — restoring plaintext from backup")
+                    bak.copyTo(plainFile, overwrite = true)
+                    return false
+                }
+                meta.edit().putBoolean(KEY_DB_ENCRYPTED, true).commit()
+                Log.i(TAG, "Database migrated to encrypted storage (user_version=$srcVersion)")
+                return true
+            } catch (e: Exception) {
+                Log.e(TAG, "Plaintext→encrypted migration failed — keeping plaintext DB", e)
+                encFile.delete()
+                return false
+            }
+        }
+
+        /** True if [file] opens as an UNENCRYPTED SQLite database. */
+        private fun isPlaintextDb(file: File): Boolean {
+            return try {
+                val db = SQLiteDatabase.openDatabase(
+                    file.absolutePath, "", null, SQLiteDatabase.OPEN_READONLY
+                )
+                try {
+                    db.rawQuery("SELECT count(*) FROM sqlite_master", null).use { it.moveToFirst() }
+                } finally {
+                    db.close()
+                }
+                true
             } catch (_: Exception) {
                 false
             }
+        }
 
-            if (!isReadable) {
-                Log.w(TAG, "Found unreadable (encrypted) database, deleting for plain recreation")
-                dbFile.delete()
-                File(dbFile.path + "-wal").delete()
-                File(dbFile.path + "-shm").delete()
-                File(dbFile.path + "-journal").delete()
+        /** Re-open the freshly-exported encrypted file and confirm it carries the
+         *  expected schema version + the `profiles` table (proof data survived). */
+        private fun verifyEncrypted(encFile: File, passStr: String, expectedVersion: Int): Boolean {
+            return try {
+                val db = SQLiteDatabase.openDatabase(
+                    encFile.absolutePath, passStr, null, SQLiteDatabase.OPEN_READONLY
+                )
+                try {
+                    val versionOk = db.version == expectedVersion
+                    val hasProfiles = db.rawQuery(
+                        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='profiles'",
+                        null
+                    ).use { it.moveToFirst() && it.getInt(0) > 0 }
+                    // Diagnostic row count — proves the *data* (not just the schema)
+                    // came across. Surfaced in logcat for the migration test.
+                    val profileRows = if (hasProfiles) {
+                        db.rawQuery("SELECT count(*) FROM profiles", null)
+                            .use { if (it.moveToFirst()) it.getInt(0) else -1 }
+                    } else -1
+                    Log.i(TAG, "verifyEncrypted: user_version=${db.version} (want $expectedVersion), profiles=$profileRows")
+                    versionOk && hasProfiles
+                } finally {
+                    db.close()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "verifyEncrypted: cannot open encrypted copy", e)
+                false
             }
         }
     }

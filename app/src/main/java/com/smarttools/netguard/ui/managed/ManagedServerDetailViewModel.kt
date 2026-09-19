@@ -424,8 +424,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val arch = client.status().agentArch.ifEmpty { "amd64" }
-                    val bytes = getApplication<App>().assets
-                        .open("agent/netguard-agent-$arch").use { it.readBytes() }
+                    val bytes = com.smarttools.netguard.agent.BundledAgent.read(getApplication<App>().assets, arch)
                     val sha = java.security.MessageDigest.getInstance("SHA-256")
                         .digest(bytes).joinToString("") { "%02x".format(it) }
                     client.uploadAgentBinary(bytes, sha)

@@ -64,10 +64,15 @@ interface ProfileDao {
         // profile, and favorites silently vanish.
         val old = getBySubscription(subId)
         fun key(p: ServerProfile) = "${p.protocol}|${p.address}|${p.port}|${p.uuid}|${p.password}|${p.hysteriaAuth}"
-        val oldByKey = old.associateBy { key(it) }
+        val oldByKey = old.groupBy { key(it) }.mapValues { it.value.toMutableList() }
         val carried = profiles.map { p ->
-            val prev = oldByKey[key(p)] ?: return@map p
+            val matches = oldByKey[key(p)] ?: return@map p
+            val matchIndex = matches.indexOfFirst { it.name == p.name && it.network == p.network }
+                .takeIf { it >= 0 } ?: 0
+            if (matches.isEmpty()) return@map p
+            val prev = matches.removeAt(matchIndex)
             p.copy(
+                id = prev.id,
                 isSelected = prev.isSelected,
                 isFavorite = prev.isFavorite
             )

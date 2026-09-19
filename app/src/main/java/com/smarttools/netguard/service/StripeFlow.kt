@@ -32,7 +32,7 @@ class StripeFlow(
         private val EMPTY = ByteArray(0)
     }
 
-    private class TxChunk(val off: Long, val data: ByteArray, var pid: Int = -1)
+    private class TxChunk(val off: Long, val data: ByteArray, var pid: Int = -1, val sentAt: Long = System.nanoTime(), var retried: Boolean = false)
 
     private val clientIn = DataInputStream(client.getInputStream())
     private val clientOut: OutputStream = client.getOutputStream()
@@ -53,6 +53,12 @@ class StripeFlow(
     private var rxFinal: Long = 0
     private var rxFinSet = false
     private var lastPosMs: Long = 0
+    private val receivedPosition = java.util.concurrent.atomic.AtomicLong(0)
+    private val queuedBytes = java.util.concurrent.atomic.AtomicLong(0)
+    private val rto = RetransmissionTimer()
+    private var nextRetryNanos = 0L
+    private val ackWanted = AtomicBoolean(false)
+    private var lastAckNanos = 0L
 
     private val s2cQueue = ArrayBlockingQueue<StripeFrame>(512)
     private val POISON = StripeFrame(StripeProtocol.RST, -1, 0, EMPTY)
@@ -63,12 +69,12 @@ class StripeFlow(
 
     @Volatile private var writerThread: Thread? = null
     @Volatile private var pumpThread: Thread? = null
-    @Volatile private var rtxThread: Thread? = null
+    @Volatile private var maintenance: java.util.concurrent.ScheduledFuture<*>? = null
 
     fun run() {
         writerThread = Thread({ s2cWriter() }, "stripe-s2c-$id").apply { isDaemon = true; start() }
         pumpThread = Thread({ c2sPump() }, "stripe-c2s-$id").apply { isDaemon = true; start() }
-        rtxThread = Thread({ c2sRetransmit() }, "stripe-rtx-$id").apply { isDaemon = true; start() }
+        maintenance = QueuedPipeWriter.timers.scheduleWithFixedDelay({ maintenanceTick() }, 200, 200, java.util.concurrent.TimeUnit.MILLISECONDS)
     }
 
     /**
@@ -84,47 +90,44 @@ class StripeFlow(
      * no-progress, then a full window's wait before the next round — so a
      * merely-slow Ack never storms. Mirrors the exit-side stripe-server fix.
      */
-    private fun c2sRetransmit() {
-        var lastBase = -1L
-        var stalls = 0
+    private fun maintenanceTick() {
+        if (closed.get()) return
         try {
-            while (!closed.get()) {
-                Thread.sleep(200)
-                val resend: List<TxChunk>
-                val base: Long
-                val rfin: Boolean
-                val fs: Long
-                lock.withLock {
-                    base = txBase
-                    resend = ArrayList(unacked)
-                    rfin = finReached
-                    fs = finSeq
-                }
-                if (resend.isEmpty()) { lastBase = base; stalls = 0; continue }
-                if (base != lastBase) { lastBase = base; stalls = 0; continue }
-                stalls++
-                if (stalls < 3) continue // ~600ms of zero Ack progress with data out
-                stalls = 0 // resend once, then require another stall window
-                for (c in resend) {
-                    val pid = mux.send(StripeFrame(StripeProtocol.DATA, id, c.off, c.data))
-                    lock.withLock { c.pid = pid }
-                }
-                if (rfin) mux.send(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
+            // Timer-driven ACK: the final short burst is acknowledged even if
+            // the application keeps its TCP connection open and sends no FIN.
+            val received = receivedPosition.get()
+            if (System.nanoTime() - lastAckNanos >= 700_000_000L && ackWanted.getAndSet(false)) {
+                if (mux.broadcast(StripeFrame(StripeProtocol.ACK, id, received, EMPTY)) == 0) ackWanted.set(true)
+                lastAckNanos = System.nanoTime()
             }
-        } catch (_: InterruptedException) {
-        } catch (_: Exception) {
-        }
+            val now = System.nanoTime()
+            var resend: TxChunk? = null
+            lock.withLock {
+                val first = unacked.firstOrNull()
+                if (first != null && now >= nextRetryNanos && now - first.sentAt >= rto.timeoutMs * 1_000_000) {
+                    first.retried = true
+                    resend = first // Repair the oldest gap, not the whole window.
+                    rto.backoff()
+                    nextRetryNanos = now + rto.timeoutMs * 1_000_000
+                }
+            }
+            resend?.let { ch ->
+                val pid = mux.send(StripeFrame(StripeProtocol.DATA, id, ch.off, ch.data))
+                lock.withLock { ch.pid = pid }
+            }
+        } catch (_: Exception) { if (!closed.get()) abort() }
     }
 
     /** Called from pipe-reader threads. Never blocks on the app socket. */
     fun onFrame(f: StripeFrame) {
+        if (closed.get()) return
         when (f.type) {
             StripeProtocol.ACK -> onAck(f.seq)
             StripeProtocol.DATA, StripeProtocol.FIN -> {
-                try {
-                    s2cQueue.put(f)
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
+                val bytes = queuedBytes.addAndGet(f.payload.size.toLong())
+                if (bytes > StripeProtocol.MAX_REORDER || !s2cQueue.offer(f)) {
+                    queuedBytes.addAndGet(-f.payload.size.toLong())
+                    abort() // Fail this flow explicitly; never block a shared pipe reader.
                 }
             }
             StripeProtocol.RST -> close()
@@ -134,7 +137,11 @@ class StripeFlow(
     /** Advance the c2s window and drop fully-acked chunks from the buffer. */
     private fun onAck(cum: Long) {
         lock.withLock {
+            if (cum > txNext) { abort(); return }
             if (cum > txBase) {
+                val sample = unacked.firstOrNull { !it.retried && it.off + it.data.size <= cum }
+                if (sample != null) rto.acknowledge((System.nanoTime() - sample.sentAt) / 1_000_000)
+                nextRetryNanos = System.nanoTime() + rto.timeoutMs * 1_000_000
                 txBase = cum
                 while (unacked.isNotEmpty()) {
                     val c = unacked.first()
@@ -142,7 +149,9 @@ class StripeFlow(
                 }
                 cond.signalAll()
             }
+            if (finReached && txBase >= txNext) txDone.set(true)
         }
+        maybeFinish()
     }
 
     /** c2s: read the app socket, retain + stripe each chunk. No window gate —
@@ -172,20 +181,25 @@ class StripeFlow(
                 // — this is what fixes Telegram's many tiny conns); only bulk
                 // flows stripe across all pipes.
                 val f = StripeFrame(StripeProtocol.DATA, id, ch.off, data)
-                val pid = if (ch.off < StripeProtocol.PROMOTE_THRESHOLD) {
+                var pid = if (ch.off < StripeProtocol.PROMOTE_THRESHOLD) {
                     val r = mux.sendPinned(homeIdx, f)
                     if (r >= 0) homeIdx = r
                     r
                 } else {
                     mux.send(f)
                 }
+                while (pid < 0 && !closed.get()) {
+                    Thread.sleep(20)
+                    pid = mux.send(f)
+                }
                 lock.withLock { ch.pid = pid }
             }
             val fs: Long
             lock.withLock { finReached = true; finSeq = txNext; fs = txNext }
             val pid = mux.send(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
+            mux.broadcast(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
             lock.withLock { finPid = pid }
-            txDone.set(true)
+            lock.withLock { if (txBase >= txNext) txDone.set(true) }
             maybeFinish()
         } catch (e: Exception) {
             if (!closed.get()) abort()
@@ -203,7 +217,7 @@ class StripeFlow(
         var resendFin = false
         var fs = 0L
         lock.withLock {
-            for (c in unacked) if (c.pid == deadId || c.pid == -1) resend.add(c)
+            for (c in unacked) if (c.pid == deadId || c.pid == -1) { c.retried = true; resend.add(c) }
             if (finReached && (finPid == deadId || finPid == -1)) { resendFin = true; fs = finSeq }
         }
         for (c in resend) {
@@ -212,6 +226,7 @@ class StripeFlow(
         }
         if (resendFin) {
             val pid = mux.send(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
+            mux.broadcast(StripeFrame(StripeProtocol.FIN, id, fs, EMPTY))
             lock.withLock { finPid = pid }
         }
     }
@@ -222,6 +237,7 @@ class StripeFlow(
             while (true) {
                 val f = s2cQueue.take()
                 if (f === POISON || closed.get()) return
+                queuedBytes.addAndGet(-f.payload.size.toLong())
                 when (f.type) {
                     StripeProtocol.DATA -> {
                         val out = try {
@@ -233,7 +249,8 @@ class StripeFlow(
                             clientOut.write(out)
                             clientOut.flush()
                         }
-                        maybePos()
+                        receivedPosition.set(rx.delivered())
+                        ackWanted.set(true)
                         if (checkRxFin()) return
                     }
                     StripeProtocol.FIN -> {
@@ -279,7 +296,9 @@ class StripeFlow(
         s2cQueue.offer(POISON)
         writerThread?.interrupt()
         pumpThread?.interrupt()
-        rtxThread?.interrupt()
+        maintenance?.cancel(false)
+        s2cQueue.clear()
+        lock.withLock { unacked.clear() }
         try { client.close() } catch (_: Exception) {}
         mux.dropFlow(id)
     }

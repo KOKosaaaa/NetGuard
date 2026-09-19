@@ -45,6 +45,11 @@ data class ServerProfile(
     val authority: String = "",
     val mode: String = "",
     val seed: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "''")
+    val xhttpExtra: String = "",
+    /** Original outbound graph for JSON subscriptions; listeners are always app-owned. */
+    @androidx.room.ColumnInfo(defaultValue = "''")
+    val xrayConfigJson: String = "",
 
     // Security
     val security: SecurityType = SecurityType.NONE,
@@ -110,6 +115,9 @@ data class ServerProfile(
         if (path.isNotEmpty()) params.add("path=${enc(path)}")
         if (serviceName.isNotEmpty()) params.add("serviceName=${enc(serviceName)}")
         if (headerType.isNotEmpty()) params.add("headerType=${enc(headerType)}")
+        if (mode.isNotEmpty()) params.add("mode=${enc(mode)}")
+        if (authority.isNotEmpty()) params.add("authority=${enc(authority)}")
+        if (xhttpExtra.isNotEmpty()) params.add("extra=${enc(xhttpExtra)}")
         val query = params.joinToString("&")
         val fragment = enc(name)
         return "vless://$uuid@$address:$port?$query#$fragment"
@@ -201,9 +209,12 @@ enum class TransportType(val value: String) {
     H2("h2");
 
     companion object {
-        fun fromString(s: String): TransportType = entries.firstOrNull {
-            it.value.equals(s, ignoreCase = true)
-        } ?: TCP
+        fun fromString(s: String): TransportType {
+            if (s.equals("xhttp", true)) return SPLIT_HTTP
+            if (s.equals("raw", true)) return TCP
+            return entries.firstOrNull { it.value.equals(s, ignoreCase = true) }
+                ?: throw IllegalArgumentException("Unsupported transport: ${s.take(32)}")
+        }
     }
 }
 

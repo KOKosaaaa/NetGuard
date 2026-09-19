@@ -12,6 +12,29 @@ implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.j
 
 picks up anything matching `*.aar`).
 
+## Compact APK packaging (1.7.3+)
+
+The current AAR's arm64 `libgojni.so` has its non-runtime debug/symbol sections
+stripped for release distribution. All allocated ELF sections (including code,
+dynamic symbols, relocations and Go runtime tables) were verified byte-identical.
+Keep this property when replacing the AAR; an unstripped upstream AAR can add over
+10 MB to the compressed APK.
+
+`xz-1.12.jar` is the pure Java XZ decoder from
+https://repo.maven.apache.org/maven2/org/tukaani/xz/1.12/xz-1.12.jar
+(SHA256 `3e158a87bd73d8afb4b6e8239c013b7d049c48563f45860ce99cd2e448cf4a6b`,
+0BSD license, https://tukaani.org/xz/java.html).
+The two offline agent assets retain their original names but contain XZ data.
+`BundledAgent.read` restores and validates the original ELF before either SSH
+bootstrap or an agent update. Neither server architecture requires a download.
+
+After replacing agent assets with fresh `agent/Makefile` outputs, run
+`python tools/pack-agent-assets.py` from the project. The app also accepts raw ELF
+assets in development builds. Update the fingerprints in `BundledAgentTest` when
+intentionally rebuilding the agent; the tests verify exact decoded bytes and
+reject corrupt or oversized installers. The APK itself uses standard Android ZIP
+packaging and installs directly; users do not extract any archive.
+
 ## Where to get it
 
 Option A — prebuilt release (fastest):

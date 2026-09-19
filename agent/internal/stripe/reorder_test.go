@@ -42,8 +42,8 @@ func TestReorderGapThenFill(t *testing.T) {
 func TestReorderMultipleGaps(t *testing.T) {
 	r := NewReorder(1 << 20)
 	// Segments arrive 3rd, 2nd, then 1st (which unlocks all three).
-	r.Insert(8, []byte("CCCC"))  // [8,12)
-	r.Insert(4, []byte("BBBB"))  // [4,8)
+	r.Insert(8, []byte("CCCC"))           // [8,12)
+	r.Insert(4, []byte("BBBB"))           // [4,8)
 	out, _ := r.Insert(0, []byte("AAAA")) // [0,4) unlocks everything
 	if !bytes.Equal(out, []byte("AAAABBBBCCCC")) {
 		t.Fatalf("expected 'AAAABBBBCCCC', got %q", out)

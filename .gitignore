@@ -36,6 +36,12 @@ screen*.png
 .DS_Store
 Thumbs.db
 *.tmp
+.stfolder/
+.stignore
+*.bak.*
+
+# Local native build input (see app/libs/README.md)
+app/libs/*.aar
 
 # Agent build output (binaries are rebuilt via Makefile; embed/ inputs are tracked)
 agent/dist/

@@ -4,6 +4,15 @@
 
 Android VPN client built for privacy, security, and stealth. Powered by xray-core.
 
+## Version 2.0.0
+
+See the [2.0.0 release notes](docs/releases/2.0.0.md) for automatic per-site routing,
+Happ subscription compatibility, conservative service failover and active-server
+display. AUTO compares reachability and response latency in the background without
+holding the first request or changing established connections. A direct route uses
+your normal public IP; choose Global proxy when all traffic should use the VPN.
+HTTP/3 and ECH-hidden names keep the core's routing rules without per-site comparison.
+
 Licensed under the **Apache License, Version 2.0** - see [`LICENSE`](LICENSE). You are free to use, modify, distribute, and sublicense the code (including for commercial use), provided you preserve the copyright notice. The Apache-2.0 patent grant also protects downstream users from patent claims by contributors.
 
 ## What makes NetGuard different
@@ -20,7 +29,9 @@ Every connection generates a fresh random port, a UUID username, and a 32-charac
 
 ### Config minimally exposed on disk
 
-The xray JSON config (containing server credentials, UUIDs, passwords) is written to app-private internal storage only long enough for xray to read it, then immediately `unlink()`ed once the SOCKS inbound is up. No config.json is kept across sessions, and it is never visible to other apps. Note that on ext4/F2FS the underlying blocks may persist until overwritten - this is a brief-exposure design, not a never-on-disk one.
+Xray receives its JSON configuration in memory through the libXray JNI API in a
+dedicated Android service process. The configuration is not passed through a
+native child process's command line or a persistent JSON configuration file.
 
 ### Built-in security self-test
 
@@ -71,7 +82,7 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 | Quick Settings tile | Android 7.0+ notification panel toggle |
 | Boot auto-connect | Reconnect to last server on device restart |
 | DNS | Custom primary/secondary, optional DoH through proxy |
-| Routing modes | Global proxy / Rule-based (RU direct) / Direct |
+| Routing modes | AUTO (per-site comparison, weekly cache) / Global proxy / Rule-based (RU direct) / Direct |
 | LAN bypass | Access local network devices while connected |
 | Themes | Dark, Light, OLED Black, Ocean, **fsociety** (Mr. Robot phosphor terminal), Dynamic (Material You) |
 | Languages | 16 languages |
@@ -84,8 +95,8 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 ## Security hardening
 
 - **Not vulnerable to the April 2026 VLESS local-SOCKS leak** affecting Happ, v2rayTUN, Hiddify, v2rayNG, NekoBox and others. No unauthenticated local SOCKS5 inbound is ever exposed - both internal bridges (SOCKS5 for tun2socks, HTTP for internal speed/service tests) require the ephemeral 32-char password. See *Ephemeral authenticated SOCKS5* above.
-- **Honest caveat on password surface.** The SOCKS5 username and password are passed to the `tun2socks` helper process via command-line arguments, so they appear in `/proc/<tun2socks_pid>/cmdline`. On modern Android this file is protected by SELinux `app_data_file` contexts and hidepid, so other apps cannot read it, but a rooted attacker or the same-uid process can. The password is ephemeral per session, so disclosure only compromises the current tunnel's local bridge, not the server credentials. Migration to stdin / fd-based credential passing is tracked as a future hardening step.
-- EncryptedSharedPreferences via `androidx.security:security-crypto` for small secrets (DB key material placeholder, credentials cache). Full database-level encryption via SQLCipher is on the roadmap - see *Known limitations* below.
+- The TUN-to-SOCKS bridge runs through hev JNI in the app process; its credentials are no longer passed to a native child process through command-line arguments.
+- SQLCipher encrypts the Room database, with migration from the existing plaintext database. EncryptedSharedPreferences holds key material and small secrets, including the site-route cache.
 - Log redaction - UUIDs, passwords, Bearer tokens masked automatically
 - SSRF protection - private/loopback/link-local IPv4 and IPv6 blocked in profile parser
 - Tapjacking protection on critical buttons (filterTouchesWhenObscured)
@@ -100,9 +111,9 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Known limitations
 
-- **Room database is currently plain**, despite earlier wording. The SQLCipher dependency was declared but never wired as the Room `SupportFactory`, and the app deletes any previously-encrypted DB on first launch of a new version (see `AppDatabase.deleteEncryptedIfNeeded`). Profile data is already re-fetchable from subscriptions, so this is low-impact, but a proper SQLCipher integration is tracked as future work.
+- AUTO uses independent HEAD probes to compare reachability and response latency, not full download speed or every authenticated page. HTTP/3 and ECH-hidden names use the core route without per-site comparison. A direct route exposes the connection's normal public IP to the destination.
 - **`androidx.security:security-crypto` was deprecated by Google in 2024.** The 1.1.0-alpha06 release still works on current Android, but Android 15/16 may change backing-store behaviour without backward-compatibility guarantees. Migration path: move to `java.security.KeyStore.getInstance("AndroidKeyStore")` directly, generate the AES-256 key via `KeyGenerator`, and store ciphertext in plain `SharedPreferences`. Tracked, not urgent.
-- **tun2socks credential exposure.** See *Security hardening → honest caveat on password surface* above.
+- Real network or server failures can still interrupt established connections. On-device migration and long-running Remote sessions need device validation.
 
 ## Acknowledgements
 
@@ -110,8 +121,8 @@ NetGuard is composed of a small original glue layer wired around a stack of open
 
 ### Tunnel core (native)
 
-- **[xray-core](https://github.com/XTLS/Xray-core)** - Mozilla Public License 2.0. Project X. The actual proxy engine that speaks VLESS / VMess / Trojan / Shadowsocks / Hysteria2 and handles TLS / REALITY / uTLS fingerprinting. Shipped as `libxray.so` in `jniLibs/arm64-v8a/`.
-- **[badvpn / tun2socks](https://github.com/ambrop72/badvpn)** - BSD-3-Clause. Ambroz Bizjak. Userspace TUN-to-SOCKS5 helper that turns the Android `VpnService` TUN file descriptor into TCP/UDP streams that xray can consume. Shipped as `libtun2socks.so`.
+- **[xray-core](https://github.com/XTLS/Xray-core)** - Mozilla Public License 2.0. Project X. The proxy engine is packaged through the libXray AAR as `libgojni.so` and runs in a dedicated Android service process.
+- **[hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)** - MIT. Converts the Android `VpnService` TUN file descriptor into TCP/UDP streams through `libhev-socks5-tunnel.so` JNI.
 
 ### Android libraries
 

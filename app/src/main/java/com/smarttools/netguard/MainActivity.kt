@@ -210,9 +210,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleDeepLink(intent: Intent?) {
-        val uri = intent?.data?.toString() ?: return
+        val input = intent?.data?.toString() ?: return
+        val uri = runCatching { com.smarttools.netguard.core.SubscriptionLink.unwrap(input) }.getOrNull() ?: return
         if (uri.length > 8192) {
             Toast.makeText(this, "URI too long", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (uri.startsWith("https://", true) && (input.startsWith("happ://", true) || input.startsWith("v2rayng://", true))) {
+            val subscriptionHost = runCatching { java.net.URI(uri).host }.getOrNull() ?: return
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.import_profile_question)
+                .setMessage(subscriptionHost)
+                .setPositiveButton(R.string.import_btn) { _, _ ->
+                    ViewModelProvider(this)[com.smarttools.netguard.viewmodel.SubscriptionViewModel::class.java].addSubscription("", uri)
+                }.setNegativeButton(android.R.string.cancel, null).show()
             return
         }
         val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")

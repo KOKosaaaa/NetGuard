@@ -3,6 +3,7 @@ package com.smarttools.netguard.core
 import android.util.Base64
 import android.util.Log
 import com.google.gson.JsonParser
+import com.google.gson.JsonObject
 import com.smarttools.netguard.model.*
 import com.smarttools.netguard.util.AddressValidator
 import java.net.URI
@@ -12,9 +13,9 @@ object ProfileParser {
 
     private const val TAG = "ProfileParser"
     /** Max total input size to prevent OOM from deep links / clipboard */
-    private const val MAX_INPUT_BYTES = 512 * 1024 // 512 KB
+    private const val MAX_INPUT_BYTES = 2 * 1024 * 1024
     /** Max single URI length */
-    private const val MAX_URI_LENGTH = 8192
+    private const val MAX_URI_LENGTH = 64 * 1024
     /** Max profile name length to prevent UI DoS */
     private const val MAX_NAME_LENGTH = 256
 
@@ -35,7 +36,7 @@ object ProfileParser {
             .replace("\r\n", "\n")
             .split("\n")
             .map { it.trim() }
-            .filter { it.isNotEmpty() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("//") }
 
         for (line in lines) {
             try {
@@ -43,11 +44,11 @@ object ProfileParser {
                 if (profile != null) {
                     profiles.add(profile)
                 } else {
-                    errors.add("Unsupported URI: ${line.take(50)}...")
+                    errors.add("Unsupported profile format")
                 }
             } catch (e: Exception) {
-                errors.add("Error parsing: ${line.take(50)}... — ${e.message}")
-                Log.w(TAG, "Failed to parse URI: $line", e)
+                errors.add("Invalid profile: ${e.javaClass.simpleName}")
+                Log.w(TAG, "Failed to parse profile (${e.javaClass.simpleName})")
             }
         }
 
@@ -59,25 +60,268 @@ object ProfileParser {
         // skip the base64 step. Some sub providers and direct paste workflows
         // hand us plaintext lines that happen to look "base64-ish" enough to
         // not throw, yielding garbage that doesn't match any URI prefix.
-        val trimmed = rawContent.trim()
+        if (rawContent.length > MAX_INPUT_BYTES) return ParseResult(emptyList(), listOf("Subscription too large"))
+        val trimmed = rawContent.trim().removePrefix("\uFEFF")
+        // JSON subscription: an array (or single object) of full xray configs,
+        // the "v2rayN/Happ JSON" convention. Carries routing rules a URI list
+        // can't. We only consume the proxy outbound of each config.
+        if (looksLikeJson(trimmed)) {
+            return parseJsonSubscription(trimmed)
+        }
         val looksLikeUri = trimmed.startsWith("vless://") || trimmed.startsWith("vmess://") ||
             trimmed.startsWith("trojan://") || trimmed.startsWith("ss://") ||
             trimmed.startsWith("hysteria2://") || trimmed.startsWith("hy2://") ||
-            trimmed.startsWith("telemost://")
+            trimmed.startsWith("telemost://") || trimmed.startsWith("wbstream://") ||
+            trimmed.startsWith("https://stream.wb.ru/room/")
         val decoded = if (looksLikeUri) {
             rawContent
         } else {
             try {
-                String(Base64.decode(trimmed, Base64.DEFAULT), Charsets.UTF_8)
+                String(decodeBase64(trimmed), Charsets.UTF_8)
             } catch (_: Exception) {
                 rawContent
             }
         }
+        // Base64 payload may itself decode to a JSON subscription.
+        val decTrimmed = decoded.trim()
+        if (looksLikeJson(decTrimmed)) {
+            return parseJsonSubscription(decTrimmed)
+        }
         return parseMultiline(decoded)
     }
 
+    // ==================== JSON subscription (full xray-config array) ====================
+
+    private fun looksLikeJson(s: String): Boolean {
+        val t = s.trimStart()
+        return t.startsWith("[") || t.startsWith("{")
+    }
+
+    /** Parse a JSON subscription: array (or single object) of full xray configs. */
+    fun parseJsonSubscription(content: String): ParseResult {
+        if (content.length > MAX_INPUT_BYTES) return ParseResult(emptyList(), listOf("Subscription too large"))
+        val profiles = mutableListOf<ServerProfile>()
+        val errors = mutableListOf<String>()
+        val root = try {
+            JsonParser.parseString(content)
+        } catch (e: Exception) {
+            return ParseResult(emptyList(), listOf("Invalid JSON subscription"))
+        }
+        val configs = when {
+            root.isJsonArray -> root.asJsonArray.toList()
+            root.isJsonObject -> listOf(root)
+            else -> return ParseResult(emptyList(), listOf("JSON subscription is neither array nor object"))
+        }
+        for ((i, el) in configs.withIndex()) {
+            try {
+                if (!el.isJsonObject) continue
+                val p = configToProfile(el.asJsonObject)
+                if (p != null) profiles.add(p.copy(xrayConfigJson = el.toString()))
+                else errors.add("Config #${i + 1}: no usable proxy outbound")
+            } catch (e: Exception) {
+                errors.add("Config #${i + 1}: invalid or unsupported configuration")
+                Log.w(TAG, "Failed to parse JSON config #${i + 1}")
+            }
+        }
+        return ParseResult(profiles, errors)
+    }
+
+    private fun configToProfile(cfg: JsonObject): ServerProfile? {
+        val name = jStr(cfg, "remarks") ?: jStr(cfg, "ps") ?: ""
+        val outbounds = cfg.getAsJsonArray("outbounds") ?: return null
+        // Pick the proxy outbound: prefer tag=="proxy", else first real-protocol
+        // outbound that isn't the direct/block freedom/blackhole.
+        val proxyProtocols = setOf("vless", "vmess", "trojan", "shadowsocks")
+        var ob: JsonObject? = null
+        for (e in outbounds) {
+            if (!e.isJsonObject) continue
+            val o = e.asJsonObject
+            val proto = jStr(o, "protocol")?.lowercase() ?: continue
+            val tag = jStr(o, "tag")?.lowercase() ?: ""
+            if (proto in proxyProtocols && tag != "direct" && tag != "block") {
+                if (tag == "proxy") { ob = o; break }
+                if (ob == null) ob = o
+            }
+        }
+        if (ob == null) return null
+        val proto = jStr(ob, "protocol")!!.lowercase()
+        val settings = ob.getAsJsonObject("settings")
+        val ss = ob.getAsJsonObject("streamSettings")
+        return when (proto) {
+            "vless" -> jsonVless(name, settings, ss)
+            "vmess" -> jsonVmess(name, settings, ss)
+            "trojan" -> jsonTrojan(name, settings, ss)
+            "shadowsocks" -> jsonShadowsocks(name, settings)
+            else -> null
+        }
+    }
+
+    private data class StreamInfo(
+        val network: TransportType, val security: SecurityType,
+        val sni: String, val fp: String, val alpn: String, val allowInsecure: Boolean,
+        val pbk: String, val sid: String, val spx: String,
+        val host: String, val path: String, val serviceName: String, val mode: String,
+        val headerType: String, val authority: String
+    )
+
+    private fun parseStream(ss: JsonObject?): StreamInfo {
+        var net = jStr(ss, "network") ?: "tcp"
+        // xray "xhttp" is the same transport our model calls SPLIT_HTTP ("splithttp").
+        if (net.equals("xhttp", true)) net = "splithttp"
+        val sec = jStr(ss, "security") ?: "none"
+        var sni = ""; var fp = "chrome"; var alpn = ""; var insecure = false
+        var pbk = ""; var sid = ""; var spx = ""
+        if (sec.equals("reality", true)) {
+            val r = ss?.getAsJsonObject("realitySettings")
+            sni = jStr(r, "serverName") ?: ""
+            pbk = jStr(r, "publicKey") ?: jStr(r, "password") ?: ""
+            sid = jStr(r, "shortId") ?: ""
+            spx = jStr(r, "spiderX") ?: ""
+            fp = jStr(r, "fingerprint") ?: "chrome"
+        } else if (sec.equals("tls", true)) {
+            val t = ss?.getAsJsonObject("tlsSettings")
+            sni = jStr(t, "serverName") ?: ""
+            fp = jStr(t, "fingerprint") ?: "chrome"
+            t?.getAsJsonArray("alpn")?.let { arr -> alpn = arr.joinToString(",") { it.asString } }
+            insecure = t?.get("allowInsecure")?.let { !it.isJsonNull && it.asBoolean } ?: false
+        }
+        var host = ""; var path = ""; var serviceName = ""; var mode = ""
+        var headerType = ""; var authority = ""
+        when (net.lowercase()) {
+            "grpc" -> {
+                val g = ss?.getAsJsonObject("grpcSettings")
+                serviceName = jStr(g, "serviceName") ?: ""
+                authority = jStr(g, "authority") ?: ""
+                if (g?.get("multiMode")?.let { !it.isJsonNull && it.asBoolean } == true) mode = "multi"
+            }
+            "ws" -> {
+                val w = ss?.getAsJsonObject("wsSettings")
+                path = jStr(w, "path") ?: "/"
+                host = jStr(w?.getAsJsonObject("headers"), "Host") ?: ""
+            }
+            "httpupgrade" -> {
+                val h = ss?.getAsJsonObject("httpupgradeSettings")
+                path = jStr(h, "path") ?: "/"
+                host = jStr(h, "host") ?: ""
+            }
+            "splithttp" -> {
+                val x = ss?.getAsJsonObject("xhttpSettings")
+                    ?: ss?.getAsJsonObject("splithttpSettings")
+                path = jStr(x, "path") ?: "/"
+                host = jStr(x, "host") ?: ""
+                mode = jStr(x, "mode") ?: ""
+            }
+            "tcp" -> {
+                val t = ss?.getAsJsonObject("tcpSettings")
+                headerType = jStr(t?.getAsJsonObject("header"), "type") ?: ""
+            }
+        }
+        return StreamInfo(
+            TransportType.fromString(net), SecurityType.fromString(sec),
+            sni, fp, alpn, insecure, pbk, sid, spx,
+            host, path, serviceName, mode, headerType, authority
+        )
+    }
+
+    private fun jsonVless(name: String, settings: JsonObject?, ss: JsonObject?): ServerProfile {
+        val vnext = settings?.getAsJsonArray("vnext")?.firstOrNull()?.asJsonObject
+            ?: throw IllegalArgumentException("vless: no vnext")
+        val host = jStr(vnext, "address") ?: throw IllegalArgumentException("vless: no address")
+        val port = jInt(vnext, "port", 443)
+        val user = vnext.getAsJsonArray("users")?.firstOrNull()?.asJsonObject
+            ?: throw IllegalArgumentException("vless: no users")
+        val uuid = jStr(user, "id") ?: ""
+        if (uuid.isBlank()) throw IllegalArgumentException("vless: empty UUID")
+        requireValidEndpoint(host, port)
+        val s = parseStream(ss)
+        return ServerProfile(
+            name = safeName(name, "$host:$port"),
+            protocol = Protocol.VLESS, address = host, port = port,
+            uuid = uuid, encryption = jStr(user, "encryption") ?: "none", flow = jStr(user, "flow") ?: "",
+            network = s.network, security = s.security, sni = s.sni, fingerprint = s.fp,
+            alpn = s.alpn, allowInsecure = s.allowInsecure, publicKey = s.pbk, shortId = s.sid,
+            spiderX = s.spx, host = s.host, path = s.path, serviceName = s.serviceName,
+            authority = s.authority, headerType = s.headerType, mode = s.mode
+        )
+    }
+
+    private fun jsonVmess(name: String, settings: JsonObject?, ss: JsonObject?): ServerProfile {
+        val vnext = settings?.getAsJsonArray("vnext")?.firstOrNull()?.asJsonObject
+            ?: throw IllegalArgumentException("vmess: no vnext")
+        val host = jStr(vnext, "address") ?: throw IllegalArgumentException("vmess: no address")
+        val port = jInt(vnext, "port", 443)
+        val user = vnext.getAsJsonArray("users")?.firstOrNull()?.asJsonObject
+            ?: throw IllegalArgumentException("vmess: no users")
+        val uuid = jStr(user, "id") ?: ""
+        if (uuid.isBlank()) throw IllegalArgumentException("vmess: empty id")
+        requireValidEndpoint(host, port)
+        val s = parseStream(ss)
+        return ServerProfile(
+            name = safeName(name, "$host:$port"),
+            protocol = Protocol.VMESS, address = host, port = port,
+            uuid = uuid, alterId = jInt(user, "alterId", 0),
+            encryption = jStr(user, "security") ?: "auto",
+            network = s.network, security = s.security, sni = s.sni, fingerprint = s.fp,
+            alpn = s.alpn, allowInsecure = s.allowInsecure, host = s.host, path = s.path,
+            serviceName = s.serviceName, headerType = s.headerType, mode = s.mode
+        )
+    }
+
+    private fun jsonTrojan(name: String, settings: JsonObject?, ss: JsonObject?): ServerProfile {
+        val srv = settings?.getAsJsonArray("servers")?.firstOrNull()?.asJsonObject
+            ?: throw IllegalArgumentException("trojan: no servers")
+        val host = jStr(srv, "address") ?: throw IllegalArgumentException("trojan: no address")
+        val port = jInt(srv, "port", 443)
+        val pw = jStr(srv, "password") ?: ""
+        if (pw.isBlank()) throw IllegalArgumentException("trojan: empty password")
+        requireValidEndpoint(host, port)
+        val s = parseStream(ss)
+        return ServerProfile(
+            name = safeName(name, "$host:$port"),
+            protocol = Protocol.TROJAN, address = host, port = port, password = pw,
+            network = s.network,
+            security = if (s.security == SecurityType.NONE) SecurityType.TLS else s.security,
+            sni = s.sni, fingerprint = s.fp, alpn = s.alpn, allowInsecure = s.allowInsecure,
+            host = s.host, path = s.path, serviceName = s.serviceName, headerType = s.headerType
+        )
+    }
+
+    private fun jsonShadowsocks(name: String, settings: JsonObject?): ServerProfile {
+        val srv = settings?.getAsJsonArray("servers")?.firstOrNull()?.asJsonObject
+            ?: throw IllegalArgumentException("ss: no servers")
+        val host = jStr(srv, "address") ?: throw IllegalArgumentException("ss: no address")
+        val port = jInt(srv, "port", 8388)
+        requireValidEndpoint(host, port)
+        return ServerProfile(
+            name = safeName(name, "$host:$port"),
+            protocol = Protocol.SHADOWSOCKS, address = host, port = port,
+            method = jStr(srv, "method") ?: "aes-256-gcm", password = jStr(srv, "password") ?: ""
+        )
+    }
+
+    private fun requireValidEndpoint(host: String, port: Int) {
+        if (host.isEmpty()) throw IllegalArgumentException("Empty host")
+        if (port !in 1..65535) throw IllegalArgumentException("Invalid port: $port")
+        if (host.equals("localhost", ignoreCase = true)) {
+            throw IllegalArgumentException("Private/loopback address not allowed: $host")
+        }
+        AddressValidator.requirePublicAddress(host)
+    }
+
+    private fun jStr(o: JsonObject?, key: String): String? {
+        val e = o?.get(key) ?: return null
+        return if (e.isJsonNull) null else try { e.asString } catch (_: Exception) { null }
+    }
+
+    private fun jInt(o: JsonObject?, key: String, default: Int): Int {
+        val e = o?.get(key) ?: return default
+        return if (e.isJsonNull) default else try { e.asInt } catch (_: Exception) {
+            try { e.asString.toInt() } catch (_: Exception) { default }
+        }
+    }
+
     fun parseSingleUri(uri: String): ServerProfile? {
-        val trimmed = uri.trim()
+        val trimmed = SubscriptionLink.unwrap(uri)
         if (trimmed.length > MAX_URI_LENGTH) {
             throw IllegalArgumentException("URI too long (max $MAX_URI_LENGTH chars)")
         }
@@ -88,8 +332,38 @@ object ProfileParser {
             trimmed.startsWith("ss://") -> parseShadowsocks(trimmed)
             trimmed.startsWith("hysteria2://") || trimmed.startsWith("hy2://") -> parseHysteria2(trimmed)
             trimmed.startsWith("telemost://") -> parseTelemost(trimmed)
+            trimmed.startsWith("https://stream.wb.ru/room/") ||
+                trimmed.startsWith("wbstream://") -> parseWbStream(trimmed)
             else -> null
         }
+    }
+
+    // WB Stream carrier bypass: the user pastes a room link straight from the
+    // headless room-host (https://stream.wb.ru/room/<id>, optional #name). It
+    // rides the same relay path as Telemost (Protocol.TELEMOST -> librelay.so),
+    // and TelemostRelayManager auto-detects the stream.wb.ru address to launch the
+    // wbstream-headless-joiner mode with per-conn ARQ instead of the Telemost mode.
+    // Multi-room (newline-separated links) is supported for future throughput
+    // scaling; a single link is the N=1 case.
+    private fun parseWbStream(uri: String): ServerProfile {
+        val normalized = if (uri.startsWith("wbstream://"))
+            "https://stream.wb.ru/room/" + uri.removePrefix("wbstream://")
+        else uri
+        val (body, fragment) = splitFragment(normalized)
+        val name = urlDecode(fragment)
+        val links = body.split('\n', '\r', ' ').map { it.trim() }.filter { it.isNotEmpty() }
+        for (l in links) {
+            if (!l.startsWith("https://stream.wb.ru/room/")) {
+                throw IllegalArgumentException("WB Stream link must be https://stream.wb.ru/room/<id>, got: ${l.take(60)}")
+            }
+        }
+        if (links.isEmpty()) throw IllegalArgumentException("No WB Stream room link found")
+        return ServerProfile(
+            name = safeName(name, if (links.size > 1) "WB Stream-x${links.size}" else "WB Stream"),
+            protocol = Protocol.TELEMOST,
+            address = links.joinToString("\n"),
+            port = 443
+        )
     }
 
     private fun parseTelemost(uri: String): ServerProfile {
@@ -98,7 +372,7 @@ object ProfileParser {
         val name = urlDecode(fragment)
         val decoded = try {
             String(
-                Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),
+                decodeBase64(encoded),
                 Charsets.UTF_8
             )
         } catch (e: Exception) {
@@ -160,14 +434,15 @@ object ProfileParser {
             allowInsecure = params["allowInsecure"] == "1",
             publicKey = params["pbk"] ?: "",
             shortId = params["sid"] ?: "",
-            spiderX = urlDecode(params["spx"] ?: ""),
+            spiderX = params["spx"] ?: "",
             host = params["host"] ?: "",
-            path = urlDecode(params["path"] ?: ""),
+            path = params["path"] ?: "",
             serviceName = params["serviceName"] ?: "",
             authority = params["authority"] ?: "",
             headerType = params["headerType"] ?: "",
             mode = params["mode"] ?: "",
-            seed = params["seed"] ?: ""
+            seed = params["seed"] ?: "",
+            xhttpExtra = parseExtra(params["extra"])
         )
     }
 
@@ -175,7 +450,7 @@ object ProfileParser {
     private fun parseVmess(uri: String): ServerProfile {
         // vmess://base64json
         val encoded = uri.removePrefix("vmess://").trim()
-        val jsonStr = String(Base64.decode(encoded, Base64.DEFAULT or Base64.NO_WRAP or Base64.URL_SAFE), Charsets.UTF_8)
+        val jsonStr = String(decodeBase64(encoded), Charsets.UTF_8)
         val json = JsonParser.parseString(jsonStr).asJsonObject
 
         val host = json.get("add")?.asString ?: ""
@@ -253,7 +528,7 @@ object ProfileParser {
             alpn = params["alpn"] ?: "",
             allowInsecure = params["allowInsecure"] == "1",
             host = params["host"] ?: "",
-            path = urlDecode(params["path"] ?: ""),
+            path = params["path"] ?: "",
             serviceName = params["serviceName"] ?: "",
             headerType = params["headerType"] ?: "",
         )
@@ -281,7 +556,7 @@ object ProfileParser {
         val hostPortQuery = mainPart.substring(atIndex + 1)
 
         val userInfo = try {
-            String(Base64.decode(userInfoEncoded, Base64.DEFAULT or Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8)
+            String(decodeBase64(userInfoEncoded), Charsets.UTF_8)
         } catch (_: Exception) {
             urlDecode(userInfoEncoded)
         }
@@ -304,7 +579,7 @@ object ProfileParser {
     }
 
     private fun parseSsLegacy(encoded: String, name: String): ServerProfile {
-        val decoded = String(Base64.decode(encoded, Base64.DEFAULT or Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8)
+        val decoded = String(decodeBase64(encoded), Charsets.UTF_8)
         // format: method:password@host:port
         val atIndex = decoded.lastIndexOf('@')
         if (atIndex < 0) throw IllegalArgumentException("Invalid SS legacy format: missing @")
@@ -362,6 +637,19 @@ object ProfileParser {
     }
 
     // ======================== Helpers ========================
+    private fun decodeBase64(value: String): ByteArray {
+        val compact = value.filterNot { it.isWhitespace() }.replace('-', '+').replace('_', '/')
+        return java.util.Base64.getDecoder().decode(compact)
+    }
+
+    private fun parseExtra(value: String?): String {
+        if (value.isNullOrBlank()) return ""
+        val json = if (value.trimStart().startsWith("{")) value else String(decodeBase64(value), Charsets.UTF_8)
+        val parsed = JsonParser.parseString(json)
+        require(parsed.isJsonObject) { "XHTTP extra must be an object" }
+        return parsed.toString()
+    }
+
     private fun splitFragment(s: String): Pair<String, String> {
         val idx = s.indexOf('#')
         return if (idx >= 0) {

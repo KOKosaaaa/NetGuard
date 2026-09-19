@@ -7,6 +7,9 @@ import com.smarttools.netguard.App
 import com.smarttools.netguard.model.Subscription
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 class SubscriptionViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -36,7 +39,8 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
 
     fun addSubscription(name: String, url: String, autoUpdateHours: Int = 0) {
         viewModelScope.launch {
-            val trimmedUrl = url.trim()
+            val trimmedUrl = try { com.smarttools.netguard.core.SubscriptionLink.unwrap(url) }
+                catch (_: Exception) { _message.emit("Invalid subscription link"); return@launch }
             if (trimmedUrl.isBlank()) {
                 _message.emit("URL is empty")
                 return@launch
@@ -106,7 +110,7 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
      * the input as a subscription HTTP URL.
      */
     private fun normalizeAsSingleProfileUri(input: String): String? {
-        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://", "wbstream://")
         if (schemes.any { input.startsWith(it) }) return input
 
         // Multi-line paste of bare Telemost links (one per line) → produce a
@@ -123,6 +127,15 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             val name = if (telemostLinks.size > 1) "Telemost-x${telemostLinks.size}" else "Telemost"
             return "telemost://$encoded#$name"
         }
+
+        // WB Stream room link(s) — must be saved as a direct profile, NOT fetched
+        // as a subscription URL: the room page (https://stream.wb.ru/room/<id>) is a
+        // browser SPA behind WB's antibot and returns HTTP 498 to a plain GET, so a
+        // subscription fetch would fail with "498". parseSingleUri -> parseWbStream
+        // handles the raw link (and newline-separated multi-room) directly.
+        val wbLinks = lines.takeIf { it.isNotEmpty() && it.all { l -> l.startsWith("https://stream.wb.ru/room/") } }
+        if (wbLinks != null) return wbLinks.joinToString("\n")
+
         return null
     }
 
@@ -207,7 +220,8 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
         url: String,
         autoUpdateHours: Int
     ): Result<ImportResult> {
-        val trimmedUrl = url.trim()
+        val trimmedUrl = try { com.smarttools.netguard.core.SubscriptionLink.unwrap(url) }
+            catch (_: IllegalArgumentException) { return Result.failure(IllegalArgumentException("Invalid subscription link")) }
         if (trimmedUrl.isBlank()) {
             return Result.failure(IllegalArgumentException("URL is empty"))
         }
@@ -248,7 +262,13 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             userRenamed = userTypedName
         )
         val id = subRepo.insert(sub)
-        val fetched = subRepo.updateSubscription(sub.copy(id = id))
+        val fetched = try {
+            subRepo.updateSubscription(sub.copy(id = id))
+        } catch (e: CancellationException) {
+            // Download cancellation must not leave a zero-profile row behind.
+            withContext(NonCancellable) { subRepo.delete(sub.copy(id = id)) }
+            throw e
+        }
         return fetched.fold(
             onSuccess = { count ->
                 // Re-read the subscription so we surface the final name —

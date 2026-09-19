@@ -21,8 +21,8 @@ android {
         applicationId = "com.smarttools.netguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 67
-        versionName = "1.6.0"
+        versionCode = 79
+        versionName = "2.0.0"
 
         buildConfigField("String", "VERSION_NAME", "\"$versionName\"")
 
@@ -83,6 +83,9 @@ android {
             // call Log for diagnostic messages, so default-value stubs
             // (return 0 / null) are exactly what we want.
             isReturnDefaultValues = true
+            all {
+                it.systemProperty("netguard.agentAssetsDir", file("src/main/assets/agent").absolutePath)
+            }
         }
     }
 
@@ -92,6 +95,8 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
+            // Replaced by libXray JNI and hev; these old executables have no callers.
+            excludes += setOf("**/libxray.so", "**/libtun2socks.so")
         }
     }
 }
@@ -114,14 +119,18 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-service:2.7.0")
 
-    // Room
-    // SQLCipher was listed here historically but never wired in as a
-    // SupportFactory, so the DB has always been plain. See README "Known
-    // limitations" for the migration plan.
+    // Room + SQLCipher (encrypted on-disk DB).
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+    // SQLCipher encrypts databases/netguard.db on disk (VLESS creds in `profiles`
+    // + server bearer tokens in `managed_servers`). Room opens it through
+    // SupportFactory(passphrase); the passphrase lives in EncryptedSharedPreferences
+    // (DatabaseKeyManager). Classic artifact → import net.sqlcipher.database.*;
+    // requires SQLiteDatabase.loadLibs(context) before first open. See
+    // AppDatabase.getInstance for the crash-safe plaintext→encrypted migration.
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
 
     // Encrypted SharedPreferences (for DB key storage)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

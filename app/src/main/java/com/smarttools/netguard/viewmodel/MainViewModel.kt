@@ -23,7 +23,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val trafficStats: StateFlow<TunnelVpnService.TrafficSnapshot> = TunnelVpnService.trafficStats
 
     val selectedProfile: StateFlow<ServerProfile?> = profileRepo.getSelectedFlow()
-        .stateIn(viewModelScope, SharingStarted.Lazily, null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    // The saved selection is the next manual connection, not necessarily the
+    // running tunnel. Observe its actual id even when connectionState stays
+    // Connecting across several failover attempts. Both home labels use this.
+    val connectionProfile: StateFlow<Pair<ConnectionState, ServerProfile?>> = combine(
+        connectionState, TunnelVpnService.activeProfileIdFlow, profileRepo.getAllFlow()
+    ) { state, activeId, profiles ->
+        state to if (state.isActive) profiles.firstOrNull { it.id == activeId }
+                 else profiles.firstOrNull { it.isSelected }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, connectionState.value to null)
 
     private val _autoSelecting = MutableStateFlow(false)
     val autoSelecting: StateFlow<Boolean> = _autoSelecting.asStateFlow()
@@ -55,10 +65,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // so a trigger-mode tunnel on a still-existing (just non-selected)
         // profile is left alone.
         viewModelScope.launch {
-            combine(connectionState, profileRepo.getAllFlow()) { state, profiles ->
-                state to profiles
-            }.collect { (state, profiles) ->
-                val pid = TunnelVpnService.activeProfileId
+            combine(connectionState, TunnelVpnService.activeProfileIdFlow, profileRepo.getAllFlow()) { state, pid, profiles ->
+                Triple(state, pid, profiles)
+            }.collect { (state, pid, profiles) ->
                 if (state is ConnectionState.Connected && pid != -1L &&
                     profiles.none { it.id == pid }
                 ) {
@@ -141,9 +150,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _speedTesting.value = true
             _speedResult.value = null
             try {
-                val profile = profileRepo.getSelected() ?: return@launch
+                val session = connectionState.value
+                if (session !is ConnectionState.Connected) return@launch
+                val profileId = TunnelVpnService.activeProfileId
+                val profile = profileRepo.getById(profileId) ?: return@launch
                 val result = SpeedTester.run(profile.address, profile.port)
-                _speedResult.value = result
+                // A result from the previous connection must not be attributed
+                // to a new server if failover happened during the test.
+                if (TunnelVpnService.activeProfileId == profileId && connectionState.value == session) {
+                    _speedResult.value = result
+                }
             } finally {
                 _speedTesting.value = false
             }
