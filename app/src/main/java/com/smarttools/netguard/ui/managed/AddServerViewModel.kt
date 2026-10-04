@@ -12,6 +12,7 @@ import com.smarttools.netguard.agent.PairRequest
 import com.smarttools.netguard.agent.SshBootstrap
 import com.smarttools.netguard.agent.SshBootstrapJsch
 import com.smarttools.netguard.agent.SshBootstrapTrilead
+import com.smarttools.netguard.agent.SshBootstrapControl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
@@ -45,7 +46,7 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
 
     sealed class State {
         object Input : State()
-        data class Progress(val stage: SshBootstrap.Stage) : State()
+        data class Progress(val stage: SshBootstrap.Stage, val sshAttempt: Int = 0) : State()
         data class Success(
             val server: ManagedServer,
             val transcript: String,
@@ -68,6 +69,7 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
     val hostKeyPrompt: StateFlow<HostKeyPrompt?> = _hostKeyPrompt.asStateFlow()
     @Volatile private var trustAnswer: TrustAnswer? = null
     private var deployJob: Job? = null
+    private var sshControl: SshBootstrapControl? = null
     private var trustRequestId = java.util.concurrent.atomic.AtomicLong()
 
     fun answerHostKey(id: Long, accepted: Boolean) {
@@ -77,7 +79,16 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun cancelDeploy() { deployJob?.cancel(); trustAnswer?.latch?.countDown() }
+    fun cancelDeploy() {
+        deployJob?.cancel()
+        sshControl?.cancel()
+        trustAnswer?.latch?.countDown()
+    }
+
+    override fun onCleared() {
+        cancelDeploy()
+        super.onCleared()
+    }
 
     private fun confirmHostKey(host: String, port: Int, fingerprint: String, owner: Job): Boolean {
         val answer = TrustAnswer(HostKeyPrompt(trustRequestId.incrementAndGet(), host, port, fingerprint))
@@ -126,11 +137,17 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
         if (deployJob?.isActive == true) return
         deployJob = viewModelScope.launch {
             val owner = coroutineContext[Job]!!
+            val control = SshBootstrapControl()
+            sshControl = control
             var hostTrust: SshHostTrust? = null
             try {
-                _state.value = State.Progress(SshBootstrap.Stage.CONNECTING)
+                var sshAttempt = 1
+                _state.value = State.Progress(SshBootstrap.Stage.CONNECTING, sshAttempt)
                 val (binsByArch, script, _) = readAssets()
-                val emit: (SshBootstrap.Stage) -> Unit = { _state.value = State.Progress(it) }
+                val emit: (SshBootstrap.Stage) -> Unit = {
+                    owner.ensureActive()
+                    _state.value = State.Progress(it, if (it == SshBootstrap.Stage.CONNECTING) sshAttempt else 0)
+                }
 
                 // Try sshj first. If the host's network path fingerprints
                 // sshj's handshake and refuses to send a banner, fall back
@@ -143,6 +160,8 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                     var completed: SshBootstrap.BootstrapResult? = null
                     while (completed == null) {
                       kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                      val proxy = com.smarttools.netguard.service.TunnelVpnService.managementProxy()
+                      Log.i(TAG, "SSH bootstrap route: ${if (proxy != null) "VPN proxy" else "direct"}")
                       try {
                         completed = try {
                         SshBootstrap(
@@ -154,10 +173,14 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                             installScript = script,
                             onProgress = emit,
                             verifyHostKey = trust::verify,
+                            control = control,
+                            proxy = proxy,
                         ).run()
                     } catch (banner: SshBootstrap.Failure.BannerTimeout) {
                         trust.rethrowFailure()
                         Log.w(TAG, "sshj banner timeout; retrying via JSch")
+                        control.checkActive()
+                        sshAttempt = 2
                         emit(SshBootstrap.Stage.CONNECTING)
                         try {
                             SshBootstrapJsch(
@@ -169,10 +192,14 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                                 installScript = script,
                                 onProgress = emit,
                             verifyHostKey = trust::verify,
+                            control = control,
+                            proxy = proxy,
                             ).run()
                         } catch (banner2: SshBootstrap.Failure.BannerTimeout) {
                             trust.rethrowFailure()
                             Log.w(TAG, "JSch banner timeout; final attempt via Trilead")
+                            control.checkActive()
+                            sshAttempt = 3
                             emit(SshBootstrap.Stage.CONNECTING)
                             SshBootstrapTrilead(
                                 host = host.trim(),
@@ -183,6 +210,8 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                                 installScript = script,
                                 onProgress = emit,
                             verifyHostKey = trust::verify,
+                            control = control,
+                            proxy = proxy,
                             ).run()
                         }
                         }
@@ -236,13 +265,10 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                 // whether this screen stays open. Failure is immaterial — we
                 // never surface it, and an old agent without the endpoint just
                 // falls back to lazy install on first profile.
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        AgentApiClient(managed, BuildConfig.VERSION_NAME).provisionServer()
-                    }
-                }
-
                 _state.value = State.Success(managed, result.transcript)
+                viewModelScope.launch(Dispatchers.IO) {
+                    runCatching { AgentApiClient(managed, BuildConfig.VERSION_NAME).provisionServer() }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SshBootstrap.Failure) {
@@ -262,6 +288,9 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                     message = e.message ?: e.javaClass.simpleName,
                     transcript = e.stackTraceToString(),
                 )
+            } finally {
+                control.closeConnections()
+                if (sshControl === control) sshControl = null
             }
         }
     }

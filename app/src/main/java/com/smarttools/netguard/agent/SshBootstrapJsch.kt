@@ -18,7 +18,7 @@ import java.security.MessageDigest
  * mwiede/jsch is the actively-maintained fork of the original library;
  * still ~280KB and supports modern KEX (curve25519, sntrup761x25519).
  */
-class SshBootstrapJsch(
+class SshBootstrapJsch internal constructor(
     private val host: String,
     private val sshPort: Int = 22,
     private val sshUser: String = "root",
@@ -30,6 +30,8 @@ class SshBootstrapJsch(
     private val timeoutMs: Long = 90_000,
     private val onProgress: (SshBootstrap.Stage) -> Unit = {},
     private val verifyHostKey: (ByteArray) -> Boolean,
+    private val control: SshBootstrapControl = SshBootstrapControl(),
+    private val proxy: com.smarttools.netguard.service.LocalSocks? = null,
 ) {
 
     fun run(): SshBootstrap.BootstrapResult {
@@ -94,6 +96,7 @@ class SshBootstrapJsch(
             )
         } finally {
             try { session.disconnect() } catch (_: Exception) {}
+            control.closeConnections()
         }
     }
 
@@ -104,6 +107,13 @@ class SshBootstrapJsch(
                 jsch.addIdentity("temp-id", sshPrivateKey.toByteArray(), null, null)
             }
             val session = jsch.getSession(sshUser, host, sshPort)
+            val transport = SshBootstrapTransport(proxy, control)
+            session.setSocketFactory(object : com.jcraft.jsch.SocketFactory {
+                override fun createSocket(host: String, port: Int) = transport.open(host, port)
+                override fun getInputStream(socket: java.net.Socket) = socket.getInputStream()
+                override fun getOutputStream(socket: java.net.Socket) = socket.getOutputStream()
+            })
+            control.track { session.disconnect() }
             if (!sshPassword.isNullOrEmpty()) session.setPassword(sshPassword)
             jsch.hostKeyRepository = object : com.jcraft.jsch.HostKeyRepository {
                 override fun check(host: String, key: ByteArray): Int =
@@ -118,8 +128,14 @@ class SshBootstrapJsch(
             session.setConfig("StrictHostKeyChecking", "yes")
             session.setConfig("PreferredAuthentications", "password,publickey")
             // JSch will negotiate the strongest mutual algo from this set.
-            session.connect(timeoutMs.toInt())
+            val connectMs = minOf(timeoutMs.toInt(), SshBootstrapControl.CONNECT_TIMEOUT_MS)
+            control.handshake(connectMs.toLong(), { session.disconnect() }) { session.connect(connectMs) }
+            session.timeout = timeoutMs.toInt()
             return session
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: SshBootstrap.Failure) {
+            throw e
         } catch (e: JSchException) {
             val msg = (e.message ?: "").lowercase()
             when {

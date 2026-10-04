@@ -15,7 +15,7 @@ import java.security.MessageDigest
  * are again different from the other two, which is enough to pass at
  * least one carrier DPI that fingerprints the others.
  */
-class SshBootstrapTrilead(
+class SshBootstrapTrilead internal constructor(
     private val host: String,
     private val sshPort: Int = 22,
     private val sshUser: String = "root",
@@ -26,6 +26,8 @@ class SshBootstrapTrilead(
     private val timeoutMs: Long = 90_000,
     private val onProgress: (SshBootstrap.Stage) -> Unit = {},
     private val verifyHostKey: (ByteArray) -> Boolean,
+    private val control: SshBootstrapControl = SshBootstrapControl(),
+    private val proxy: com.smarttools.netguard.service.LocalSocks? = null,
 ) {
 
     fun run(): SshBootstrap.BootstrapResult {
@@ -90,14 +92,20 @@ class SshBootstrapTrilead(
             )
         } finally {
             try { conn.close() } catch (_: Exception) {}
+            control.closeConnections()
         }
     }
 
     private fun openConnection(): Connection {
         val conn = Connection(host, sshPort)
+        control.track { conn.close() }
+        conn.setProxyData(SshBootstrapTransport(proxy, control).trileadProxy(host, sshPort))
         try {
             // Trilead's connect() takes (verifier, kexTimeoutMs, connectTimeoutMs).
-            conn.connect({ _, _, _, key -> verifyHostKey(key) }, timeoutMs.toInt(), timeoutMs.toInt())
+            val connectMs = minOf(timeoutMs.toInt(), SshBootstrapControl.CONNECT_TIMEOUT_MS)
+            control.handshake(connectMs.toLong(), { control.closeConnections() }) {
+                conn.connect({ _, _, _, key -> verifyHostKey(key) }, connectMs, connectMs)
+            }
         } catch (e: SocketTimeoutException) {
             try { conn.close() } catch (_: Exception) {}
             throw SshBootstrap.Failure.BannerTimeout(
@@ -115,16 +123,21 @@ class SshBootstrapTrilead(
                 msg.ifBlank { e.javaClass.simpleName }, e.stackTraceToString())
         }
         try {
-            val ok = sshPassword?.let {
-                conn.authenticateWithPassword(sshUser, it)
-            } ?: false
+            val ok = control.handshake(minOf(timeoutMs, SshBootstrapControl.CONNECT_TIMEOUT_MS.toLong()), { control.closeConnections() }) {
+                sshPassword?.let { conn.authenticateWithPassword(sshUser, it) } ?: false
+            }
             if (!ok) {
+                conn.close()
                 throw SshBootstrap.Failure.SshAuthFailed(
                     "password authentication refused",
                     "Trilead.authenticateWithPassword returned false",
                 )
             }
         } catch (e: SshBootstrap.Failure) {
+            conn.close()
+            throw e
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            conn.close()
             throw e
         } catch (e: Exception) {
             try { conn.close() } catch (_: Exception) {}

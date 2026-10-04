@@ -9,20 +9,26 @@ import java.net.Socket
 import java.net.SocketAddress
 import javax.net.SocketFactory
 
-/** OkHttp owns/cancels the TCP socket; only SOCKS performs destination DNS. */
-internal class TunnelSpeedSocketFactory(private val proxy: LocalSocks) : SocketFactory() {
+/** OkHttp owns/cancels the socket. With a proxy, destination DNS stays inside VPN. */
+internal class TunnelSpeedSocketFactory(private val proxy: () -> LocalSocks?, private val onSocket: (Socket) -> Unit = {}) : SocketFactory() {
+    constructor(proxy: LocalSocks, onSocket: (Socket) -> Unit = {}) : this({ proxy }, onSocket)
     override fun createSocket(): Socket = object : Socket() {
         override fun connect(endpoint: SocketAddress, timeout: Int) {
             val remote = endpoint as? InetSocketAddress ?: error("Invalid destination")
             try {
-                super.connect(InetSocketAddress("127.0.0.1", proxy.port), minOf(timeout.takeIf { it > 0 } ?: 2000, 2000))
+                val selected = proxy()
+                if (selected == null) {
+                    super.connect(InetSocketAddress(remote.hostString, remote.port), timeout)
+                    return
+                }
+                super.connect(InetSocketAddress("127.0.0.1", selected.port), minOf(timeout.takeIf { it > 0 } ?: 2000, 2000))
                 soTimeout = 20_000
                 tcpNoDelay = true
-                SocksWire.handshake(this, proxy, SocksDestination(remote.hostString, remote.port))
+                SocksWire.handshake(this, selected, SocksDestination(remote.hostString, remote.port))
             } catch (e: Exception) { close(); throw e }
         }
         override fun connect(endpoint: SocketAddress) = connect(endpoint, 2000)
-    }
+    }.also(onSocket)
     private fun connected(host: String, port: Int, local: InetAddress? = null, localPort: Int = 0): Socket =
         createSocket().also { socket ->
             try {

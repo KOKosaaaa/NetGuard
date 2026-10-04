@@ -413,7 +413,7 @@ class AgentApiClient(
                 init(null, arrayOf<javax.net.ssl.TrustManager>(pinningTm),
                     java.security.SecureRandom())
             }
-            return OkHttpClient.Builder()
+            return managementRoute(OkHttpClient.Builder())
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
@@ -441,7 +441,7 @@ class AgentApiClient(
          * requests with empty UA on default zone settings.
          */
         private fun buildClientStandard(): OkHttpClient {
-            return OkHttpClient.Builder()
+            return managementRoute(OkHttpClient.Builder())
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
@@ -456,6 +456,16 @@ class AgentApiClient(
                     chain.proceed(req)
                 }
                 .build()
+        }
+
+        private fun managementRoute(builder: OkHttpClient.Builder): OkHttpClient.Builder {
+            return builder.proxy(java.net.Proxy.NO_PROXY)
+                .socketFactory(com.smarttools.netguard.util.TunnelSpeedSocketFactory({
+                    com.smarttools.netguard.service.TunnelVpnService.managementProxy()
+                }))
+                .dns(object : okhttp3.Dns {
+                    override fun lookup(hostname: String) = listOf(java.net.InetAddress.getByAddress(hostname, byteArrayOf(127, 0, 0, 1)))
+                })
         }
 
         /**

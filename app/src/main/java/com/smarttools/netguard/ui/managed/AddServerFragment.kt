@@ -157,7 +157,8 @@ class AddServerFragment : Fragment() {
             is AddServerViewModel.State.Input -> Unit
             is AddServerViewModel.State.Progress -> {
                 binding.pbStage.progress = state.stage.pct
-                binding.tvStageLabel.text = stageLabel(state.stage)
+                binding.tvStageLabel.text = stageLabel(state.stage) +
+                    if (state.sshAttempt > 0) " · ${state.sshAttempt}/3" else ""
                 binding.tvStagePct.text = "${state.stage.pct}%"
             }
             is AddServerViewModel.State.Success -> {

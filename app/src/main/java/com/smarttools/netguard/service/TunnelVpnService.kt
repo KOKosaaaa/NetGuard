@@ -72,6 +72,14 @@ class TunnelVpnService : VpnService() {
         private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
         val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
+        /** Agent/SSH clients are outside TUN, so explicitly select the running VPN's proxy. */
+        internal fun managementProxy(): LocalSocks? {
+            if (connectionState.value !is ConnectionState.Connected) return null
+            val published = subscriptionProxy ?: return null
+            return if (published.type == java.net.Proxy.Type.SOCKS) LocalSocks(published.port, "", "")
+            else CredentialManager.speedProxy(relay = false)?.endpoint
+        }
+
         /**
          * Profile id the running tunnel is actually using (-1 when stopped).
          * Exposed so the UI can detect an "orphaned" tunnel — connected to a

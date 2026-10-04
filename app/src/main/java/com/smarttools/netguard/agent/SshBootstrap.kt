@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit
  * All backends require an explicitly confirmed, persisted SSH wire-key fingerprint
  * before authenticating. A previously stored different key is rejected.
  */
-class SshBootstrap(
+class SshBootstrap internal constructor(
     private val host: String,
     private val sshPort: Int = 22,
     private val sshUser: String = "root",
@@ -57,6 +57,8 @@ class SshBootstrap(
      *  this to a progress label so the user sees what is happening. */
     private val onProgress: (Stage) -> Unit = {},
     private val verifyHostKey: (ByteArray) -> Boolean,
+    private val control: SshBootstrapControl = SshBootstrapControl(),
+    private val proxy: com.smarttools.netguard.service.LocalSocks? = null,
 ) {
 
     /** Coarse-grained stages the UI can render as bullet points / progress bar. */
@@ -127,7 +129,10 @@ class SshBootstrap(
         onProgress(Stage.CONNECTING)
         val ssh = openSshWithRetry()
         try {
-            authenticate(ssh)
+            control.handshake(minOf(timeoutMs, SshBootstrapControl.CONNECT_TIMEOUT_MS.toLong()), { ssh.close() }) {
+                authenticate(ssh)
+            }
+            ssh.timeout = timeoutMs.toInt()
             // Annotate every Failure with whatever diagnostic context we
             // have at the time of throw, so the UI's "Show log" dialog
             // always has something useful instead of an empty box.
@@ -207,6 +212,7 @@ class SshBootstrap(
             )
         } finally {
             try { ssh.disconnect() } catch (_: Exception) { /* best-effort */ }
+            control.closeConnections()
         }
     }
 
@@ -221,10 +227,18 @@ class SshBootstrap(
      * frozen for 90s on a genuine block.
      */
     private fun openSshWithRetry(): SSHClient {
-        val connectTimeoutMs = 25_000
+        val connectTimeoutMs = minOf(timeoutMs.toInt(), SshBootstrapControl.CONNECT_TIMEOUT_MS)
         val report = StringBuilder()
         for (attempt in 0..BANNER_RETRY_LIMIT) {
-            val ssh = SSHClient(opensshLikeConfig()).apply {
+            val ssh = object : SSHClient(opensshLikeConfig()) {
+                // sshj 0.38 resolves this name again just to label its reader thread.
+                // The key policy below is bound to the original host/port by the caller.
+                override fun getRemoteHostname(): String = if (proxy != null) "127.0.0.1" else super.getRemoteHostname()
+                override fun makeInetSocketAddress(hostname: String, port: Int): java.net.InetSocketAddress =
+                    if (proxy != null) java.net.InetSocketAddress.createUnresolved(hostname, port)
+                    else super.makeInetSocketAddress(hostname, port)
+            }.apply {
+                socketFactory = SshBootstrapTransport(proxy, control).socketFactory
                 addHostKeyVerifier(object : HostKeyVerifier {
                     override fun verify(hostname: String, port: Int, key: java.security.PublicKey): Boolean =
                         verifyHostKey(Buffer.PlainBuffer().putPublicKey(key).compactData)
@@ -233,12 +247,13 @@ class SshBootstrap(
                 connectTimeout = connectTimeoutMs
                 timeout = connectTimeoutMs
             }
+            control.track { ssh.close() }
             try {
-                ssh.connect(host, sshPort)
+                control.handshake(connectTimeoutMs.toLong(), { ssh.close() }) { ssh.connect(host, sshPort) }
                 // Restore the long timeout for the rest of the flow
                 // (install can take ~30s, geo-dat downloads are async on
                 // the agent side anyway).
-                ssh.timeout = timeoutMs.toInt()
+                ssh.timeout = connectTimeoutMs
                 return ssh
             } catch (e: UnknownHostException) {
                 try { ssh.disconnect() } catch (_: Exception) {}
@@ -405,7 +420,7 @@ class SshBootstrap(
 
     companion object {
         /** How many extra times we re-open SSH on a banner timeout. */
-        private const val BANNER_RETRY_LIMIT = 2
+        private const val BANNER_RETRY_LIMIT = 0
 
         /**
          * Some carrier-grade middleboxes between the phone and the
