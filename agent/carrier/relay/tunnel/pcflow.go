@@ -240,7 +240,10 @@ func (t *VP8DataTunnel) pcOnAckAt(p []byte, now time.Time) {
 	for _, k := range t.pcSendFIFO {
 		if uint32(k) <= t.pcFlow.acked[uint32(k>>32)] {
 			unit := t.pcSendBuf[k]
-			if len(unit) >= 13 && (unit[12] == MsgClose || unit[12] == MsgConnectErr) {
+			// A UDP request/reply uses one outgoing frame per connID. Retire
+			// its send cursors only once that frame is acknowledged; incoming
+			// UDP completion must still allow the reverse reply to be queued.
+			if len(unit) >= 13 && (unit[12] == MsgClose || unit[12] == MsgConnectErr || unit[12] == MsgUDP || unit[12] == MsgUDPReply) {
 				completed = append(completed, uint32(k>>32))
 			}
 			t.pcFlow.sendBytes -= len(t.pcSendBuf[k])

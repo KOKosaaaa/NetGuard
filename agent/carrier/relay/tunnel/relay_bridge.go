@@ -813,6 +813,16 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 	go func() {
 		defer udpConn.Close()
 		defer tcpConn.Close()
+		defer func() {
+			// Replies can be lost or omitted. Retire only this association's
+			// requests after its reader stops creating new entries.
+			rb.udpClients.Range(func(key, value any) bool {
+				if client, ok := value.(*udpClient); ok && client.udpConn == udpConn {
+					rb.udpClients.Delete(key)
+				}
+				return true
+			})
+		}()
 		buf := make([]byte, common.UDPBufSize)
 		for {
 			n, addr, err := udpConn.ReadFromUDP(buf)
@@ -835,7 +845,9 @@ func (rb *RelayBridge) handleUDPAssociate(tcpConn net.Conn) {
 			payload[0] = byte(len(dstAddr))
 			copy(payload[1:], dstAddr)
 			copy(payload[1+len(dstAddr):], buf[headerLen:n])
-			rb.udpClients.Store(id, &udpClient{udpConn: udpConn, clientAddr: addr, socksHdr: buf[:headerLen]})
+			// The next read reuses buf, while this request's reply can arrive later.
+			header := append([]byte(nil), buf[:headerLen]...)
+			rb.udpClients.Store(id, &udpClient{udpConn: udpConn, clientAddr: addr, socksHdr: header})
 			rb.send(id, MsgUDP, payload)
 		}
 	}()
