@@ -108,6 +108,16 @@ class AgentApiClient(
      * Returns a task_id; caller polls /v1/tasks/{id} for completion
      * and reads `result.rooms[]` to build the multi-channel URI.
      */
+    fun wbStreamAvailable(): Boolean = JSONObject(doGet("/wbstream/health", auth = true)).optBoolean("supported")
+    fun wbStreamTransportRevision(): Int = JSONObject(doGet("/wbstream/health", auth = true)).optInt("transport_revision", 0)
+    fun deleteWbStream(room: String): TaskAck = TaskAck.fromJson(JSONObject(doPost(
+        "/wbstream/delete", body = JSONObject().put("room", room).toString(), auth = true)))
+    fun wbStreamRooms(): TelemostRooms = TelemostRooms.fromJson(JSONObject(doGet("/wbstream/rooms", auth = true)))
+    fun deployWbStream(room: String, update: Boolean = false, ownerSession: JSONObject? = null): TaskAck = TaskAck.fromJson(JSONObject(doPost(
+        "/wbstream/deploy", body = JSONObject().put("room", room).put("update", update).apply {
+            if (ownerSession != null) put("owner_session", ownerSession)
+        }.toString(), auth = true)))
+
     fun deployTelemost(count: Int, cookiesJson: String): TaskAck {
         val body = JSONObject().apply {
             put("count", count)
@@ -151,7 +161,15 @@ class AgentApiClient(
             .post(binary.toRequestBody("application/octet-stream".toMediaType()))
             .applyAuth(true)
             .build()
-        return execute(req)
+        // Inherit certificate verification/pinning and auth, but allow a
+        // bounded large upload through a slow conference transport.
+        val uploadHttp = http.newBuilder()
+            .writeTimeout(4, TimeUnit.MINUTES)
+            .readTimeout(4, TimeUnit.MINUTES)
+            .callTimeout(5, TimeUnit.MINUTES)
+            .retryOnConnectionFailure(false)
+            .build()
+        return uploadHttp.newCall(req).execute().use { handle(it, false) }
     }
 
     /** Create + enable a swapfile so a low-RAM VPS survives Telemost peaks.
@@ -332,22 +350,9 @@ class AgentApiClient(
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
-        /**
-         * Connect once without any pinner, read the leaf certificate
-         * straight off the live TLS handshake, and derive its SPKI
-         * SHA256. This is the pin we must use for every subsequent
-         * call — strictly more correct than fetching cert.pem from
-         * disk via openssl (different format quirks, file race vs the
-         * agent regenerating). Used during Add-Server bootstrap after
-         * SSH install finishes and before /v1/auth/pair.
-         */
-        /**
-         * Pair the freshly-installed agent without any cert pinning,
-         * relying on the fact that we **just** SSH-bootstrapped this
-         * server seconds ago — anyone who could MITM us here could
-         * also have hijacked the SSH session. Returns the new bearer
-         * + the SPKI pin we should use for **subsequent** OkHttp calls,
-         * computed off the live TLS session via SSLSocket.
+        /** Pair only with the SPKI received over the bootstrap SSH connection.
+         * TLS must prove that key before the one-shot token is sent; never learn
+         * a replacement pin from an unauthenticated second TLS connection.
          */
         fun bootstrapPair(
             host: String,
@@ -355,18 +360,9 @@ class AgentApiClient(
             pairToken: String,
             deviceName: String,
             appVersion: String,
+            expectedSpkiPin: String,
         ): Pair<PairResponse, String> {
-            val trustAll = trustAllManager()
-            val sslCtx = javax.net.ssl.SSLContext.getInstance("TLS").apply {
-                init(null, arrayOf<javax.net.ssl.TrustManager>(trustAll),
-                    java.security.SecureRandom())
-            }
-            val client = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .sslSocketFactory(sslCtx.socketFactory, trustAll)
-                .hostnameVerifier { _, _ -> true }
-                .build()
+            val client = bootstrapClient(expectedSpkiPin)
             val body = PairRequest(pairToken, deviceName, appVersion).toJson()
             val req = Request.Builder()
                 .url("https://$host:$port/v1/auth/pair")
@@ -380,149 +376,19 @@ class AgentApiClient(
                 }
                 PairResponse.fromJson(org.json.JSONObject(text))
             }
-            // Compute the SPKI pin off a *separate* SSLSocket so future
-            // OkHttp calls (which carry a CertificatePinner) bind to the
-            // same Android-side encoding of the public key. Doing both
-            // through OkHttp would also work, but Response.handshake
-            // came back null on at least one Android HTTP/2 path; raw
-            // SSLSocket avoids that bug.
-            val pin = fetchSpkiFromLive(host, port, sslCtx)
-            return pairResp to pin
+            return pairResp to expectedSpkiPin
         }
 
-        private fun trustAllManager() = object : javax.net.ssl.X509TrustManager {
-            override fun checkClientTrusted(
-                chain: Array<java.security.cert.X509Certificate>,
-                authType: String,
-            ) {}
-            override fun checkServerTrusted(
-                chain: Array<java.security.cert.X509Certificate>,
-                authType: String,
-            ) {}
-            override fun getAcceptedIssuers():
-                Array<java.security.cert.X509Certificate> = emptyArray()
-        }
+        internal fun bootstrapClient(expectedSpkiPin: String): OkHttpClient = buildClient("", expectedSpkiPin)
 
-        private fun fetchSpkiFromLive(
-            host: String,
-            port: Int,
-            sslCtx: javax.net.ssl.SSLContext,
-        ): String {
-            var lastError: Exception? = null
-            repeat(5) { _ ->
-                var socket: javax.net.ssl.SSLSocket? = null
-                try {
-                    socket = sslCtx.socketFactory.createSocket() as javax.net.ssl.SSLSocket
-                    socket.soTimeout = 10_000
-                    socket.connect(java.net.InetSocketAddress(host, port), 10_000)
-                    socket.startHandshake()
-                    val leaf = socket.session.peerCertificates.firstOrNull()
-                    if (leaf != null) {
-                        val spkiDer = leaf.publicKey?.encoded
-                            ?: throw IllegalStateException("encoded public key is null")
-                        val sha = java.security.MessageDigest.getInstance("SHA-256")
-                            .digest(spkiDer)
-                        return sha.joinToString("") { "%02x".format(it) }
-                    }
-                } catch (e: Exception) {
-                    lastError = e
-                } finally {
-                    try { socket?.close() } catch (_: Exception) {}
-                }
-                try { Thread.sleep(1500L) } catch (_: InterruptedException) {}
-            }
-            throw lastError ?: IllegalStateException("no peer cert after 5 tries")
-        }
-
-        @Deprecated("use bootstrapPair")
-        fun fetchSpkiFromLive(host: String, port: Int): String {
-            // OkHttp's Response.handshake can come back null on certain
-            // Android HTTP/2 paths even after a successful 200 — verified
-            // on the user's phone where /v1/health returned 200 five
-            // times but every handshake was null. Going through a raw
-            // SSLSocket sidesteps that quirk and guarantees we get the
-            // peer certificate chain straight off the SSLSession.
-            val trustAll = object : javax.net.ssl.X509TrustManager {
-                override fun checkClientTrusted(
-                    chain: Array<java.security.cert.X509Certificate>,
-                    authType: String,
-                ) {}
-                override fun checkServerTrusted(
-                    chain: Array<java.security.cert.X509Certificate>,
-                    authType: String,
-                ) {}
-                override fun getAcceptedIssuers():
-                    Array<java.security.cert.X509Certificate> = emptyArray()
-            }
-            val sslCtx = javax.net.ssl.SSLContext.getInstance("TLS").apply {
-                init(null, arrayOf<javax.net.ssl.TrustManager>(trustAll),
-                    java.security.SecureRandom())
-            }
-            var lastError: Exception? = null
-            repeat(5) { _ ->
-                var socket: javax.net.ssl.SSLSocket? = null
-                try {
-                    socket = sslCtx.socketFactory.createSocket() as javax.net.ssl.SSLSocket
-                    socket.soTimeout = 10_000
-                    socket.connect(java.net.InetSocketAddress(host, port), 10_000)
-                    socket.startHandshake()
-                    val peerCerts = socket.session.peerCertificates
-                    val leaf = peerCerts.firstOrNull()
-                    if (leaf == null) {
-                        lastError = IllegalStateException("empty peerCertificates")
-                    } else {
-                        val spkiDer = leaf.publicKey?.encoded
-                            ?: throw IllegalStateException("public key has no encoded form")
-                        val sha = java.security.MessageDigest.getInstance("SHA-256")
-                            .digest(spkiDer)
-                        return sha.joinToString("") { "%02x".format(it) }
-                    }
-                } catch (e: Exception) {
-                    lastError = e
-                } finally {
-                    try { socket?.close() } catch (_: Exception) {}
-                }
-                try { Thread.sleep(1500L) } catch (_: InterruptedException) {}
-            }
-            throw lastError ?: IllegalStateException(
-                "live TLS handshake to $host:$port yielded no peer certificate"
-            )
-        }
-
-        /**
-         * Built per-server because CertificatePinner is host-scoped at
-         * construction time; cheap because we share connection pools by
-         * keeping a single application-wide client factory.
-         *
-         * The agent uses a self-signed cert that no system CA chains
-         * to. Standard OkHttp validation rejects it with
-         * CertPathValidatorException ("Trust anchor not found"). We
-         * replace the trust check with a permissive TrustManager and
-         * rely on [CertificatePinner] to enforce that the SPKI hash
-         * matches the one we captured during bootstrap — that's a
-         * stronger guarantee than CA validation for this single host.
-         */
-        /**
-         * Builds an OkHttp client that trusts exactly one self-signed
-         * cert — the one whose SPKI hash matches [spkiPin].
-         *
-         * We deliberately do NOT use [CertificatePinner]. OkHttp's
-         * internal SPKI extraction goes through `cert.publicKey.encoded`
-         * filtered by a system Provider that, on some Android builds,
-         * returns subtly different bytes from a vanilla
-         * `MessageDigest.digest(cert.publicKey.encoded)`. We captured
-         * the pin earlier through SSLSocket → publicKey.encoded; using
-         * the same code path in the TrustManager guarantees the two
-         * hashes are computed from byte-identical input and the
-         * comparison succeeds.
-         */
+        /** The self-signed agent certificate is authenticated by the exact SSH-delivered SPKI. */
         private fun buildClient(host: String, spkiPin: String): OkHttpClient {
             val expected = hexToBytes(spkiPin)
             val pinningTm = object : javax.net.ssl.X509TrustManager {
                 override fun checkClientTrusted(
                     chain: Array<java.security.cert.X509Certificate>,
                     authType: String,
-                ) {}
+                ) { throw java.security.cert.CertificateException("Client certificate authentication is not supported") }
                 override fun checkServerTrusted(
                     chain: Array<java.security.cert.X509Certificate>,
                     authType: String,

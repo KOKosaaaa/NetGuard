@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"วางการกำหนดค่า JSON"</string>
+    <string name="subscription_tls_date_error">"ข้อผิดพลาด TLS: ตรวจสอบวันที่และเวลาของอุปกรณ์ %1$s"</string>
+    <string name="subscription_tls_pin_error">"ใบรับรอง TLS ไม่ตรงกับใบรับรองที่ตรึงไว้ ใบรับรองอาจเปลี่ยนหลังแอปเวอร์ชันนี้เผยแพร่ %1$s"</string>
+    <string name="subscription_tls_chain_error">"สายโซ่ใบรับรอง TLS ของเซิร์ฟเวอร์ไม่ครบ นี่เป็นปัญหาการกำหนดค่าเซิร์ฟเวอร์ %1$s"</string>
+    <string name="subscription_fetch_failed">"โหลดการสมัครรับข้อมูลไม่ได้"</string>
+    <string name="trigger_apps_removed_from_bypass">"แอปที่ลบออกจากรายการยกเว้น VPN: %1$d แอปเหล่านี้จะข้ามการเชื่อมต่ออัตโนมัติ"</string>
+    <string name="server_installing_xray">"กำลังติดตั้ง xray บนเซิร์ฟเวอร์…"</string>
+    <string name="server_upstream_added">"เพิ่ม upstream แล้ว"</string>
+    <string name="server_upstream_deleted">"ลบ upstream แล้ว"</string>
+    <string name="server_rule_added">"เพิ่มกฎแล้ว"</string>
+    <string name="server_rule_deleted">"ลบกฎแล้ว"</string>
+    <string name="wb_room_stop_failed">"หยุดห้อง WB Stream บนเซิร์ฟเวอร์ไม่ได้ โดยยังเก็บโปรไฟล์ไว้ ลองลบอีกครั้ง"</string>
+    <string name="wb_room_still_present">"ห้อง WB Stream ยังอยู่บนเซิร์ฟเวอร์"</string>
+    <string name="rule_label_domain">"โดเมน"</string>
+    <string name="rule_label_cidr">"ช่วง IP (CIDR)"</string>
+    <string name="rule_label_geosite">"กลุ่มเว็บไซต์ (geosite)"</string>
+    <string name="rule_label_geoip">"กลุ่ม IP (geoip)"</string>
+    <string name="rule_label_direct">"การเชื่อมต่อโดยตรง"</string>
+    <string name="rule_label_block">"บล็อก"</string>
+    <string name="rule_label_via">"ผ่าน upstream"</string>
+    <string name="rule_no_upstreams">"ยังไม่ได้เพิ่ม upstream"</string>
+</resources>

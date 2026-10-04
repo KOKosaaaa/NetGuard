@@ -7,8 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -148,9 +148,13 @@ class TelemostRelayManager(
         val sinceLastStop = if (lastStopElapsedMs == 0L) Long.MAX_VALUE
             else SystemClock.elapsedRealtime() - lastStopElapsedMs
         stop()
-        val links = profile.address.split('\n', '\r')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        val links = try {
+            if (profile.isWbStream) com.smarttools.netguard.model.WbStreamLink.parse(profile.address).links
+            else profile.address.split('\n', '\r').map { it.trim() }.filter { it.isNotEmpty() }
+        } catch (_: IllegalArgumentException) {
+            onLog("Invalid WB Stream room link")
+            return false
+        }
         if (links.isEmpty()) {
             onLog("No Telemost links in profile address")
             return false
@@ -202,40 +206,51 @@ class TelemostRelayManager(
             }
         }
         spawnDeferreds = deferreds
-        // Form the pool from whoever joined within a grace window; don't wait
+        // Wait for the first usable room with its full deadline; don't wait
         // for the slowest/dead room (that made connect take ~timeout seconds).
         // Grace scales with the join stagger so staggered rooms land in the pool
         // instead of being reaped as stragglers (a reap = join+immediate-leave =
         // exactly the churn we're trying to avoid).
-        val graceMs = minOf(timeoutMs, JOIN_STAGGER_BASE_MS * links.size + 9_000L)
-        withTimeoutOrNull(graceMs) { deferreds.awaitAll() }
-        instances.addAll(deferreds.mapNotNull { if (it.isCompleted) it.getCompleted() else null })
-        // Reap any straggler that connects after the grace (not in the LB).
-        deferreds.filter { !it.isCompleted }.forEach { d ->
-            scope.launch { runCatching { d.await() }.getOrNull()?.stop() }
+        val selected = mutableListOf<RelayInstance>()
+        try {
+            selected.addAll(awaitRelayPool(
+                deferreds,
+                firstTimeoutMs = timeoutMs + JOIN_STAGGER_BASE_MS * (links.size - 1) + JOIN_STAGGER_JITTER_MS,
+                poolGraceMs = if (links.size == 1) 0L else JOIN_STAGGER_BASE_MS * links.size + JOIN_STAGGER_JITTER_MS
+            ))
+            instances.addAll(selected)
+        } finally {
+            // Stop synchronously even if a process starts exactly as its job is
+            // cancelled. No straggler may rejoin after a failed startup.
+            pending.forEachIndexed { i, instance ->
+                if (instance !in selected) {
+                    instance.stop()
+                    deferreds[i].cancel()
+                }
+            }
         }
-
         Log.i(TAG, "rooms joined within grace: ${instances.size}/${links.size} (these become striping upstreams)")
         if (instances.isEmpty()) {
-            onLog("All ${links.size} Telemost relays failed to connect")
+            onLog("${profile.displayProtocol}: ни одна из ${links.size} комнат не подтвердила соединение")
             return false
         }
 
         val upstreams = instances.map { InetSocketAddress("127.0.0.1", it.socksPort) }
 
-        if (useStriping) {
+        if (useStriping && !profile.isWbStream) {
             // Striping: one flow's bytes are split across all rooms and
             // reassembled by the exit's stripe-server (reached via a SOCKS5
             // CONNECT to 127.0.0.1:stripePort through each relay).
             val mux = StripeMux(exposedSocksPort, upstreams, "127.0.0.1", stripePort, onLog)
             if (!mux.start(scope)) {
-                onLog("StripeMux failed to start on port $exposedSocksPort")
-                stop()
-                return false
+                mux.stop()
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                onLog("Telemost striping unavailable — using whole-connection routing through the joined rooms")
+            } else {
+                this.stripeMux = mux
+                onLog("Telemost striping up: ${instances.size}/${links.size} relays, mux on :$exposedSocksPort -> stripe-server :$stripePort")
+                return true
             }
-            this.stripeMux = mux
-            onLog("Telemost striping up: ${instances.size}/${links.size} relays, mux on :$exposedSocksPort -> stripe-server :$stripePort")
-            return true
         }
 
         val lb = SocksRoundRobinLb(exposedSocksPort, upstreams)
@@ -323,13 +338,14 @@ class TelemostRelayManager(
         // A stream.wb.ru room link routes through the WB Stream carrier instead of
         // Telemost: different librelay --mode + per-conn ARQ + JOIN key (roomId vs
         // joinLink). Same relay/LB plumbing otherwise.
-        private val isWbStream = joinLink.contains("stream.wb.ru", ignoreCase = true)
+        private val carrier = com.smarttools.netguard.model.RelayCarrier.forRoom(joinLink)
 
-        @Volatile var process: Process? = null
-        @Volatile private var stdinWriter: BufferedWriter? = null
+        private val processOwner = RelayProcessOwner()
+        val process: Process? get() = processOwner.process
+        private val stdinWriter: BufferedWriter? get() = processOwner.writer
         @Volatile private var tunnelConnected = false
         @Volatile private var sawReady = false
-        @Volatile private var stopped = false
+        private val stopped: Boolean get() = processOwner.stopped
         @Volatile private var scopeRef: CoroutineScope? = null
 
         /** Spawns the librelay subprocess + stdout reader. Re-usable by the
@@ -347,7 +363,7 @@ class TelemostRelayManager(
             // and fail; all sockets are 127.0.0.1 so it adds no security.
             val pb = ProcessBuilder(
                 bin.absolutePath,
-                "--mode", if (isWbStream) "wbstream-headless-joiner" else "telemost-headless-joiner",
+                "--mode", carrier.mode,
                 "--ws-port", signalingPort.toString(),
                 "--socks-port", socksPort.toString(),
                 "--control-port", controlPort.toString()
@@ -373,12 +389,7 @@ class TelemostRelayManager(
             // per connID, no cross-conn head-of-line blocking) — MUST match the
             // server creator. Telemost uses the global single-cursor ARQ. The WB
             // cold-start warmup gate is applied automatically inside librelay.
-            if (isWbStream) {
-                pb.environment().remove("WLB_CARRIER_ARQ")
-                pb.environment()["WLB_CARRIER_PCARQ"] = "1"
-            } else {
-                pb.environment()["WLB_CARRIER_ARQ"] = "1"
-            }
+            carrier.configureEnvironment(pb.environment())
             pb.redirectErrorStream(true)
             val proc = try {
                 pb.start()
@@ -388,14 +399,9 @@ class TelemostRelayManager(
             }
             // stop() may have raced in during pb.start() - kill the fresh
             // process instead of tracking it, or it orphans.
-            if (stopped) {
-                try { proc.destroyForcibly() } catch (_: Exception) {}
-                return false
-            }
+            if (!processOwner.admit(proc, BufferedWriter(OutputStreamWriter(proc.outputStream)))) return false
             sawReady = false
             tunnelConnected = false
-            process = proc
-            stdinWriter = BufferedWriter(OutputStreamWriter(proc.outputStream))
             Log.i(TAG, "librelay.so #${idx + 1} started")
             scope.launch(Dispatchers.IO) {
                 try {
@@ -490,7 +496,7 @@ class TelemostRelayManager(
             Log.d(TAG, "#${idx + 1} joining as \"$name\"")
             val json = JSONObject().apply {
                 // WB joiner reads {"roomId": <link/id>}; Telemost reads {"joinLink": <url>}.
-                if (isWbStream) put("roomId", joinLink) else put("joinLink", joinLink)
+                put(carrier.roomKey, joinLink)
                 put("displayName", name)
                 put("tunnelMode", "video")
             }.toString()
@@ -511,26 +517,9 @@ class TelemostRelayManager(
         }
 
         fun stop() {
-            stopped = true // tell the watchdog to stop respawning
-            try { stdinWriter?.close() } catch (_: Exception) {}
-            stdinWriter = null
-            val p = process
-            process = null
+            processOwner.stop()
             tunnelConnected = false
             sawReady = false
-            if (p != null) {
-                // Graceful leave: SIGTERM lets librelay self-kick off the SFU
-                // (no ghost left in the room) before SIGKILL. On a daemon thread
-                // so stopping N relays stays non-blocking.
-                try { p.destroy() } catch (_: Exception) {}
-                Thread {
-                    try {
-                        if (!p.waitFor(1500, TimeUnit.MILLISECONDS)) p.destroyForcibly()
-                    } catch (_: Exception) {
-                        try { p.destroyForcibly() } catch (_: Exception) {}
-                    }
-                }.apply { isDaemon = true }.start()
-            }
         }
     }
 }

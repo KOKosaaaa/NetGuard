@@ -121,16 +121,17 @@ class ServerRulesFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 24, 48, 0)
         }
+        val kinds = listOf("domain", "cidr", "geosite", "geoip")
         val spKind = Spinner(ctx).apply {
             adapter = ArrayAdapter(ctx,
                 android.R.layout.simple_spinner_dropdown_item,
-                listOf("domain", "cidr", "geosite", "geoip"))
+                kinds.map { ruleLabel(ctx, it) })
             container.addView(this)
         }
         val etVal = EditText(ctx).apply { hint = getString(R.string.srv_rule_value_hint); container.addView(this) }
         val actions = listOf("direct", "block", "via")
         val spAction = Spinner(ctx).apply {
-            adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, actions)
+            adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, actions.map { ruleLabel(ctx, it) })
             container.addView(this)
         }
         // Upstream picker — only relevant when action=via.
@@ -138,20 +139,20 @@ class ServerRulesFragment : Fragment() {
         val spVia = Spinner(ctx).apply {
             adapter = ArrayAdapter(ctx,
                 android.R.layout.simple_spinner_dropdown_item,
-                if (upstreamTags.isEmpty()) listOf("(no upstreams)") else upstreamTags)
+                if (upstreamTags.isEmpty()) listOf(getString(com.smarttools.netguard.R.string.rule_no_upstreams)) else upstreamTags)
             container.addView(this)
         }
         MaterialAlertDialogBuilder(ctx)
             .setTitle(R.string.srv_add_rule)
             .setView(container)
             .setPositiveButton(R.string.add) { _, _ ->
-                val action = spAction.selectedItem as String
+                val action = actions[spAction.selectedItemPosition]
                 val via = if (action == "via" && upstreamTags.isNotEmpty()) {
                     spVia.selectedItem as String
                 } else ""
                 vm.addRule(
                     AddBypassRuleRequest(
-                        kind = spKind.selectedItem as String,
+                        kind = kinds[spKind.selectedItemPosition],
                         value = etVal.text.toString().trim(),
                         action = action,
                         viaOutboundTag = via,
@@ -165,7 +166,7 @@ class ServerRulesFragment : Fragment() {
     private fun confirmDeleteOutbound(o: BypassOutbound) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.delete)
-            .setMessage("Delete upstream \"${o.tag}\"?")
+            .setMessage(getString(com.smarttools.netguard.R.string.delete_upstream_confirmation, o.tag))
             .setPositiveButton(android.R.string.ok) { _, _ -> vm.deleteUpstream(o.id) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -174,7 +175,7 @@ class ServerRulesFragment : Fragment() {
     private fun confirmDeleteRule(r: BypassRule) {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.delete)
-            .setMessage("Delete rule \"${r.kind} ${r.value} → ${r.action}\"?")
+            .setMessage(getString(com.smarttools.netguard.R.string.delete_rule_confirmation, "${ruleLabel(requireContext(), r.kind)} ${r.value} → ${ruleLabel(requireContext(), r.action)}"))
             .setPositiveButton(android.R.string.ok) { _, _ -> vm.deleteRule(r.id) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -210,8 +211,8 @@ class ServerRulesFragment : Fragment() {
             VH(ItemRuleRowBinding.inflate(LayoutInflater.from(p.context), p, false))
         override fun onBindViewHolder(h: VH, pos: Int) {
             val r = getItem(pos)
-            h.b.tvPrimary.text = "${r.kind} ${r.value}"
-            h.b.tvSecondary.text = "→ ${r.action}" +
+            h.b.tvPrimary.text = "${ruleLabel(h.b.root.context, r.kind)} ${r.value}"
+            h.b.tvSecondary.text = "→ ${ruleLabel(h.b.root.context, r.action)}" +
                 if (r.action == "via" && r.viaOutboundTag.isNotEmpty()) " (${r.viaOutboundTag})" else ""
             h.b.btnDelete.setOnClickListener { onDelete(r) }
         }
@@ -222,4 +223,18 @@ class ServerRulesFragment : Fragment() {
             }
         }
     }
+}
+
+private fun ruleLabel(context: android.content.Context, key: String): String {
+    val id = when (key) {
+        "domain" -> com.smarttools.netguard.R.string.rule_label_domain
+        "cidr" -> com.smarttools.netguard.R.string.rule_label_cidr
+        "geosite" -> com.smarttools.netguard.R.string.rule_label_geosite
+        "geoip" -> com.smarttools.netguard.R.string.rule_label_geoip
+        "direct" -> com.smarttools.netguard.R.string.rule_label_direct
+        "block" -> com.smarttools.netguard.R.string.rule_label_block
+        "via" -> com.smarttools.netguard.R.string.rule_label_via
+        else -> return key
+    }
+    return com.smarttools.netguard.util.LocalizedResources.string(context, id)
 }

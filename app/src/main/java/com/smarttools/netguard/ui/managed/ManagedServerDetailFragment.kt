@@ -172,7 +172,7 @@ class ManagedServerDetailFragment : Fragment() {
         R.id.action_remove_server -> {
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.srv_action_remove_server)
-                .setMessage("Remove this server from the app? Agent keeps running on the VPS.")
+                .setMessage(getString(com.smarttools.netguard.R.string.server_remove_confirmation))
                 .setPositiveButton(android.R.string.ok) { _, _ ->
                     viewModel.removeServer { if (isAdded) findNavController().navigateUp() }
                 }
@@ -186,14 +186,25 @@ class ManagedServerDetailFragment : Fragment() {
                 .setMessage(R.string.srv_update_agent_confirm)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
                     val progress = showProgress(getString(R.string.srv_update_agent_progress))
-                    viewModel.updateAgent { ok, msg ->
+                    viewModel.updateAgent { ok, msg, error ->
                         if (!isAdded) return@updateAgent
                         runCatching { progress.dismiss() }
-                        MaterialAlertDialogBuilder(requireContext())
+                        val result = MaterialAlertDialogBuilder(requireContext())
                             .setTitle(if (ok) R.string.srv_swap_done else R.string.srv_swap_failed)
                             .setMessage(msg)
                             .setPositiveButton(android.R.string.ok, null)
-                            .show()
+                        if (error != null) result.setNeutralButton(R.string.add_server_show_log) { _, _ ->
+                            val text = android.widget.TextView(requireContext()).apply {
+                                this.text = error.rawDetails
+                                setTextIsSelectable(true)
+                                setPadding(32, 24, 32, 24)
+                            }
+                            MaterialAlertDialogBuilder(requireContext())
+                                .setTitle(R.string.add_server_show_log)
+                                .setView(android.widget.ScrollView(requireContext()).apply { addView(text) })
+                                .setPositiveButton(android.R.string.ok, null).show()
+                        }
+                        result.show()
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)

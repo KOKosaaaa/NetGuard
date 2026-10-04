@@ -10,6 +10,7 @@ import com.smarttools.netguard.App
 import com.smarttools.netguard.R
 import com.smarttools.netguard.model.AppSettings
 import com.smarttools.netguard.util.SecuritySelfTest
+import com.smarttools.netguard.util.ConfigBackupSubscriptions
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -42,6 +43,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateSettings(updater: (AppSettings) -> AppSettings) {
         val newSettings = updater(_settings.value)
+        // Merely leaving Settings to read About must not persist all defaults.
+        if (newSettings == _settings.value) return
         _settings.value = newSettings
         app.saveSettings(newSettings)
     }
@@ -58,22 +61,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val profiles = app.profileRepository.getAll()
             val subs = app.subscriptionRepository.getAll()
-            val subById = subs.associateBy { it.id }
-            // Strip perAppList from export — contains installed package names (privacy)
-            val safeSettings = _settings.value.copy(perAppList = emptySet())
-            val profilesWithSub = profiles.map { p ->
-                val subName = subById[p.subscriptionId]?.name
-                if (subName != null) {
-                    mapOf("uri" to p.toUri(), "subscription" to subName)
-                } else {
-                    mapOf("uri" to p.toUri())
-                }
-            }
-            val exportData = mapOf(
-                "version" to 2,
-                "profiles" to profilesWithSub,
-                "subscriptions" to subs.map { mapOf("name" to it.name, "url" to it.url) },
-                "settings" to safeSettings
+            val safeSettings = _settings.value.copy(perAppList = emptySet(), alwaysVpnApps = emptySet())
+            val exportData = ConfigBackupSubscriptions.export(
+                profiles.map { it.toUri() to it.subscriptionId },
+                subs.map { ConfigBackupSubscriptions.Subscription(it.id, it.name, it.url) },
+                com.smarttools.netguard.util.LauncherIconBackup.forExport(safeSettings)
             )
             _exportResult.emit(Gson().toJson(exportData))
         }
@@ -83,70 +75,39 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 if (json.isBlank()) {
-                    _importResult.emit(Result.failure(Exception("Empty JSON")))
+                    _importResult.emit(Result.failure(Exception(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.backup_empty_json))))
                     return@launch
                 }
                 val root = com.google.gson.JsonParser.parseString(json).asJsonObject
                 var count = 0
 
-                // 1. Import subscriptions FIRST so we know their new ids
+                // Parse all reference keys before any insert, so malformed/duplicate v3
+                // keys cannot create a partially imported subscription catalog.
+                val importedSubscriptions = ConfigBackupSubscriptions.subscriptions(root)
+                val subKeyToId = mutableMapOf<String, Long>()
                 val subNameToId = mutableMapOf<String, Long>()
-                val subsArray = root.getAsJsonArray("subscriptions")
-                if (subsArray != null && subsArray.size() > 0) {
-                    for (i in 0 until subsArray.size()) {
-                        val subObj = subsArray[i]?.asJsonObject ?: continue
-                        val name = subObj.get("name")?.asString ?: continue
-                        val url = subObj.get("url")?.asString ?: continue
-                        if (url.isNotBlank()) {
-                            try {
-                                app.subscriptionRepository.validateUrl(url)
-                            } catch (e: Exception) {
-                                android.util.Log.w(
-                                    "ImportConfig",
-                                    "Skipping subscription with invalid URL: ${e.message}"
-                                )
-                                continue
-                            }
-                            val safeName = name.take(256).ifBlank { "Subscription" }
-                            val id = app.subscriptionRepository.insert(
-                                com.smarttools.netguard.model.Subscription(name = safeName, url = url)
-                            )
-                            subNameToId[name] = id
-                        }
+                for (sub in importedSubscriptions) {
+                    if (sub.url.isBlank()) continue
+                    try {
+                        app.subscriptionRepository.validateUrl(sub.url)
+                    } catch (e: Exception) {
+                        android.util.Log.w("ImportConfig", "Skipping subscription with invalid URL: ${e.message}")
+                        continue
                     }
-                }
-
-                // 2. Import profiles. Support both v1 (string array) and v2
-                //    (objects with {uri, subscription}). v2 lets us re-link
-                //    profiles to the subscription they came from so the
-                //    Profiles tab stays grouped after restore.
-                val profilesArray = root.getAsJsonArray("profiles")
-                if (profilesArray != null && profilesArray.size() > 0) {
-                    // Group by subscription name (or "" for unattached)
-                    val groups = mutableMapOf<String, MutableList<String>>()
-                    for (i in 0 until profilesArray.size()) {
-                        val el = profilesArray[i] ?: continue
-                        val (uri, subName) = if (el.isJsonObject) {
-                            val obj = el.asJsonObject
-                            val u = obj.get("uri")?.asString ?: continue
-                            val s = obj.get("subscription")?.asString ?: ""
-                            u to s
-                        } else if (el.isJsonPrimitive) {
-                            (el.asString ?: continue) to ""
-                        } else continue
-                        groups.getOrPut(subName) { mutableListOf() }.add(uri)
-                    }
-                    for ((subName, uris) in groups) {
-                        val parsed = com.smarttools.netguard.core.ProfileParser.parseMultiline(
-                            uris.joinToString("\n")
+                    val id = app.subscriptionRepository.insert(
+                        com.smarttools.netguard.model.Subscription(
+                            name = sub.name.take(256).ifBlank { "Subscription" }, url = sub.url
                         )
-                        val subId = subNameToId[subName] ?: 0L
-                        val linked = if (subId != 0L) {
-                            parsed.profiles.map { it.copy(subscriptionId = subId) }
-                        } else parsed.profiles
-                        app.profileRepository.insertAll(linked)
-                        count += linked.size
-                    }
+                    )
+                    sub.key?.let { subKeyToId[it] = id }
+                    subNameToId[sub.name] = id // compatibility with legacy v2 backups
+                }
+                for ((subId, uris) in ConfigBackupSubscriptions.profileGroups(root, subKeyToId, subNameToId)) {
+                    val parsed = com.smarttools.netguard.core.ProfileParser.parseMultiline(uris.joinToString("\n"))
+                    val linked = if (subId != 0L) parsed.profiles.map { it.copy(subscriptionId = subId) }
+                        else parsed.profiles
+                    app.profileRepository.insertAll(linked)
+                    count += linked.size
                 }
 
                 // 3. Restore settings. exportConfig writes a "settings"
@@ -166,10 +127,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         val gson = Gson()
                         val base = gson.toJsonTree(_settings.value).asJsonObject
                         for ((k, v) in settingsEl.asJsonObject.entrySet()) {
-                            base.add(k, v)
+                            base.add(k, if (k == "launcherIconTheme")
+                                com.smarttools.netguard.util.LauncherIconBackup.restoreValue(v) else v)
                         }
                         val merged = gson.fromJson(base, AppSettings::class.java)
-                            .copy(perAppList = _settings.value.perAppList)
+                            .copy(perAppList = _settings.value.perAppList, alwaysVpnApps = _settings.value.alwaysVpnApps)
                         app.saveSettings(merged)
                         _settings.value = merged
                     } catch (e: Exception) {
@@ -189,23 +151,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             try {
                 val profiles = app.profileRepository.getAll()
                 val subs = app.subscriptionRepository.getAll()
-                val subById = subs.associateBy { it.id }
-                val safeSettings = _settings.value.copy(perAppList = emptySet())
-                // v2 format: profiles carry their subscription name so import
-                // can re-link them after subscriptions are recreated.
-                val profilesWithSub = profiles.map { p ->
-                    val subName = subById[p.subscriptionId]?.name
-                    if (subName != null) {
-                        mapOf("uri" to p.toUri(), "subscription" to subName)
-                    } else {
-                        mapOf("uri" to p.toUri())
-                    }
-                }
-                val exportData = mapOf(
-                    "version" to 2,
-                    "profiles" to profilesWithSub,
-                    "subscriptions" to subs.map { mapOf("name" to it.name, "url" to it.url) },
-                    "settings" to safeSettings
+                val safeSettings = _settings.value.copy(perAppList = emptySet(), alwaysVpnApps = emptySet())
+                val exportData = ConfigBackupSubscriptions.export(
+                    profiles.map { it.toUri() to it.subscriptionId },
+                    subs.map { ConfigBackupSubscriptions.Subscription(it.id, it.name, it.url) },
+                    com.smarttools.netguard.util.LauncherIconBackup.forExport(safeSettings)
                 )
                 val json = Gson().toJson(exportData)
                 context.contentResolver.openOutputStream(uri)?.use { out ->
@@ -213,7 +163,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 }
                 _exportResult.emit(context.getString(R.string.backup_success))
             } catch (e: Exception) {
-                _exportResult.emit("Error: ${e.message}")
+                _exportResult.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.error_with_details, e.message.orEmpty()))
             }
         }
     }

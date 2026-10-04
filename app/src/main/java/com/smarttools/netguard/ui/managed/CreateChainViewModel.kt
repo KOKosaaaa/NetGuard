@@ -34,6 +34,8 @@ import kotlinx.coroutines.withContext
  * the user can flip on the connection from Home immediately.
  */
 class CreateChainViewModel(application: Application) : AndroidViewModel(application) {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(getApplication<android.app.Application>(), id, *args)
+
 
     private val repo = ManagedServerRepository.get(application)
     private val chains = ChainRepository.get(application)
@@ -107,9 +109,8 @@ class CreateChainViewModel(application: Application) : AndroidViewModel(applicat
         val hops = _route.value
         if (hops.size < 2) {
             _state.value = State.Failure(FriendlyError(
-                title = "Слишком короткий маршрут",
-                body = "Маршрут должен включать хотя бы два сервера: " +
-                    "первый — вход, второй (или дальше) — выход в интернет.",
+                title = l10n(com.smarttools.netguard.R.string.loc_create_chain_view_model_1),
+                body = l10n(com.smarttools.netguard.R.string.loc_create_chain_view_model_2),
                 retryable = false,
                 rawDetails = "route.size=${hops.size}",
             ))
@@ -118,9 +119,8 @@ class CreateChainViewModel(application: Application) : AndroidViewModel(applicat
         val labelTrim = label.trim()
         if (labelTrim.isEmpty()) {
             _state.value = State.Failure(FriendlyError(
-                title = "Нужно название",
-                body = "Введи название маршрута — оно будет видно в списке " +
-                    "серверов и поможет тебе различать разные цепочки.",
+                title = l10n(com.smarttools.netguard.R.string.loc_create_chain_view_model_3),
+                body = l10n(com.smarttools.netguard.R.string.loc_create_chain_view_model_4),
                 retryable = false,
                 rawDetails = "label is empty",
             ))
@@ -129,9 +129,8 @@ class CreateChainViewModel(application: Application) : AndroidViewModel(applicat
         val sniTrim = sni.trim()
         if (sniTrim.isEmpty() || sniTrim.contains('/') || sniTrim.contains(' ')) {
             _state.value = State.Failure(FriendlyError(
-                title = "Неверный SNI",
-                body = "Укажи корректное доменное имя (например, " +
-                    "www.cloudflare.com).",
+                title = l10n(com.smarttools.netguard.R.string.loc_create_chain_view_model_5),
+                body = l10n(com.smarttools.netguard.R.string.loc_create_chain_view_model_6),
                 retryable = false,
                 rawDetails = "sni=$sniTrim",
             ))
@@ -197,7 +196,7 @@ class CreateChainViewModel(application: Application) : AndroidViewModel(applicat
                 )
             } catch (e: Exception) {
                 Log.w(TAG, "chain build failed", e)
-                _state.value = State.Failure(AgentErrorMessages.explain(e))
+                _state.value = State.Failure(AgentErrorMessages.explain(e, getApplication<android.app.Application>()))
             }
         }
     }

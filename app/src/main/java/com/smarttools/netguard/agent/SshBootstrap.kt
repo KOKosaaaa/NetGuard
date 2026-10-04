@@ -4,7 +4,8 @@ import android.util.Base64
 import net.schmizz.sshj.DefaultConfig
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.IOUtils
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier
+import net.schmizz.sshj.transport.verification.HostKeyVerifier
+import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.userauth.UserAuthException
 import java.io.IOException
 import java.net.ConnectException
@@ -32,11 +33,8 @@ import java.util.concurrent.TimeUnit
  * abort mid-command, so on cancellation we close the client (best-effort)
  * and the script either finished or got killed by SIGHUP.
  *
- * Security note: SSH host-key verification is INTENTIONALLY off via
- * PromiscuousVerifier. The threat model says the user just bought a VPS
- * and is provisioning it for the first time; they don't have a known
- * host-key to compare against. Once the agent is up we switch to SPKI
- * pinning over HTTPS for everything else.
+ * All backends require an explicitly confirmed, persisted SSH wire-key fingerprint
+ * before authenticating. A previously stored different key is rejected.
  */
 class SshBootstrap(
     private val host: String,
@@ -58,6 +56,7 @@ class SshBootstrap(
     /** Called whenever the bootstrap moves to the next phase. UI binds
      *  this to a progress label so the user sees what is happening. */
     private val onProgress: (Stage) -> Unit = {},
+    private val verifyHostKey: (ByteArray) -> Boolean,
 ) {
 
     /** Coarse-grained stages the UI can render as bullet points / progress bar. */
@@ -226,7 +225,11 @@ class SshBootstrap(
         val report = StringBuilder()
         for (attempt in 0..BANNER_RETRY_LIMIT) {
             val ssh = SSHClient(opensshLikeConfig()).apply {
-                addHostKeyVerifier(PromiscuousVerifier())
+                addHostKeyVerifier(object : HostKeyVerifier {
+                    override fun verify(hostname: String, port: Int, key: java.security.PublicKey): Boolean =
+                        verifyHostKey(Buffer.PlainBuffer().putPublicKey(key).compactData)
+                    override fun findExistingAlgorithms(hostname: String, port: Int): List<String> = emptyList()
+                })
                 connectTimeout = connectTimeoutMs
                 timeout = connectTimeoutMs
             }
@@ -324,8 +327,8 @@ class SshBootstrap(
         val sess = ssh.startSession()
         try {
             val c = sess.exec(cmd)
-            val out = IOUtils.readFully(c.inputStream).toString(Charsets.UTF_8)
-            val err = IOUtils.readFully(c.errorStream).toString(Charsets.UTF_8)
+            val out = IOUtils.readFully(c.inputStream).toString("UTF-8")
+            val err = IOUtils.readFully(c.errorStream).toString("UTF-8")
             c.join(timeoutMs, TimeUnit.MILLISECONDS)
             return CommandResult(c.exitStatus ?: -1, out, err)
         } finally {
@@ -339,8 +342,8 @@ class SshBootstrap(
             val c = sess.exec(cmd)
             // sshj exposes the remote's stdin via outputStream.
             c.outputStream.use { it.write(stdin.toByteArray()) }
-            val out = IOUtils.readFully(c.inputStream).toString(Charsets.UTF_8)
-            val err = IOUtils.readFully(c.errorStream).toString(Charsets.UTF_8)
+            val out = IOUtils.readFully(c.inputStream).toString("UTF-8")
+            val err = IOUtils.readFully(c.errorStream).toString("UTF-8")
             c.join(timeoutMs, TimeUnit.MILLISECONDS)
             return CommandResult(c.exitStatus ?: -1, out, err)
         } finally {

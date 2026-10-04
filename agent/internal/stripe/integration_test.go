@@ -145,9 +145,18 @@ func (s *striper) readPipe(c net.Conn) {
 }
 
 // sendFlow opens flow 1 to the echo dest and streams payload c2s, gating on
-// the server's acks so we never exceed Window outstanding.
+// the server's acks so we never exceed MaxReorder outstanding, matching the
+// production Android StripeFlow sender. A raw unbounded 2 MiB burst can rightly
+// trigger the receiver's per-flow bounded-queue reset before dialing completes.
 func (s *striper) sendFlow(dest string, payload []byte) {
 	s.writeStriped(Frame{Type: FrameOpen, FlowID: 1, Payload: []byte(dest)})
+	deadline := time.Now().Add(20 * time.Second)
+	wakeup := time.AfterFunc(20*time.Second, func() {
+		s.mu.Lock()
+		s.cond.Broadcast()
+		s.mu.Unlock()
+	})
+	defer wakeup.Stop()
 	var off uint64
 	for off < uint64(len(payload)) {
 		end := off + ChunkSize
@@ -155,9 +164,13 @@ func (s *striper) sendFlow(dest string, payload []byte) {
 			end = uint64(len(payload))
 		}
 		s.mu.Lock()
+		for end > s.c2sAcked+MaxReorder && !s.rst && time.Now().Before(deadline) {
+			s.cond.Wait()
+		}
 		rst := s.rst
+		expired := !time.Now().Before(deadline)
 		s.mu.Unlock()
-		if rst {
+		if rst || expired {
 			return
 		}
 		s.writeStriped(Frame{Type: FrameData, FlowID: 1, Seq: off, Payload: payload[off:end]})

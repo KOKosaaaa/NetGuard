@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Xác minh máy chủ SSH</string>
+    <string name="ssh_trust_message">So sánh dấu vân tay này với bảng điều khiển máy chủ trước khi tiếp tục. Mật khẩu SSH chưa được gửi.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Tin cậy khóa này</string>
+    <string name="ssh_trust_changed">Khóa máy chủ SSH đã thay đổi. Kết nối bị chặn; hãy xác minh danh tính máy chủ.</string>
+    <string name="ssh_trust_rejected">Khóa máy chủ SSH chưa được chấp thuận. Mật khẩu SSH chưa được gửi.</string>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Autentikasi SOCKS5 sendiri</string>
+    <string name="security_name_2">VPN lain</string>
+    <string name="security_name_3">Proksi SOCKS5</string>
+    <string name="security_name_4">Proksi HTTP</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">Pemindaian port</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">Penanda VPN</string>
+    <string name="security_name_10">Pemeriksaan MTU</string>
+    <string name="security_name_11">Nama paket</string>
+    <string name="security_detail_1">Terowongan tidak aktif, tidak dapat diuji</string>
+    <string name="security_detail_2">Server menutup koneksi tanpa autentikasi — baik</string>
+    <string name="security_detail_3">Versi SOCKS tidak terduga: %1$s</string>
+    <string name="security_detail_4">KRITIS: SOCKS5 sendiri menerima TANPA AUTENTIKASI — rantai autentikasi rusak!</string>
+    <string name="security_detail_5">SOCKS5 sendiri dengan benar mewajibkan autentikasi pengguna/kata sandi</string>
+    <string name="security_detail_6">SOCKS5 sendiri menolak tanpa autentikasi (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">SOCKS5 sendiri mengembalikan metode tidak terduga: 0x%1$s</string>
+    <string name="security_detail_8">Tidak dapat menguji SOCKS sendiri: %1$s</string>
+    <string name="security_detail_9">Tidak ada klien VPN lain yang dikenal terinstal</string>
+    <string name="security_detail_10">Klien VPN lain terinstal (sebagian mungkin terdampak kebocoran SOCKS lokal April 2026): %1$s</string>
+    <string name="security_detail_11">Tidak ditemukan SOCKS5 tanpa autentikasi di port standar</string>
+    <string name="security_detail_12">RENTAN: SOCKS5 terbuka tanpa autentikasi di port: %1$s</string>
+    <string name="security_detail_13">Tidak ditemukan proksi HTTP CONNECT terbuka di port standar</string>
+    <string name="security_detail_14">RENTAN: Proksi HTTP terbuka di port: %1$s</string>
+    <string name="security_detail_15">Tidak terdeteksi port Xray gRPC API</string>
+    <string name="security_detail_16">RENTAN: Port Xray API terbuka: %1$s</string>
+    <string name="security_detail_17">Tidak terdeteksi Clash REST API</string>
+    <string name="security_detail_18">RENTAN: Clash API terbuka di port: %1$s — /connections membocorkan semua IP</string>
+    <string name="security_detail_19">Tidak ada port VPN yang dikenal terbuka di localhost</string>
+    <string name="security_detail_20">Port yang dapat dideteksi terbuka: %1$s</string>
+    <string name="security_detail_21">Tidak ditemukan port VPN yang dikenal di /proc/net/tcp</string>
+    <string name="security_detail_22">Dapat dideteksi di /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">Tidak dapat membaca /proc/net/tcp (mungkin dibatasi)</string>
+    <string name="security_detail_24">TRANSPORT_VPN terlihat (tidak dapat dihindari di Android). Aplikasi dapat mendeteksi VPN aktif, tetapi tidak dapat melihat IP server.</string>
+    <string name="security_detail_25">Penanda TRANSPORT_VPN tidak terdeteksi (VPN tidak aktif atau pemeriksaan berjalan sebelum koneksi)</string>
+    <string name="security_detail_26">Tidak dapat memeriksa NetworkCapabilities</string>
+    <string name="security_detail_27">Antarmuka TUN tidak terdeteksi</string>
+    <string name="security_detail_28">Hanya informasi: %1$s. MTU saja bukan indikator VPN yang andal.</string>
+    <string name="security_detail_29">Tidak dapat memeriksa MTU antarmuka</string>
+    <string name="security_detail_30">RENTAN: Nama paket \'%1$s\' mengandung kata kunci VPN</string>
+    <string name="security_detail_31">Nama paket \'%1$s\' netral</string>
+</resources>

@@ -1,0 +1,9 @@
+<resources>
+    <item name="glass_decorated" type="id" />
+    <item name="glass_heading" type="id" />
+    <style name="TextAppearance.NetGuard.GlassTitle" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:fontFamily">@font/manrope_semibold</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:letterSpacing">-0.03</item>
+    </style>
+</resources>

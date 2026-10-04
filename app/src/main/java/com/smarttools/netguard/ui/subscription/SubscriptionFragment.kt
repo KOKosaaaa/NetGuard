@@ -131,11 +131,11 @@ class SubscriptionFragment : Fragment() {
 
     private fun showSubscriptionQR(sub: Subscription) {
         if (sub.url.isBlank()) {
-            Toast.makeText(requireContext(), "Subscription URL is empty", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.subscription_empty_url), Toast.LENGTH_SHORT).show()
             return
         }
         if (sub.url.length > 2953) {
-            Toast.makeText(requireContext(), "URL too long for QR code", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.subscription_qr_too_long), Toast.LENGTH_SHORT).show()
             return
         }
         val qrBitmap = QRGenerator.generate(sub.url, 600)
@@ -166,11 +166,13 @@ class SubscriptionFragment : Fragment() {
         val items = arrayOf(
             getString(R.string.add_by_link),
             getString(R.string.scan_qr),
+            getString(R.string.add_wb_stream),
         )
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.add_subscription)
             .setItems(items) { _, which ->
                 when (which) {
+                    2 -> showAddDialog(wbStreamOnly = true)
                     0 -> showAddDialog()
                     1 -> findNavController().navigate(R.id.action_subscriptions_to_qr_scan)
                 }
@@ -178,8 +180,12 @@ class SubscriptionFragment : Fragment() {
             .show()
     }
 
-    private fun showAddDialog() {
+    private fun showAddDialog(wbStreamOnly: Boolean = false) {
         val dlgBinding = DialogAddSubscriptionBinding.inflate(layoutInflater)
+        if (wbStreamOnly) {
+            dlgBinding.etUrl.hint = getString(R.string.wb_stream_room_hint)
+            dlgBinding.spInterval.visibility = View.GONE
+        }
 
         val intervals = listOf("Disabled", "6 hours", "12 hours", "24 hours", "48 hours")
         val intervalValues = listOf(0, 6, 12, 24, 48)
@@ -196,13 +202,15 @@ class SubscriptionFragment : Fragment() {
         runCatching {
             val cb = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val text = cb.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
-            if (!text.isNullOrEmpty() && looksLikeSubscriptionInput(text)) {
+            if (!text.isNullOrEmpty() && looksLikeSubscriptionInput(text) &&
+                (!wbStreamOnly || com.smarttools.netguard.model.WbStreamLink.looksLike(text))) {
                 dlgBinding.etUrl.setText(text)
             }
         }
 
         val dialog: AlertDialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.add_subscription)
+            .setTitle(if (wbStreamOnly) R.string.add_wb_stream else R.string.add_subscription)
+            .setMessage(if (wbStreamOnly) getString(R.string.wb_stream_room_help) else null)
             .setView(dlgBinding.root)
             .setCancelable(true)
             .create()
@@ -223,7 +231,11 @@ class SubscriptionFragment : Fragment() {
         fun runImport() {
             val name = dlgBinding.etName.text?.toString()?.trim().orEmpty()
             val url = dlgBinding.etUrl.text?.toString()?.trim().orEmpty()
-            val hours = intervalValues[dlgBinding.spInterval.selectedItemPosition]
+            if (wbStreamOnly && runCatching { com.smarttools.netguard.model.WbStreamLink.parse(url) }.isFailure) {
+                dlgBinding.etUrl.error = getString(R.string.wb_stream_invalid_room)
+                return
+            }
+            val hours = if (wbStreamOnly) 0 else intervalValues[dlgBinding.spInterval.selectedItemPosition]
             // Drop the soft keyboard so the loading spinner / success card isn't
             // hidden behind the IME.
             val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
@@ -272,7 +284,7 @@ class SubscriptionFragment : Fragment() {
 
     private fun looksLikeSubscriptionInput(text: String): Boolean {
         if (text.startsWith("https://")) return true
-        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://", "wbstream://")
         return schemes.any { text.startsWith(it) }
     }
 
@@ -337,7 +349,7 @@ class SubAdapter(
         // RecyclerView leaks the token to anyone who screenshots / records the
         // screen. Show host + a 4-char tail as a hint instead.
         holder.binding.tvSubUrl.text = maskSubscriptionUrl(sub.url)
-        holder.binding.tvSubCount.text = "${sub.profileCount} profiles"
+        holder.binding.tvSubCount.text = holder.binding.root.resources.getQuantityString(com.smarttools.netguard.R.plurals.subscription_profile_count, sub.profileCount, sub.profileCount)
         holder.binding.tvSubUpdated.text = if (sub.lastUpdatedMs > 0) {
             java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
                 .format(java.util.Date(sub.lastUpdatedMs))

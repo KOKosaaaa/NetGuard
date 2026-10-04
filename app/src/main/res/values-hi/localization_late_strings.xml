@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"JSON कॉन्फ़िगरेशन पेस्ट करें"</string>
+    <string name="subscription_tls_date_error">"TLS त्रुटि: डिवाइस की तारीख और समय जाँचें। %1$s"</string>
+    <string name="subscription_tls_pin_error">"TLS प्रमाणपत्र पिन मेल नहीं खाता। ऐप के इस संस्करण के जारी होने के बाद प्रमाणपत्र बदल गया हो सकता है। %1$s"</string>
+    <string name="subscription_tls_chain_error">"सर्वर की TLS प्रमाणपत्र श्रृंखला अधूरी है। यह सर्वर कॉन्फ़िगरेशन की समस्या है। %1$s"</string>
+    <string name="subscription_fetch_failed">"सदस्यता लोड नहीं हो सकी"</string>
+    <string name="trigger_apps_removed_from_bypass">"VPN बायपास सूची से हटाए गए ऐप्स: %1$d। वे स्वचालित कनेक्शन को बायपास कर देते।"</string>
+    <string name="server_installing_xray">"सर्वर पर xray इंस्टॉल हो रहा है…"</string>
+    <string name="server_upstream_added">"अपस्ट्रीम जोड़ा गया"</string>
+    <string name="server_upstream_deleted">"अपस्ट्रीम हटाया गया"</string>
+    <string name="server_rule_added">"नियम जोड़ा गया"</string>
+    <string name="server_rule_deleted">"नियम हटाया गया"</string>
+    <string name="wb_room_stop_failed">"सर्वर पर WB Stream रूम रोका नहीं जा सका। प्रोफ़ाइल सुरक्षित है; फिर हटाने की कोशिश करें।"</string>
+    <string name="wb_room_still_present">"WB Stream रूम अभी भी सर्वर पर मौजूद है"</string>
+    <string name="rule_label_domain">"डोमेन"</string>
+    <string name="rule_label_cidr">"IP रेंज (CIDR)"</string>
+    <string name="rule_label_geosite">"साइट समूह (geosite)"</string>
+    <string name="rule_label_geoip">"IP समूह (geoip)"</string>
+    <string name="rule_label_direct">"सीधा कनेक्शन"</string>
+    <string name="rule_label_block">"ब्लॉक करें"</string>
+    <string name="rule_label_via">"अपस्ट्रीम के ज़रिए"</string>
+    <string name="rule_no_upstreams">"कोई अपस्ट्रीम नहीं जोड़ा गया"</string>
+</resources>

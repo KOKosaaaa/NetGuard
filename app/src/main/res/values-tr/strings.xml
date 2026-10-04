@@ -172,7 +172,7 @@
     <string name="speed_test_desc">Ana ekranda hız testi düğmesi</string>
     <string name="speed_test">Hız Testi</string>
     <string name="auto_connect_wifi">WiFi\'de otomatik bağlan</string>
-    <string name="auto_connect_wifi_desc">Bilinmeyen WiFi\'de VPN + Evil Twin koruması</string>
+    <string name="auto_connect_wifi_desc">Güvenilmeyen Wi-Fi ağlarında VPN kullanılır. Android ağ bilgilerini gizlediğinde de ağ güvenilmez sayılır. VPN izni önceden verilmelidir.</string>
     <string name="trusted_wifi">Güvenilir WiFi Ağları</string>
     <string name="add_current_wifi">Mevcut WiFi\'yi ekle</string>
     <string name="location_needed_for_wifi">WiFi adı için konum izni gerekli</string>

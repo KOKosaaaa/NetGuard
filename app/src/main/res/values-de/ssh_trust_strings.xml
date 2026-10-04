@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">SSH-Server prüfen</string>
+    <string name="ssh_trust_message">Vergleichen Sie diesen Fingerabdruck vor dem Fortfahren mit der Serverkonsole. Das SSH-Passwort wurde noch nicht gesendet.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Schlüssel vertrauen</string>
+    <string name="ssh_trust_changed">Der SSH-Hostschlüssel hat sich geändert. Verbindung blockiert; prüfen Sie die Identität des Servers.</string>
+    <string name="ssh_trust_rejected">SSH-Hostschlüssel nicht bestätigt. Das SSH-Passwort wurde nicht gesendet.</string>
+</resources>

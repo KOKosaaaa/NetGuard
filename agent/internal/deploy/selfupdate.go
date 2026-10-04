@@ -10,17 +10,15 @@ package deploy
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 	"time"
 
+	"github.com/KOKosaaaa/NetGuard/agent/internal/agentupdate"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/storage"
 	"github.com/KOKosaaaa/NetGuard/agent/internal/tasks"
 )
@@ -49,49 +47,11 @@ type UpdateAgentRequest struct {
 // agent, backs up the current binary, then atomically swaps it in. Caller
 // restarts the service afterwards via [ScheduleAgentRestart].
 func ApplyUploadedAgent(body io.Reader, wantSha string) error {
-	if strings.TrimSpace(wantSha) == "" {
-		return fmt.Errorf("sha256 is required (refusing to install an unverified binary)")
-	}
-	tmp := AgentBinaryPath + ".new"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
-	if err != nil {
-		return fmt.Errorf("open temp: %w", err)
-	}
-	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, h), body)
-	closeErr := f.Close()
-	if err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("stream upload: %w", err)
-	}
-	if closeErr != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("flush temp: %w", closeErr)
-	}
-	if n < 1_000_000 {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("uploaded binary suspiciously small (%d bytes)", n)
-	}
-	got := hex.EncodeToString(h.Sum(nil))
-	if !strings.EqualFold(got, wantSha) {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("sha256 mismatch: got %s want %s", got, wantSha)
-	}
-	// Smoke-test: the new binary must execute here. `--version` prints and
-	// exits 0; a wrong-arch / corrupt binary fails, so we bail before
-	// touching the live one.
-	if out, err := exec.Command(tmp, "--version").CombinedOutput(); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("uploaded binary won't run here (wrong arch / corrupt): %v (%s)",
-			err, strings.TrimSpace(string(out)))
-	}
-	_ = os.Rename(AgentBinaryPath, AgentBinaryPath+".bak")
-	if err := os.Rename(tmp, AgentBinaryPath); err != nil {
-		_ = os.Rename(AgentBinaryPath+".bak", AgentBinaryPath) // best-effort restore
-		_ = os.Remove(tmp)
-		return fmt.Errorf("swap binary: %w", err)
-	}
-	return nil
+	return ApplyUploadedAgentContext(context.Background(), body, wantSha)
+}
+
+func ApplyUploadedAgentContext(ctx context.Context, body io.Reader, wantSha string) error {
+	return agentupdate.Install(ctx, AgentBinaryPath, body, wantSha)
 }
 
 // ScheduleAgentRestart restarts the service ~1s later, so the caller's HTTP
@@ -132,14 +92,15 @@ func AgentUpdate(db *storage.DB, req *UpdateAgentRequest) tasks.Runner {
 		h.LogF("backed up current binary to %s", bk)
 
 		h.SetStep("install", 80)
-		data, err := os.ReadFile(tmp)
+		file, err := os.Open(tmp)
 		if err != nil {
 			return h.Fail("E_READ_TMP", err.Error(), false)
 		}
-		if err := AtomicWrite(AgentBinaryPath, data, 0o755); err != nil {
+		defer file.Close()
+		if err := agentupdate.Install(ctx, AgentBinaryPath, file, req.SHA256); err != nil {
 			return h.Fail("E_INSTALL", err.Error(), false)
 		}
-		h.LogF("installed %d-byte binary at %s", len(data), AgentBinaryPath)
+		h.LogF("installed verified binary at %s", AgentBinaryPath)
 
 		h.SetStep("restart-scheduled", 95)
 		h.LogF("scheduling graceful restart in ~1s")

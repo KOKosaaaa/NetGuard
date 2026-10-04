@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="map_server_location_unknown">Server location unavailable</string>
+    <string name="home_auto_select_short">Auto select</string>
+    <string name="home_speed_test_short">Speed test</string>
+    <string name="home_choose_server">Choose server</string>
+    <string name="home_details">Traffic details</string>
+    <string name="home_chart_accessibility">Daily traffic: %1$s</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="speed_cancel">Cancel</string>
+    <string name="home_server">SERVER</string>
+    <string name="home_download">↓ Receiving</string>
+    <string name="home_upload">↑ Sending</string>
+    <string name="speed_hint">Through VPN · to the test server</string>
+    <string name="speed_latency_stage">Checking latency…</string>
+    <string name="speed_download_stage">Measuring download…</string>
+    <string name="speed_upload_stage">Measuring upload…</string>
+    <string name="speed_unmeasured">not measured</string>
+    <string name="speed_value">%1$s Mbps</string>
+    <string name="speed_latency_value">%1$d ms</string>
+    <string name="speed_results">Download: %1$s\nUpload: %2$s\nHTTP latency: %3$s</string>
+    <string name="speed_not_ready">The tunnel is not ready yet. Try again shortly.</string>
+    <string name="speed_failed">The test server did not complete the transfer. Try again. This does not necessarily mean the VPN is unavailable.</string>
+    <string name="speed_timeout">The test deadline expired. Completed measurements are preserved; unfinished measurements are marked as unmeasured.</string>
+</resources>

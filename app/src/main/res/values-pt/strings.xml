@@ -172,7 +172,7 @@
     <string name="speed_test_desc">Botão de teste de velocidade na tela inicial</string>
     <string name="speed_test">Teste de velocidade</string>
     <string name="auto_connect_wifi">Conexão automática WiFi</string>
-    <string name="auto_connect_wifi_desc">VPN em WiFi desconhecido + proteção Evil Twin</string>
+    <string name="auto_connect_wifi_desc">Conectar VPN em redes Wi-Fi não confiáveis, inclusive quando o Android oculta os dados da rede. É necessário autorizar a VPN previamente.</string>
     <string name="trusted_wifi">Redes WiFi confiáveis</string>
     <string name="add_current_wifi">Adicionar WiFi atual</string>
     <string name="location_needed_for_wifi">Permissão de localização necessária para nome WiFi</string>

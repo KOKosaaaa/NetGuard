@@ -13,6 +13,8 @@ captures/
 *.jks
 *.keystore
 *.bin
+!agent/carrier/relay/tunnel/vp8_kf_prefix.bin
+!agent/carrier/relay/tunnel/vp8_inter_prefix.bin
 keystore.properties
 
 # APK / AAB
@@ -45,3 +47,6 @@ app/libs/*.aar
 
 # Agent build output (binaries are rebuilt via Makefile; embed/ inputs are tracked)
 agent/dist/
+
+# Reproducible native checkout; pinned source + patch are in tools/build-hev.py
+/third_party/hev-socks5-tunnel/

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Vérifier le serveur SSH</string>
+    <string name="ssh_trust_message">Comparez cette empreinte avec la console du serveur avant de continuer. Le mot de passe SSH n’a pas encore été envoyé.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Faire confiance à cette clé</string>
+    <string name="ssh_trust_changed">La clé de l’hôte SSH a changé. Connexion bloquée ; vérifiez l’identité du serveur.</string>
+    <string name="ssh_trust_rejected">La clé de l’hôte SSH n’a pas été approuvée. Le mot de passe SSH n’a pas été envoyé.</string>
+</resources>

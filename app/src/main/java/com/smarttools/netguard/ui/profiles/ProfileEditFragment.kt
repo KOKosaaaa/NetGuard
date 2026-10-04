@@ -68,7 +68,7 @@ class ProfileEditFragment : Fragment() {
     }
 
     private fun setupSpinners() {
-        val protocols = Protocol.entries.map { it.value }
+        val protocols = Protocol.entries.map { if (it == Protocol.WBSTREAM) "WB Stream" else it.value }
         binding.spProtocol.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, protocols)
 
         val networks = TransportType.entries.map { it.value }
@@ -79,6 +79,22 @@ class ProfileEditFragment : Fragment() {
 
         val fingerprints = listOf("chrome", "firefox", "safari", "ios", "android", "edge", "qq", "random", "randomized")
         binding.spFingerprint.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, fingerprints)
+        binding.spProtocol.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                renderProtocol(Protocol.entries[position])
+            }
+        }
+    }
+
+    private fun renderProtocol(protocol: Protocol) {
+        binding.protocolDetails.visibility = if (protocol.usesRelay) View.GONE else View.VISIBLE
+        val inputLayout = binding.etAddress.parent?.parent as? com.google.android.material.textfield.TextInputLayout
+        inputLayout?.hint = getString(if (protocol == Protocol.WBSTREAM) R.string.wb_stream_room_hint else R.string.address)
+        inputLayout?.helperText = if (protocol == Protocol.WBSTREAM) getString(R.string.wb_stream_room_help) else null
+        binding.etAddress.inputType = android.text.InputType.TYPE_CLASS_TEXT or
+            if (protocol.usesRelay) android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE else android.text.InputType.TYPE_TEXT_VARIATION_URI
+        binding.etAddress.maxLines = if (protocol.usesRelay) 12 else 1
     }
 
     private fun setupButtons() {
@@ -98,7 +114,10 @@ class ProfileEditFragment : Fragment() {
 
         binding.btnShare.setOnClickListener {
             collectProfile()
-            val uri = viewModel.getShareUri()
+            val uri = runCatching { viewModel.getShareUri() }.getOrElse {
+                Toast.makeText(requireContext(), R.string.wb_stream_invalid_room, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
             val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("profile", uri))
             Toast.makeText(requireContext(), R.string.copied, Toast.LENGTH_SHORT).show()

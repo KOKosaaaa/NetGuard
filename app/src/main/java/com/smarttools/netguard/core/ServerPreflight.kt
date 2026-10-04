@@ -46,15 +46,15 @@ object ServerPreflight {
             // Telemost profile.address holds the full join URL, not a hostname.
             // Probe the SFU entry point instead; the actual relay handshake
             // happens later inside librelay.so.
-            if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) {
+            if (profile.protocol.usesRelay) {
                 val socket = Socket()
                 val started = System.currentTimeMillis()
                 return@withContext try {
-                    socket.connect(InetSocketAddress("telemost.yandex.ru", 443), TCP_TIMEOUT_MS)
+                    socket.connect(InetSocketAddress(profile.relayHost, 443), TCP_TIMEOUT_MS)
                     val rtt = System.currentTimeMillis() - started
                     if (rtt > slowThresholdMs) Result.Slow(rtt) else Result.Ok(rtt)
                 } catch (e: Exception) {
-                    Result.Dead("Telemost TCP: ${e.message ?: e.javaClass.simpleName}")
+                    Result.Dead("${profile.displayProtocol} TCP: ${e.message ?: e.javaClass.simpleName}")
                 } finally {
                     try { socket.close() } catch (_: Exception) {}
                 }

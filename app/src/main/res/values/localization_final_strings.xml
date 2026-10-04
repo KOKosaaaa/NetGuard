@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Invalid subscription link"</string>
+    <string name="subscription_url_required">"URL is empty"</string>
+    <string name="subscription_room_invalid">"Invalid room or profile link"</string>
+    <string name="subscription_profile_unsupported">"Unsupported profile URI"</string>
+    <string name="profile_default_name">"Profile"</string>
+    <string name="subscription_default_name">"Subscription"</string>
+    <string name="subscription_profile_invalid_details">"Invalid profile link: %1$s"</string>
+    <string name="subscription_profile_added">"Profile added: %1$s"</string>
+    <string name="subscription_url_invalid_details">"Invalid URL: %1$s"</string>
+    <string name="subscription_deleted_name">"Deleted: %1$s"</string>
+    <string name="subscription_update_with_errors">"Updated profiles: %1$d. Errors: %2$d"</string>
+    <string name="profile_room_invalid">"Invalid room link"</string>
+    <string name="profile_address_invalid">"Invalid address"</string>
+    <string name="profile_test_connect_first">"Connect VPN first to avoid leaking real IP"</string>
+    <string name="profile_test_proxy_unready">"VPN credentials not ready"</string>
+    <string name="profile_testing">"Testing..."</string>
+    <string name="profile_test_failed">"Failed"</string>
+    <string name="backup_empty_json">"The configuration file is empty"</string>
+    <string name="import_profiles_with_errors">"Imported profiles: %1$d. Errors: %2$d"</string>
+    <string name="connection_room_not_ready">"The server in the room has not confirmed the connection"</string>
+    <string name="connection_whitelist_help">"The server may be blocked by an IP allowlist. Try WB Stream or Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">Updated %1$d profile</item>
+        <item quantity="other">Updated %1$d profiles</item>
+    </plurals>
+</resources>

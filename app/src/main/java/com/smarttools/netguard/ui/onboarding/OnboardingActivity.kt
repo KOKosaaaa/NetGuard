@@ -19,6 +19,9 @@ import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.addCallback
+import com.smarttools.netguard.BuildConfig
+import com.smarttools.netguard.util.LauncherIcons
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -42,6 +45,8 @@ class OnboardingActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityOnboardingBinding
     private var step = STEP_LANG
+    private var guidePage = 0
+    private val infoOnly get() = intent.getBooleanExtra(EXTRA_INFO_ONLY, false)
     private var pickedMode = OnboardingMode.TRIGGER
     private var profileImportedCount = 0
     private var transitioning = false
@@ -88,9 +93,13 @@ class OnboardingActivity : AppCompatActivity() {
         // setApplicationLocales triggers when the user picks a language.
         pickedLanguage = (application as App).loadSettings().language
 
-        val isRestoration = savedInstanceState != null
+        if (infoOnly) step = STEP_WELCOME
+        val iconTheme = (application as App).loadSettings().let { it.launcherIconTheme ?: it.themeMode }
+        binding.ivLogo.setImageResource(LauncherIcons.iconFor(iconTheme))
         savedInstanceState?.let {
             step = it.getInt(KEY_STEP, STEP_LANG)
+            guidePage = it.getInt(KEY_GUIDE_PAGE, 0).coerceIn(GUIDE_TITLES.indices)
+            if (infoOnly) step = STEP_WELCOME
             pickedMode = runCatching {
                 OnboardingMode.valueOf(it.getString(KEY_MODE) ?: OnboardingMode.TRIGGER.name)
             }.getOrDefault(OnboardingMode.TRIGGER)
@@ -103,6 +112,7 @@ class OnboardingActivity : AppCompatActivity() {
         setupModeSelection()
         setupProfileStep()
         setupButtons()
+        onBackPressedDispatcher.addCallback(this) { goBack() }
 
         // Initial logo entrance — small zoom + fade.
         binding.ivLogo.alpha = 0f
@@ -156,21 +166,28 @@ class OnboardingActivity : AppCompatActivity() {
         // the rows anyway so the selection's stroke color tracks the theme
         // refresh on dynamic-color themes.
         populateLanguageList()
+        renderGuide()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // singleTask may reuse a live wizard for a new About request. Do not
+        // inherit its old mode or an unfinished transition into the new guide.
+        listOf(binding.stepLang, binding.stepWelcome, binding.stepMode, binding.stepVpn,
+            binding.stepUsage, binding.stepProfile, binding.stepDone).forEach { it.animate().cancel() }
+        transitioning = false
+        guidePage = 0
+        step = if (infoOnly) STEP_WELCOME else STEP_LANG
+        renderStep(animate = false)
+        binding.stepWelcome.scrollTo(0, 0)
     }
 
     private fun buildRefreshMap() {
         refreshMap = listOf(
             binding.tvLangTitle to R.string.onb_lang_title,
             binding.tvLangSubtitle to R.string.onb_lang_subtitle,
-            binding.tvWelcomeTitle to R.string.onb_welcome_title,
-            binding.tvWelcomeSubtitle to R.string.onb_welcome_subtitle,
-            binding.tvWelcomeBody to R.string.onb_welcome_body,
-            binding.tvFeatureTriggerTitle to R.string.onb_feature_trigger_title,
-            binding.tvFeatureTriggerBody to R.string.onb_feature_trigger,
-            binding.tvFeaturePerappTitle to R.string.onb_feature_perapp_title,
-            binding.tvFeaturePerappBody to R.string.onb_feature_perapp,
-            binding.tvFeatureProtocolsTitle to R.string.onb_feature_protocols_title,
-            binding.tvFeatureProtocolsBody to R.string.onb_feature_protocols,
+            binding.btnGuideSkip to R.string.guide_skip,
             binding.tvModeTitle to R.string.onb_mode_title,
             binding.tvModeSubtitle to R.string.onb_mode_subtitle,
             binding.tvModeTriggerTitle to R.string.onb_mode_trigger,
@@ -205,6 +222,7 @@ class OnboardingActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(KEY_STEP, step)
+        outState.putInt(KEY_GUIDE_PAGE, guidePage)
         outState.putString(KEY_MODE, pickedMode.name)
         outState.putInt(KEY_IMPORTED, profileImportedCount)
         outState.putString(KEY_LANG, pickedLanguage)
@@ -246,7 +264,7 @@ class OnboardingActivity : AppCompatActivity() {
                 isFocusable = false
             }
             val name = TextView(this).apply {
-                text = LANGUAGE_NAMES[idx]
+                text = if (idx == 0) getString(com.smarttools.netguard.R.string.app_language_system) else LANGUAGE_NAMES[idx]
                 textSize = 15f
                 setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurface))
                 layoutParams = LinearLayout.LayoutParams(
@@ -518,20 +536,20 @@ class OnboardingActivity : AppCompatActivity() {
                 "notafter" in lower ||
                 "expired" in lower ||
                 "not yet valid" in lower ->
-                "TLS error — check your device date/time. ($raw)"
+                getString(com.smarttools.netguard.R.string.subscription_tls_date_error, raw)
             "certificate pinning failure" in lower ->
-                "TLS pin mismatch (cert rotated since this NetGuard release). $raw"
+                getString(com.smarttools.netguard.R.string.subscription_tls_pin_error, raw)
             "unable to find acceptable" in lower ->
-                "Server's TLS chain is incomplete (server config issue). $raw"
-            else -> raw.ifBlank { "fetch failed" }
+                getString(com.smarttools.netguard.R.string.subscription_tls_chain_error, raw)
+            else -> raw.ifBlank { getString(com.smarttools.netguard.R.string.subscription_fetch_failed) }
         }
     }
 
     private fun subscriptionNameFromUrl(url: String): String {
         return try {
-            java.net.URL(url).host.takeIf { it.isNotBlank() } ?: "Subscription"
+            java.net.URL(url).host.takeIf { it.isNotBlank() } ?: getString(com.smarttools.netguard.R.string.subscription_default_name)
         } catch (_: Exception) {
-            "Subscription"
+            getString(com.smarttools.netguard.R.string.subscription_default_name)
         }
     }
 
@@ -548,6 +566,9 @@ class OnboardingActivity : AppCompatActivity() {
     private fun setupButtons() {
         binding.btnNext.setOnClickListener { advance() }
         binding.btnBack.setOnClickListener { goBack() }
+        binding.btnGuideSkip.setOnClickListener {
+            if (!transitioning) leaveGuide()
+        }
         binding.btnVpnGrant.setOnClickListener {
             val prepareIntent = VpnService.prepare(this)
             if (prepareIntent != null) {
@@ -580,7 +601,14 @@ class OnboardingActivity : AppCompatActivity() {
         if (transitioning) return
         when (step) {
             STEP_LANG -> step = STEP_WELCOME
-            STEP_WELCOME -> step = STEP_MODE
+            STEP_WELCOME -> {
+                if (guidePage < GUIDE_TITLES.lastIndex) {
+                    guidePage++
+                    renderGuide(resetScroll = true)
+                    updateProgress(animate = true)
+                } else leaveGuide()
+                return
+            }
             STEP_MODE -> step = STEP_VPN
             STEP_VPN -> step = if (pickedMode == OnboardingMode.TRIGGER) STEP_USAGE else STEP_PROFILE
             STEP_USAGE -> step = STEP_PROFILE
@@ -593,8 +621,17 @@ class OnboardingActivity : AppCompatActivity() {
     private fun goBack() {
         if (transitioning) return
         when (step) {
-            STEP_LANG -> return
-            STEP_WELCOME -> step = STEP_LANG
+            STEP_LANG -> { finish(); return }
+            STEP_WELCOME -> {
+                if (guidePage > 0) {
+                    guidePage--
+                    renderGuide(resetScroll = true)
+                    updateProgress(animate = true)
+                    return
+                }
+                if (infoOnly) { finish(); return }
+                step = STEP_LANG
+            }
             STEP_MODE -> step = STEP_WELCOME
             STEP_VPN -> step = STEP_MODE
             STEP_USAGE -> step = STEP_VPN
@@ -631,6 +668,8 @@ class OnboardingActivity : AppCompatActivity() {
         binding.btnNext.text = getString(
             if (step == STEP_DONE) R.string.onb_finish else R.string.onb_next
         )
+
+        renderGuide()
 
         // Sync step_profile sub-state with the running counter — if the user
         // has already imported anything and is just navigating back into this
@@ -691,14 +730,18 @@ class OnboardingActivity : AppCompatActivity() {
     }
 
     private fun updateProgress(animate: Boolean) {
-        val totalSteps = if (pickedMode == OnboardingMode.TRIGGER) 7 else 6
+        if (infoOnly) {
+            binding.progressSteps.setProgressCompat((guidePage + 1) * 100 / GUIDE_TITLES.size, animate)
+            return
+        }
+        val totalSteps = if (pickedMode == OnboardingMode.TRIGGER) 10 else 9
         val effective = when (step) {
             STEP_LANG -> 1
-            STEP_WELCOME -> 2
-            STEP_MODE -> 3
-            STEP_VPN -> 4
-            STEP_USAGE -> 5
-            STEP_PROFILE -> if (pickedMode == OnboardingMode.TRIGGER) 6 else 5
+            STEP_WELCOME -> 2 + guidePage
+            STEP_MODE -> 6
+            STEP_VPN -> 7
+            STEP_USAGE -> 8
+            STEP_PROFILE -> if (pickedMode == OnboardingMode.TRIGGER) 9 else 8
             STEP_DONE -> totalSteps
             else -> 1
         }
@@ -712,6 +755,27 @@ class OnboardingActivity : AppCompatActivity() {
         } else {
             binding.progressSteps.progress = target
         }
+    }
+
+    private fun renderGuide(resetScroll: Boolean = false) {
+        binding.tvWelcomeTitle.setText(GUIDE_TITLES[guidePage])
+        binding.tvWelcomeBody.setText(GUIDE_BODIES[guidePage])
+        binding.tvWelcomeSubtitle.text = getString(R.string.guide_page, guidePage + 1, GUIDE_TITLES.size)
+        binding.tvGuideVersion.text = getString(R.string.guide_version, BuildConfig.VERSION_NAME)
+        binding.btnGuideSkip.visibility = if (infoOnly) View.GONE else View.VISIBLE
+        if (step == STEP_WELCOME) {
+            binding.btnBack.visibility = View.VISIBLE
+            binding.btnNext.setText(if (guidePage == GUIDE_TITLES.lastIndex) {
+                if (infoOnly) R.string.guide_close else R.string.guide_start
+            } else R.string.onb_next)
+        }
+        if (resetScroll) binding.stepWelcome.scrollTo(0, 0)
+    }
+
+    private fun leaveGuide() {
+        if (infoOnly) { finish(); return }
+        step = STEP_MODE
+        renderStep(animate = true)
     }
 
     private fun refreshUsageStatus() {
@@ -729,6 +793,7 @@ class OnboardingActivity : AppCompatActivity() {
     }
 
     private fun finishOnboarding() {
+        if (infoOnly) { finish(); return }
         val app = application as App
         val current = app.loadSettings()
         val withMode = when (pickedMode) {
@@ -790,6 +855,13 @@ class OnboardingActivity : AppCompatActivity() {
         private const val STEP_USAGE = 4
         private const val STEP_PROFILE = 5
         private const val STEP_DONE = 6
+
+        const val EXTRA_INFO_ONLY = "info_only"
+        private const val KEY_GUIDE_PAGE = "guide_page"
+        private val GUIDE_TITLES = intArrayOf(R.string.guide_app_title, R.string.guide_auto_title,
+            R.string.guide_wb_title, R.string.guide_help_title)
+        private val GUIDE_BODIES = intArrayOf(R.string.guide_app_body, R.string.guide_auto_body,
+            R.string.guide_wb_body, R.string.guide_help_body)
 
         private const val KEY_STEP = "wizard_step"
         private const val KEY_MODE = "wizard_mode"

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">مصادقة SOCKS5 الخاصة بالتطبيق</string>
+    <string name="security_name_2">شبكات VPN الأخرى</string>
+    <string name="security_name_3">وكيل SOCKS5</string>
+    <string name="security_name_4">وكيل HTTP</string>
+    <string name="security_name_5">واجهة Xray API</string>
+    <string name="security_name_6">واجهة Clash API</string>
+    <string name="security_name_7">فحص المنافذ</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">مؤشر VPN</string>
+    <string name="security_name_10">فحص MTU</string>
+    <string name="security_name_11">اسم الحزمة</string>
+    <string name="security_detail_1">النفق غير نشط، لا يمكن إجراء الاختبار</string>
+    <string name="security_detail_2">أغلق الخادم الاتصال دون مصادقة — سلوك سليم</string>
+    <string name="security_detail_3">إصدار SOCKS غير متوقع: %1$s</string>
+    <string name="security_detail_4">حرج: يقبل SOCKS5 الخاص بالتطبيق خيار NO AUTH — سلسلة المصادقة معطلة!</string>
+    <string name="security_detail_5">يتطلب SOCKS5 الخاص بالتطبيق اسم مستخدم وكلمة مرور بصورة صحيحة</string>
+    <string name="security_detail_6">يرفض SOCKS5 الخاص بالتطبيق الاتصالات دون مصادقة (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">أرجع SOCKS5 الخاص بالتطبيق طريقة غير متوقعة: 0x%1$s</string>
+    <string name="security_detail_8">تعذر اختبار SOCKS الخاص بالتطبيق: %1$s</string>
+    <string name="security_detail_9">لا توجد تطبيقات VPN معروفة أخرى مثبتة</string>
+    <string name="security_detail_10">توجد تطبيقات VPN أخرى مثبتة (قد يتأثر بعضها بتسريب SOCKS المحلي في أبريل 2026): %1$s</string>
+    <string name="security_detail_11">لم يُعثر على SOCKS5 دون مصادقة على المنافذ القياسية</string>
+    <string name="security_detail_12">ثغرة: SOCKS5 مفتوح دون مصادقة على المنافذ: %1$s</string>
+    <string name="security_detail_13">لم يُعثر على وكيل HTTP CONNECT مفتوح على المنافذ القياسية</string>
+    <string name="security_detail_14">ثغرة: وكيل HTTP مفتوح على المنافذ: %1$s</string>
+    <string name="security_detail_15">لم تُكتشف منافذ لواجهة Xray gRPC API</string>
+    <string name="security_detail_16">ثغرة: منافذ Xray API مفتوحة: %1$s</string>
+    <string name="security_detail_17">لم تُكتشف واجهة Clash REST API</string>
+    <string name="security_detail_18">ثغرة: Clash API مفتوحة على المنافذ: %1$s — يكشف /connections جميع عناوين IP</string>
+    <string name="security_detail_19">لا توجد منافذ VPN معروفة مفتوحة على localhost</string>
+    <string name="security_detail_20">منافذ مفتوحة قابلة للاكتشاف: %1$s</string>
+    <string name="security_detail_21">لم يُعثر على منافذ VPN معروفة في /proc/net/tcp</string>
+    <string name="security_detail_22">قابل للاكتشاف في /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">تعذرت قراءة /proc/net/tcp (قد يكون الوصول مقيدًا)</string>
+    <string name="security_detail_24">TRANSPORT_VPN ظاهر (لا يمكن تجنب ذلك على Android). يمكن للتطبيقات اكتشاف أن VPN نشط، لكنها لا تستطيع رؤية عنوان IP للخادم.</string>
+    <string name="security_detail_25">لم يُكتشف مؤشر TRANSPORT_VPN (VPN غير نشط أو أُجري الفحص قبل الاتصال)</string>
+    <string name="security_detail_26">تعذر فحص NetworkCapabilities</string>
+    <string name="security_detail_27">لم تُكتشف واجهة TUN</string>
+    <string name="security_detail_28">للمعلومات فقط: %1$s. لا تُعد MTU وحدها مؤشرًا موثوقًا على VPN.</string>
+    <string name="security_detail_29">تعذر فحص MTU للواجهة</string>
+    <string name="security_detail_30">ثغرة: يحتوي اسم الحزمة «%1$s» على كلمات دالة على VPN</string>
+    <string name="security_detail_31">اسم الحزمة «%1$s» محايد</string>
+</resources>

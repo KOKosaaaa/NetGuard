@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">ยืนยันเซิร์ฟเวอร์ SSH</string>
+    <string name="ssh_trust_message">เปรียบเทียบลายนิ้วมือนี้กับคอนโซลเซิร์ฟเวอร์ก่อนดำเนินการต่อ ยังไม่ได้ส่งรหัสผ่าน SSH\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">เชื่อถือคีย์นี้</string>
+    <string name="ssh_trust_changed">คีย์โฮสต์ SSH เปลี่ยนแล้ว การเชื่อมต่อถูกบล็อก โปรดยืนยันตัวตนของเซิร์ฟเวอร์</string>
+    <string name="ssh_trust_rejected">ไม่ได้อนุมัติคีย์โฮสต์ SSH ยังไม่ได้ส่งรหัสผ่าน SSH</string>
+</resources>

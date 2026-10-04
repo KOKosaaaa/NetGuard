@@ -17,8 +17,7 @@ import kotlinx.coroutines.withContext
 /**
  * Two-step wizard for creating an xray inbound on a managed server.
  *
- * Step 1: protocol picker — VLESS+REALITY (always-on) vs Telemost
- *   (disabled placeholder; agent stub still returns 501).
+ * Step 1: choose VLESS+REALITY, Telemost or WB Stream.
  * Step 2 (auto-shown for VLESS): SNI preset chips with a "Custom…" tail
  *   and an optional friendly label.
  *
@@ -27,6 +26,8 @@ import kotlinx.coroutines.withContext
  * `lastCreatedUri` to show the "вот ссылка" success card.
  */
 class CreateProfileSheet : BottomSheetDialogFragment() {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(requireContext(), id, *args)
+
 
     private var _b: BottomSheetCreateProfileBinding? = null
     private val b get() = _b!!
@@ -55,6 +56,12 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
         // dismiss the VLESS sheet, then show the Telemost one. Sharing
         // a sheet would mean toggling visibility on a lot of views;
         // separate sheets keep each flow simple.
+        b.cardWbstream.setOnClickListener {
+            val server = vm.serverOrNull ?: return@setOnClickListener
+            startActivity(android.content.Intent(requireContext(), CreateWbStreamActivity::class.java)
+                .putExtra(CreateWbStreamActivity.EXTRA_SERVER_ID, server.id))
+            dismiss()
+        }
         b.cardVless.setOnClickListener { /* already selected */ }
         b.cardTelemost.setOnClickListener {
             CreateTelemostSheet().show(parentFragmentManager, CreateTelemostSheet.TAG)
@@ -140,7 +147,7 @@ class CreateProfileSheet : BottomSheetDialogFragment() {
                 b.cgSni.checkedChipIds.firstOrNull()?.let { sniByChipId[it] }.orEmpty()
             }
             if (sni.isEmpty() || sni.contains('/') || sni.contains(' ')) {
-                b.tilCustomSni.error = "Введи корректный домен"
+                b.tilCustomSni.error = l10n(com.smarttools.netguard.R.string.loc_create_profile_sheet_1)
                 return@setOnClickListener
             }
             val label = b.etLabel.text?.toString()?.trim().orEmpty()

@@ -249,11 +249,11 @@ class ProfileAdapter(
                 rawName
             }
             b.tvAddress.text = if (fsocietyMode) {
-                "${profile.address}:${profile.port}  │  ${profile.protocol.value.uppercase()}"
+                "${profile.address}:${profile.port}  │  ${profile.displayProtocol}"
             } else {
                 "${profile.address}:${profile.port}"
             }
-            b.tvProtocol.text = profile.protocol.value.uppercase()
+            b.tvProtocol.text = profile.displayProtocol
             // Avoid double-printing the protocol when the address row already
             // includes it in fsociety mode.
             b.tvProtocol.visibility = if (fsocietyMode) View.GONE else View.VISIBLE
@@ -297,6 +297,12 @@ class ProfileAdapter(
                 true
             }
             b.tvPing.setOnClickListener { onPingClick(profile) }
+            (ctx as? com.smarttools.netguard.MainActivity)?.decorateGlass(b.root)
+            // Selection is explicit even when both cards use the same glass material.
+            b.root.isSelected=profile.isSelected
+            b.root.strokeWidth=if(profile.isSelected)2 else 0
+            b.root.strokeColor=com.google.android.material.color.MaterialColors.getColor(
+                ctx,com.google.android.material.R.attr.colorPrimary,android.graphics.Color.GRAY)
         }
     }
 }

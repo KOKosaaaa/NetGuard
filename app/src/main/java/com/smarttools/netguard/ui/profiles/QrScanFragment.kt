@@ -161,14 +161,14 @@ class QrScanFragment : Fragment() {
                 cameraProvider.bindToLifecycle(viewLifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
             } catch (e: Exception) {
                 Log.e("QrScan", "Camera bind failed", e)
-                Toast.makeText(requireContext(), "Camera error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.camera_error_details, e.message.orEmpty()), Toast.LENGTH_SHORT).show()
             }
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
     private fun isVpnUri(value: String): Boolean {
-        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
-        return schemes.any { value.startsWith(it, ignoreCase = true) }
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://", "wbstream://")
+        return schemes.any { value.startsWith(it, ignoreCase = true) } || com.smarttools.netguard.model.WbStreamLink.looksLike(value)
     }
 
     private fun handleScannedValue(value: String) {
@@ -207,7 +207,7 @@ class QrScanFragment : Fragment() {
         } catch (e: Exception) {
             Toast.makeText(
                 requireContext(),
-                "Invalid profile: ${e.message}",
+                getString(com.smarttools.netguard.R.string.subscription_profile_invalid_details, e.message.orEmpty()),
                 Toast.LENGTH_LONG
             ).show()
             findNavController().popBackStack()
@@ -218,7 +218,7 @@ class QrScanFragment : Fragment() {
             findNavController().popBackStack()
             return
         }
-        val info = "${profile.protocol.value}://${profile.address}:${profile.port}"
+        val info = if (profile.protocol.usesRelay) profile.displayProtocol else "${profile.protocol.value}://${profile.address}:${profile.port}"
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.import_profile_question)
             .setMessage(getString(R.string.import_profile_confirm, info))

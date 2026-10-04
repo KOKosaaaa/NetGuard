@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"JSON 設定を貼り付け"</string>
+    <string name="subscription_tls_date_error">"TLS エラー：端末の日付と時刻を確認してください。%1$s"</string>
+    <string name="subscription_tls_pin_error">"固定された TLS 証明書と一致しません。このアプリのリリース後に証明書が変更された可能性があります。%1$s"</string>
+    <string name="subscription_tls_chain_error">"サーバーの TLS 証明書チェーンが不完全です。サーバー設定の問題です。%1$s"</string>
+    <string name="subscription_fetch_failed">"購読を読み込めませんでした"</string>
+    <string name="trigger_apps_removed_from_bypass">"VPN のバイパスリストから削除したアプリ：%1$d。これらのアプリは自動接続を迂回してしまうためです。"</string>
+    <string name="server_installing_xray">"サーバーに xray をインストール中…"</string>
+    <string name="server_upstream_added">"上流を追加しました"</string>
+    <string name="server_upstream_deleted">"上流を削除しました"</string>
+    <string name="server_rule_added">"ルールを追加しました"</string>
+    <string name="server_rule_deleted">"ルールを削除しました"</string>
+    <string name="wb_room_stop_failed">"サーバー上の WB Stream ルームを停止できませんでした。プロファイルは保持されています。削除を再試行してください。"</string>
+    <string name="wb_room_still_present">"WB Stream のルームがまだサーバー上にあります"</string>
+    <string name="rule_label_domain">"ドメイン"</string>
+    <string name="rule_label_cidr">"IP 範囲（CIDR）"</string>
+    <string name="rule_label_geosite">"サイトグループ（geosite）"</string>
+    <string name="rule_label_geoip">"IP グループ（geoip）"</string>
+    <string name="rule_label_direct">"直接接続"</string>
+    <string name="rule_label_block">"ブロック"</string>
+    <string name="rule_label_via">"上流経由"</string>
+    <string name="rule_no_upstreams">"上流が追加されていません"</string>
+</resources>

@@ -24,6 +24,7 @@ import com.smarttools.netguard.R
 import com.smarttools.netguard.databinding.FragmentSettingsBinding
 import com.smarttools.netguard.model.PerAppMode
 import com.smarttools.netguard.service.WifiAutoConnectManager
+import com.smarttools.netguard.service.NotificationHelper
 import com.smarttools.netguard.model.RoutingMode
 import com.smarttools.netguard.model.ThemeMode
 import com.smarttools.netguard.model.TrafficStatsMode
@@ -50,12 +51,93 @@ class SettingsFragment : Fragment() {
 
         private val TLS_PACKETS_VALID = setOf("tlshello", "http")
         private val RANGE_REGEX = Regex("^\\d+-\\d+$")
+        private const val NOTIFICATION_REQUESTED = "notification_permission_requested"
+        private const val NOTIFICATION_ENABLE_PENDING = "notification_enable_pending"
     }
 
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
     private val viewModel: SettingsViewModel by activityViewModels()
     private var updatingFromFlow = false
+    private var notificationEnablePending = false
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { finishNotificationEnable() }
+
+    private val notificationSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { finishNotificationEnable() }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        notificationEnablePending = savedInstanceState?.getBoolean(NOTIFICATION_ENABLE_PENDING) ?: false
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(NOTIFICATION_ENABLE_PENDING, notificationEnablePending)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        renderNotificationToggle()
+    }
+
+    private fun renderNotificationToggle() {
+        val b = _binding ?: return
+        val wasUpdating = updatingFromFlow
+        updatingFromFlow = true
+        b.cbSpeedNotification.isChecked = viewModel.settings.value.showSpeedInNotification &&
+            NotificationHelper.canPost(requireContext())
+        updatingFromFlow = wasUpdating
+    }
+
+    private fun finishNotificationEnable() {
+        if (!notificationEnablePending) return
+        notificationEnablePending = false
+        val context = context ?: return
+        val granted = NotificationHelper.canPost(context)
+        viewModel.updateSettings { it.copy(showSpeedInNotification = granted) }
+        renderNotificationToggle()
+        if (!granted) Toast.makeText(context, R.string.notifications_not_enabled, Toast.LENGTH_LONG).show()
+    }
+
+    private fun enableSpeedNotification() {
+        val context = requireContext()
+        if (NotificationHelper.canPost(context)) {
+            viewModel.updateSettings { it.copy(showSpeedInNotification = true) }
+            return
+        }
+        // A displayed checkmark must not promise notifications that Android blocks.
+        viewModel.updateSettings { it.copy(showSpeedInNotification = false) }
+        renderNotificationToggle()
+        val permission = android.Manifest.permission.POST_NOTIFICATIONS
+        val missingPermission = android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        val prefs = (requireActivity().application as App).getPreferences()
+        if (missingPermission && (!prefs.getBoolean(NOTIFICATION_REQUESTED, false) ||
+                    shouldShowRequestPermissionRationale(permission))) {
+            notificationEnablePending = true
+            prefs.edit().putBoolean(NOTIFICATION_REQUESTED, true).apply()
+            notificationPermissionLauncher.launch(permission)
+        } else {
+            // Only an explicit user action opens system settings; denial never loops.
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.notifications_permission_title)
+                .setMessage(R.string.notifications_permission_settings)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.notifications_open_settings) { _, _ ->
+                    notificationEnablePending = true
+                    try {
+                        notificationSettingsLauncher.launch(NotificationHelper.settingsIntent(context))
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        notificationEnablePending = false
+                        Toast.makeText(context, R.string.notifications_not_enabled, Toast.LENGTH_LONG).show()
+                    }
+                }.show()
+        }
+    }
 
     // Remembers what each text field was populated with, so onPause can tell
     // "user edited this" apart from "settings changed under us (e.g. restore
@@ -141,6 +223,8 @@ class SettingsFragment : Fragment() {
                             ThemeMode.FSOCIETY -> getString(R.string.theme_fsociety)
                             ThemeMode.DYNAMIC -> getString(R.string.theme_dynamic)
                         }
+                        binding.btnLauncherIcon.text = s.launcherIconTheme?.let { iconThemeName(it) }
+                            ?: getString(R.string.launcher_icon_follow)
                         binding.rgRouting.check(
                             when (s.routingMode) {
                                 RoutingMode.AUTO -> R.id.rb_auto
@@ -149,12 +233,13 @@ class SettingsFragment : Fragment() {
                                 RoutingMode.DIRECT -> R.id.rb_direct
                             }
                         )
+                        binding.cbLocalDpi.isChecked = s.localDpiEnabled
                         binding.cbDoh.isChecked = s.dohEnabled
                         binding.cbBypassLan.isChecked = s.bypassLan
                         binding.cbIpv6.isChecked = s.enableIpv6
-                        binding.cbSpeedNotification.isChecked = s.showSpeedInNotification
+                        binding.cbSpeedNotification.isChecked = s.showSpeedInNotification && NotificationHelper.canPost(requireContext())
                         val langIdx = LANGUAGE_CODES.indexOf(s.language).coerceAtLeast(0)
-                        binding.btnLanguage.text = LANGUAGE_NAMES[langIdx]
+                        binding.btnLanguage.text = if (langIdx == 0) getString(com.smarttools.netguard.R.string.app_language_system) else LANGUAGE_NAMES[langIdx]
                         binding.rgPerAppMode.check(
                             when (s.perAppMode) {
                                 PerAppMode.DISABLED -> R.id.rb_per_app_disabled
@@ -199,10 +284,10 @@ class SettingsFragment : Fragment() {
                     viewModel.importResult.collect { result ->
                         result.fold(
                             onSuccess = { count ->
-                                Toast.makeText(requireContext(), "Imported $count profiles", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(requireContext(), resources.getQuantityString(com.smarttools.netguard.R.plurals.import_profiles_count, count, count), Toast.LENGTH_SHORT).show()
                             },
                             onFailure = { e ->
-                                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.error_with_details, e.message.orEmpty()), Toast.LENGTH_SHORT).show()
                             }
                         )
                     }
@@ -224,7 +309,7 @@ class SettingsFragment : Fragment() {
             val child = root.getChildAt(i)
             if (child is android.widget.TextView) {
                 val tf = child.typeface
-                val isBold = tf != null && tf.isBold
+                val isBold = com.smarttools.netguard.widget.AppTypography.isHeading(tf)
                 val sizeSp = child.textSize / resources.displayMetrics.scaledDensity
                 val isHeaderSize = sizeSp in 13f..15.5f
                 val isWrap = child.layoutParams?.width == android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -240,6 +325,20 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupTheme() {
+        binding.btnLauncherIcon.setOnClickListener {
+            val modes = listOf<ThemeMode?>(null) + THEME_MODES.toList()
+            val labels = modes.map { it?.let { theme -> iconThemeName(theme) }
+                ?: getString(R.string.launcher_icon_follow) }
+            val current = modes.indexOf(viewModel.settings.value.launcherIconTheme).coerceAtLeast(0)
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.launcher_icon_title)
+                .setSingleChoiceItems(labels.toTypedArray(), current) { dialog, which ->
+                    viewModel.updateSettings { it.copy(launcherIconTheme = modes[which]) }
+                    dialog.dismiss()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
         binding.btnTheme.setOnClickListener {
             val names = mutableListOf(
                 getString(R.string.theme_dark),
@@ -268,6 +367,15 @@ class SettingsFragment : Fragment() {
                 .show()
         }
     }
+
+    private fun iconThemeName(theme: ThemeMode): String = getString(when (theme) {
+        ThemeMode.DARK -> R.string.theme_dark
+        ThemeMode.LIGHT -> R.string.theme_light
+        ThemeMode.OLED -> R.string.theme_oled
+        ThemeMode.OCEAN -> R.string.theme_ocean
+        ThemeMode.FSOCIETY -> R.string.theme_fsociety
+        ThemeMode.DYNAMIC -> R.string.theme_dynamic
+    })
 
     private fun setupSettings() {
         // Initialize DNS fields
@@ -302,7 +410,13 @@ class SettingsFragment : Fragment() {
             if (!updatingFromFlow) viewModel.updateSettings { it.copy(enableIpv6 = checked) }
         }
         binding.cbSpeedNotification.setOnCheckedChangeListener { _, checked ->
-            if (!updatingFromFlow) viewModel.updateSettings { it.copy(showSpeedInNotification = checked) }
+            if (!updatingFromFlow) {
+                if (checked) enableSpeedNotification()
+                else {
+                    notificationEnablePending = false
+                    viewModel.updateSettings { it.copy(showSpeedInNotification = false) }
+                }
+            }
         }
     }
 
@@ -335,7 +449,7 @@ class SettingsFragment : Fragment() {
             val checkedItem = LANGUAGE_CODES.indexOf(currentLang).coerceAtLeast(0)
             MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.language)
-                .setSingleChoiceItems(LANGUAGE_NAMES, checkedItem) { dialog, which ->
+                .setSingleChoiceItems(LANGUAGE_NAMES.copyOf().also { it[0] = getString(com.smarttools.netguard.R.string.app_language_system) }, checkedItem) { dialog, which ->
                     val code = LANGUAGE_CODES[which]
                     viewModel.updateSettings { s -> s.copy(language = code) }
                     val locales = if (code == "system") {
@@ -457,9 +571,9 @@ class SettingsFragment : Fragment() {
     /**
      * Permissions we need before we can read the current SSID/BSSID:
      *  * ACCESS_FINE_LOCATION — required on all versions.
-     *  * NEARBY_WIFI_DEVICES — required additionally on Android 13+
-     *    (SDK 33+); without it, `WifiInfo.ssid` comes back as
-     *    `<unknown ssid>` even though ACCESS_FINE_LOCATION is granted.
+     *  * Android 12+ requests fine and coarse together so precise access can be granted.
+     *  * NEARBY_WIFI_DEVICES on Android 13+ does not replace fine location
+     *    for the location-sensitive SSID/BSSID fields.
      */
     private fun missingWifiPermissions(): Array<String> {
         val ctx = requireContext()
@@ -469,6 +583,7 @@ class SettingsFragment : Fragment() {
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
             missing += android.Manifest.permission.ACCESS_FINE_LOCATION
+            missing += android.Manifest.permission.ACCESS_COARSE_LOCATION
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -533,7 +648,7 @@ class SettingsFragment : Fragment() {
                     // Add current WiFi with SSID+BSSID
                     val updated = trusted + currentEntry!!
                     viewModel.updateSettings { it.copy(trustedWifiList = updated.toSet()) }
-                    Toast.makeText(requireContext(), "$currentSsid ${getString(R.string.added)}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.wifi_network_added, currentSsid), Toast.LENGTH_SHORT).show()
                 } else {
                     // Remove tapped item
                     val idx = if (hasCurrentWifi) which - 1 else which
@@ -541,7 +656,7 @@ class SettingsFragment : Fragment() {
                     trusted.removeAt(idx)
                     viewModel.updateSettings { it.copy(trustedWifiList = trusted.toSet()) }
                     val removedName = WifiAutoConnectManager.ssidOf(removed)
-                    Toast.makeText(requireContext(), "$removedName ${getString(R.string.removed)}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.wifi_network_removed, removedName), Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -550,6 +665,10 @@ class SettingsFragment : Fragment() {
 
     private fun setupTlsFragment() {
         val s = viewModel.settings.value
+        binding.cbLocalDpi.isChecked = s.localDpiEnabled
+        binding.cbLocalDpi.setOnCheckedChangeListener { _, checked ->
+            if (!updatingFromFlow) viewModel.updateSettings { it.copy(localDpiEnabled = checked) }
+        }
         binding.cbTlsFragment.isChecked = s.tlsFragmentEnabled
         binding.llTlsFragmentSettings.visibility = if (s.tlsFragmentEnabled) View.VISIBLE else View.GONE
         binding.etTlsPackets.setTextAndBaseline(s.tlsFragmentPackets)
@@ -643,7 +762,7 @@ class SettingsFragment : Fragment() {
                     result.warning -> ContextCompat.getColor(context, R.color.test_warn)
                     else -> ContextCompat.getColor(context, R.color.test_fail)
                 }
-                text = "$icon ${result.testName}: ${result.details}"
+                text = "$icon ${com.smarttools.netguard.util.SecurityResultText.name(context, result.testName)}: ${com.smarttools.netguard.util.SecurityResultText.details(context, result.details)}"
                 setTextColor(color)
                 textSize = 13f
                 setPadding(0, 8, 0, 8)
@@ -662,7 +781,7 @@ class SettingsFragment : Fragment() {
                     val intent = android.content.Intent(android.provider.Settings.ACTION_VPN_SETTINGS)
                     startActivity(intent)
                 } catch (_: Exception) {
-                    Toast.makeText(requireContext(), "Open Settings > Network > VPN manually", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.settings_open_vpn_manually), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -683,6 +802,9 @@ class SettingsFragment : Fragment() {
 
         binding.btnSelectApps.setOnClickListener {
             findNavController().navigate(R.id.action_settings_to_per_app)
+        }
+        binding.btnAlwaysVpnApps.setOnClickListener {
+            findNavController().navigate(R.id.action_settings_to_per_app, Bundle().apply { putBoolean("always_vpn", true) })
         }
 
         binding.btnOpenTrigger.setOnClickListener {
@@ -706,7 +828,7 @@ class SettingsFragment : Fragment() {
 
         binding.btnImport.setOnClickListener {
             val input = EditText(requireContext()).apply {
-                hint = "Paste JSON config"
+                hint = getString(com.smarttools.netguard.R.string.settings_import_json_hint)
                 minLines = 3
                 setPadding(48, 32, 48, 16)
             }
@@ -722,6 +844,11 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupAbout() {
+        binding.btnAboutApp.setOnClickListener {
+            startActivity(android.content.Intent(requireContext(),
+                com.smarttools.netguard.ui.onboarding.OnboardingActivity::class.java)
+                .putExtra(com.smarttools.netguard.ui.onboarding.OnboardingActivity.EXTRA_INFO_ONLY, true))
+        }
         binding.tvCreatedBy.setOnClickListener {
             val url = getString(R.string.github_url)
             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))

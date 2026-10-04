@@ -71,7 +71,8 @@ class StripeFlow(
     @Volatile private var pumpThread: Thread? = null
     @Volatile private var maintenance: java.util.concurrent.ScheduledFuture<*>? = null
 
-    fun run() {
+    @Synchronized fun run() {
+        if (closed.get()) return
         writerThread = Thread({ s2cWriter() }, "stripe-s2c-$id").apply { isDaemon = true; start() }
         pumpThread = Thread({ c2sPump() }, "stripe-c2s-$id").apply { isDaemon = true; start() }
         maintenance = QueuedPipeWriter.timers.scheduleWithFixedDelay({ maintenanceTick() }, 200, 200, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -291,7 +292,9 @@ class StripeFlow(
     }
 
     fun close() {
-        if (!closed.compareAndSet(false, true)) return
+        // Wait for run() to publish all handles, then release the initialization
+        // monitor before taking the flow lock (onAck may call close under that lock).
+        synchronized(this) { if (!closed.compareAndSet(false, true)) return }
         lock.withLock { cond.signalAll() }
         s2cQueue.offer(POISON)
         writerThread?.interrupt()

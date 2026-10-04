@@ -36,7 +36,7 @@ class ExactCoreSiteRoutingTest {
                     s.soTimeout = 5000
                     val header = StringBuilder()
                     while (!header.endsWith("\r\n\r\n")) { val c = s.getInputStream().read(); if (c < 0) break; header.append(c.toChar()) }
-                    if (header.startsWith("HEAD / ")) heads.incrementAndGet()
+                    if (header.contains("User-Agent: NetGuard-Route")) heads.incrementAndGet()
                     s.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\ncore".toByteArray())
                 } }
             } } catch (_: Exception) {}

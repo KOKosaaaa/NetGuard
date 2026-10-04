@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Tautan langganan tidak valid"</string>
+    <string name="subscription_url_required">"URL kosong"</string>
+    <string name="subscription_room_invalid">"Tautan ruang atau profil tidak valid"</string>
+    <string name="subscription_profile_unsupported">"URI profil tidak didukung"</string>
+    <string name="profile_default_name">"Profil"</string>
+    <string name="subscription_default_name">"Langganan"</string>
+    <string name="subscription_profile_invalid_details">"Tautan profil tidak valid: %1$s"</string>
+    <string name="subscription_profile_added">"Profil ditambahkan: %1$s"</string>
+    <string name="subscription_url_invalid_details">"URL tidak valid: %1$s"</string>
+    <string name="subscription_deleted_name">"Dihapus: %1$s"</string>
+    <string name="subscription_update_with_errors">"Profil diperbarui: %1$d. Kesalahan: %2$d"</string>
+    <string name="profile_room_invalid">"Tautan ruang tidak valid"</string>
+    <string name="profile_address_invalid">"Alamat tidak valid"</string>
+    <string name="profile_test_connect_first">"Hubungkan VPN terlebih dahulu agar IP asli tidak bocor"</string>
+    <string name="profile_test_proxy_unready">"Kredensial VPN belum siap"</string>
+    <string name="profile_testing">"Menguji…"</string>
+    <string name="profile_test_failed">"Gagal"</string>
+    <string name="backup_empty_json">"File konfigurasi kosong"</string>
+    <string name="import_profiles_with_errors">"Profil diimpor: %1$d. Kesalahan: %2$d"</string>
+    <string name="connection_room_not_ready">"Server di ruang belum mengonfirmasi koneksi"</string>
+    <string name="connection_whitelist_help">"Server mungkin diblokir oleh daftar IP yang diizinkan. Coba WB Stream atau Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="other">%1$d profil diperbarui</item>
+    </plurals>
+</resources>

@@ -15,13 +15,23 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_route_diagnostics"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:text="@string/route_diagnostics"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <com.google.android.material.chip.ChipGroup
         android:id="@+id/chip_group"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:paddingHorizontal="8dp"
         app:singleSelection="true"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintTop_toBottomOf="@id/btn_route_diagnostics"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -29,25 +39,25 @@
             android:id="@+id/chip_all"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="All"
+            android:text="@string/log_filter_all"
             style="@style/Widget.Material3.Chip.Filter" />
         <com.google.android.material.chip.Chip
             android:id="@+id/chip_info"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Info"
+            android:text="@string/log_filter_info"
             style="@style/Widget.Material3.Chip.Filter" />
         <com.google.android.material.chip.Chip
             android:id="@+id/chip_warn"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Warn"
+            android:text="@string/log_filter_warn"
             style="@style/Widget.Material3.Chip.Filter" />
         <com.google.android.material.chip.Chip
             android:id="@+id/chip_error"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Error"
+            android:text="@string/log_filter_error"
             style="@style/Widget.Material3.Chip.Filter" />
 
     </com.google.android.material.chip.ChipGroup>
@@ -56,7 +66,9 @@
         android:id="@+id/rv_logs"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:clipToPadding="false"
+        android:requiresFadingEdge="vertical"
+        android:fadingEdgeLength="24dp"
+        android:clipToPadding="true"
         android:padding="8dp"
         app:layout_constraintTop_toBottomOf="@id/chip_group"
         app:layout_constraintBottom_toBottomOf="parent"

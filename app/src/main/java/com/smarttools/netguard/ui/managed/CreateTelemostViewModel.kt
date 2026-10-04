@@ -32,6 +32,8 @@ import org.json.JSONObject
  * profile generation) live here.
  */
 class CreateTelemostViewModel(application: Application) : AndroidViewModel(application) {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(getApplication<android.app.Application>(), id, *args)
+
 
     /** Set by the sheet after it knows which managed server hosts the deploy. */
     private var server: ManagedServer? = null
@@ -91,8 +93,8 @@ class CreateTelemostViewModel(application: Application) : AndroidViewModel(appli
     fun build(count: Int) {
         val srv = server ?: run {
             _state.value = State.Failure(FriendlyError(
-                title = "Сервер не выбран",
-                body = "Открой Telemost-мастер из экрана конкретного сервера.",
+                title = l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_1),
+                body = l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_2),
                 retryable = false,
                 rawDetails = "server is null",
             ))
@@ -101,9 +103,8 @@ class CreateTelemostViewModel(application: Application) : AndroidViewModel(appli
         val cookies = _cookiesJson.value
         if (cookies.isNullOrBlank()) {
             _state.value = State.Failure(FriendlyError(
-                title = "Нужен Яндекс-аккаунт",
-                body = "Сначала войди через кнопку «Войти через Яндекс» — комнаты " +
-                    "Telemost создаются твоим аккаунтом.",
+                title = l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_3),
+                body = l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_4),
                 retryable = false,
                 rawDetails = "cookies empty",
             ))
@@ -111,7 +112,7 @@ class CreateTelemostViewModel(application: Application) : AndroidViewModel(appli
         }
 
         viewModelScope.launch {
-            _state.value = State.Building("Отправляю задачу агенту…")
+            _state.value = State.Building(l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_5))
             try {
                 val (taskId, rooms) = withContext(Dispatchers.IO) {
                     val client = AgentApiClient(srv, BuildConfig.VERSION_NAME)
@@ -143,7 +144,7 @@ class CreateTelemostViewModel(application: Application) : AndroidViewModel(appli
                 _state.value = State.Success(rooms.size, telemostUri)
             } catch (e: Exception) {
                 Log.w(TAG, "telemost deploy failed", e)
-                _state.value = State.Failure(AgentErrorMessages.explain(e))
+                _state.value = State.Failure(AgentErrorMessages.explain(e, getApplication<android.app.Application>()))
             }
         }
     }
@@ -186,14 +187,14 @@ class CreateTelemostViewModel(application: Application) : AndroidViewModel(appli
     }
 
     private fun substepText(step: String): String = when (step) {
-        "detect" -> "проверяю текущую установку"
-        "install_bin" -> "ставлю headless-telemost-creator"
-        "user_dirs" -> "создаю пользователя wlb и каталоги"
-        "cookies" -> "сохраняю Яндекс-куки"
-        "create_rooms" -> "создаю комнаты в Яндекс Telemost"
-        "systemd_unit" -> "регистрирую systemd-юнит"
-        "systemd_start" -> "запускаю инстансы"
-        "healthcheck" -> "проверяю что все инстансы поднялись"
+        "detect" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_6)
+        "install_bin" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_7)
+        "user_dirs" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_8)
+        "cookies" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_9)
+        "create_rooms" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_10)
+        "systemd_unit" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_11)
+        "systemd_start" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_12)
+        "healthcheck" -> l10n(com.smarttools.netguard.R.string.loc_create_telemost_view_model_13)
         else -> step
     }
 

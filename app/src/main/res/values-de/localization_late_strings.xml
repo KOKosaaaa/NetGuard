@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"JSON-Konfiguration einfügen"</string>
+    <string name="subscription_tls_date_error">"TLS-Fehler: Prüfe Datum und Uhrzeit deines Geräts. %1$s"</string>
+    <string name="subscription_tls_pin_error">"Das TLS-Zertifikat stimmt nicht mit dem festgelegten Zertifikat überein. Es könnte seit dieser App-Version geändert worden sein. %1$s"</string>
+    <string name="subscription_tls_chain_error">"Die TLS-Zertifikatskette des Servers ist unvollständig. Dies ist ein Problem der Serverkonfiguration. %1$s"</string>
+    <string name="subscription_fetch_failed">"Abonnement konnte nicht geladen werden"</string>
+    <string name="trigger_apps_removed_from_bypass">"Aus der VPN-Ausnahmeliste entfernte Apps: %1$d. Sie hätten die automatische Verbindung umgangen."</string>
+    <string name="server_installing_xray">"xray wird auf dem Server installiert…"</string>
+    <string name="server_upstream_added">"Upstream hinzugefügt"</string>
+    <string name="server_upstream_deleted">"Upstream gelöscht"</string>
+    <string name="server_rule_added">"Regel hinzugefügt"</string>
+    <string name="server_rule_deleted">"Regel gelöscht"</string>
+    <string name="wb_room_stop_failed">"Der WB-Stream-Raum auf dem Server konnte nicht angehalten werden. Das Profil wurde beibehalten; versuche es erneut zu löschen."</string>
+    <string name="wb_room_still_present">"Der WB-Stream-Raum ist noch auf dem Server vorhanden"</string>
+    <string name="rule_label_domain">"Domain"</string>
+    <string name="rule_label_cidr">"IP-Bereich (CIDR)"</string>
+    <string name="rule_label_geosite">"Websitegruppe (geosite)"</string>
+    <string name="rule_label_geoip">"IP-Gruppe (geoip)"</string>
+    <string name="rule_label_direct">"Direkte Verbindung"</string>
+    <string name="rule_label_block">"Blockieren"</string>
+    <string name="rule_label_via">"Über einen Upstream"</string>
+    <string name="rule_no_upstreams">"Keine Upstreams hinzugefügt"</string>
+</resources>

@@ -115,6 +115,7 @@ class VpnTileService : TileService() {
         }
     }
 
+    @android.annotation.SuppressLint("StartActivityAndCollapseDeprecated") // Guarded legacy path for API 26–33.
     private fun collapseAndStart(intent: Intent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val pi = PendingIntent.getActivity(

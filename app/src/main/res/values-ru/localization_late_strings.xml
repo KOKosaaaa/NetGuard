@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Вставь настройки в формате JSON"</string>
+    <string name="subscription_tls_date_error">"Ошибка TLS: проверь дату и время на телефоне. %1$s"</string>
+    <string name="subscription_tls_pin_error">"Сертификат TLS не совпадает с сохранённым. Возможно, его сменили после выпуска этой версии. %1$s"</string>
+    <string name="subscription_tls_chain_error">"Цепочка сертификатов TLS сервера неполная. Это проблема настройки сервера. %1$s"</string>
+    <string name="subscription_fetch_failed">"Не удалось загрузить подписку"</string>
+    <string name="trigger_apps_removed_from_bypass">"Приложений удалено из списка обхода VPN: %1$d. Иначе они обходили бы автоподключение."</string>
+    <string name="server_installing_xray">"Устанавливаю xray на сервер…"</string>
+    <string name="server_upstream_added">"Исходящий сервер добавлен"</string>
+    <string name="server_upstream_deleted">"Исходящий сервер удалён"</string>
+    <string name="server_rule_added">"Правило добавлено"</string>
+    <string name="server_rule_deleted">"Правило удалено"</string>
+    <string name="wb_room_stop_failed">"Не удалось остановить комнату WB Stream на сервере. Профиль сохранён — повтори удаление."</string>
+    <string name="wb_room_still_present">"Комната WB Stream всё ещё присутствует на сервере"</string>
+    <string name="rule_label_domain">"Домен"</string>
+    <string name="rule_label_cidr">"Диапазон IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Группа сайтов (geosite)"</string>
+    <string name="rule_label_geoip">"Группа IP (geoip)"</string>
+    <string name="rule_label_direct">"Напрямую"</string>
+    <string name="rule_label_block">"Блокировать"</string>
+    <string name="rule_label_via">"Через исходящий сервер"</string>
+    <string name="rule_no_upstreams">"Исходящие серверы не добавлены"</string>
+</resources>

@@ -40,31 +40,34 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
     fun addSubscription(name: String, url: String, autoUpdateHours: Int = 0) {
         viewModelScope.launch {
             val trimmedUrl = try { com.smarttools.netguard.core.SubscriptionLink.unwrap(url) }
-                catch (_: Exception) { _message.emit("Invalid subscription link"); return@launch }
+                catch (_: Exception) { _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_invalid_link)); return@launch }
             if (trimmedUrl.isBlank()) {
-                _message.emit("URL is empty")
+                _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_url_required))
                 return@launch
             }
             // Shortcut: if the user pasted a single profile URI instead of a
             // subscription URL (common with Telemost links since we don't host
             // a subscription endpoint for them), save it directly as a single
             // standalone profile and skip the periodic HTTP refresh entirely.
-            val asProfileUri = normalizeAsSingleProfileUri(trimmedUrl)
+            val asProfileUri = try { normalizeAsSingleProfileUri(trimmedUrl) } catch (_: IllegalArgumentException) {
+                _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_room_invalid))
+                return@launch
+            }
             if (asProfileUri != null) {
                 val parsed = try {
                     com.smarttools.netguard.core.ProfileParser.parseSingleUri(asProfileUri)
                 } catch (e: Exception) {
-                    _message.emit("Invalid profile URI: ${e.message}")
+                    _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_profile_invalid_details, e.message.orEmpty()))
                     return@launch
                 }
                 if (parsed == null) {
-                    _message.emit("Unsupported profile URI")
+                    _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_profile_unsupported))
                     return@launch
                 }
-                val finalName = name.trim().ifBlank { parsed.name.ifBlank { "Profile" } }
+                val finalName = name.trim().ifBlank { parsed.name.ifBlank { com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_default_name) } }
                 val profile = parsed.copy(name = finalName.take(MAX_SUB_NAME_LENGTH))
                 app.profileRepository.insert(profile)
-                _message.emit("Profile added: $finalName")
+                _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_profile_added, finalName))
                 return@launch
             }
             // Validate before insert — otherwise a junk subscription persists
@@ -72,7 +75,7 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             try {
                 subRepo.validateUrl(trimmedUrl)
             } catch (e: Exception) {
-                _message.emit("Invalid URL: ${e.message}")
+                _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_url_invalid_details, e.message.orEmpty()))
                 return@launch
             }
             // If the user typed a name, treat it as their explicit choice and
@@ -80,13 +83,13 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             // overwrite). If they left it blank we'll auto-fill from the
             // server response, so userRenamed stays false. While we wait for
             // that first fetch, use the URL's host as a placeholder — much
-            // more useful than the literal string "Subscription" when the
+            // more useful than the literal string com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_default_name) when the
             // server doesn't expose a `profile-title` header.
             val userTypedName = name.isNotBlank()
             val safeName = if (userTypedName) {
                 name.take(MAX_SUB_NAME_LENGTH)
             } else {
-                hostFromUrl(trimmedUrl) ?: "Subscription"
+                hostFromUrl(trimmedUrl) ?: com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_default_name)
             }
             val sub = Subscription(
                 name = safeName,
@@ -111,7 +114,7 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
      */
     private fun normalizeAsSingleProfileUri(input: String): String? {
         val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://", "wbstream://")
-        if (schemes.any { input.startsWith(it) }) return input
+        if (schemes.any { input.startsWith(it) } && !com.smarttools.netguard.model.WbStreamLink.looksLike(input)) return input
 
         // Multi-line paste of bare Telemost links (one per line) → produce a
         // single multi-channel profile. The relay manager spawns one
@@ -128,13 +131,10 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             return "telemost://$encoded#$name"
         }
 
-        // WB Stream room link(s) — must be saved as a direct profile, NOT fetched
-        // as a subscription URL: the room page (https://stream.wb.ru/room/<id>) is a
-        // browser SPA behind WB's antibot and returns HTTP 498 to a plain GET, so a
-        // subscription fetch would fail with "498". parseSingleUri -> parseWbStream
-        // handles the raw link (and newline-separated multi-room) directly.
-        val wbLinks = lines.takeIf { it.isNotEmpty() && it.all { l -> l.startsWith("https://stream.wb.ru/room/") } }
-        if (wbLinks != null) return wbLinks.joinToString("\n")
+        if (com.smarttools.netguard.model.WbStreamLink.looksLike(input)) {
+            val parsed = com.smarttools.netguard.model.WbStreamLink.parse(input)
+            return com.smarttools.netguard.model.WbStreamLink.encode(parsed.links.joinToString("\n"), parsed.name)
+        }
 
         return null
     }
@@ -151,10 +151,10 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             val result = subRepo.updateSubscription(sub)
             result.fold(
                 onSuccess = { count ->
-                    _message.emit("Updated: $count profiles")
+                    _message.emit(com.smarttools.netguard.util.LocalizedResources.context(app).resources.getQuantityString(com.smarttools.netguard.R.plurals.subscription_updated_count, count, count))
                 },
                 onFailure = { error ->
-                    _message.emit("Error: ${error.message}")
+                    _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.error_with_details, error.message.orEmpty()))
                 }
             )
             _updating.value = false
@@ -168,9 +168,9 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
             val total = results.values.sumOf { it.getOrDefault(0) }
             val errors = results.values.count { it.isFailure }
             if (errors > 0) {
-                _message.emit("Updated $total profiles, $errors errors")
+                _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_update_with_errors, total, errors))
             } else {
-                _message.emit("Updated $total profiles")
+                _message.emit(com.smarttools.netguard.util.LocalizedResources.context(app).resources.getQuantityString(com.smarttools.netguard.R.plurals.subscription_updated_count, total, total))
             }
             _updating.value = false
         }
@@ -201,7 +201,7 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
     fun deleteSubscription(sub: Subscription) {
         viewModelScope.launch {
             subRepo.delete(sub)
-            _message.emit("Deleted: ${sub.name}")
+            _message.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_deleted_name, sub.name))
         }
     }
 
@@ -221,23 +221,25 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
         autoUpdateHours: Int
     ): Result<ImportResult> {
         val trimmedUrl = try { com.smarttools.netguard.core.SubscriptionLink.unwrap(url) }
-            catch (_: IllegalArgumentException) { return Result.failure(IllegalArgumentException("Invalid subscription link")) }
+            catch (_: IllegalArgumentException) { return Result.failure(IllegalArgumentException(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_invalid_link))) }
         if (trimmedUrl.isBlank()) {
-            return Result.failure(IllegalArgumentException("URL is empty"))
+            return Result.failure(IllegalArgumentException(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_url_required)))
         }
 
         // Branch 1: single-profile URI or multi-line Telemost paste.
-        val asProfileUri = normalizeAsSingleProfileUri(trimmedUrl)
+        val asProfileUri = try { normalizeAsSingleProfileUri(trimmedUrl) } catch (_: IllegalArgumentException) {
+            return Result.failure(IllegalArgumentException(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_room_invalid)))
+        }
         if (asProfileUri != null) {
             val parsed = try {
                 com.smarttools.netguard.core.ProfileParser.parseSingleUri(asProfileUri)
             } catch (e: Exception) {
-                return Result.failure(IllegalArgumentException("Invalid profile URI: ${e.message}"))
+                return Result.failure(IllegalArgumentException(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_profile_invalid_details, e.message.orEmpty())))
             }
             if (parsed == null) {
-                return Result.failure(IllegalArgumentException("Unsupported profile URI"))
+                return Result.failure(IllegalArgumentException(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_profile_unsupported)))
             }
-            val finalName = name.trim().ifBlank { parsed.name.ifBlank { "Profile" } }
+            val finalName = name.trim().ifBlank { parsed.name.ifBlank { com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_default_name) } }
             val profile = parsed.copy(name = finalName.take(MAX_SUB_NAME_LENGTH))
             app.profileRepository.insert(profile)
             return Result.success(ImportResult(finalName, 1))
@@ -247,13 +249,13 @@ class SubscriptionViewModel(application: Application) : AndroidViewModel(applica
         try {
             subRepo.validateUrl(trimmedUrl)
         } catch (e: Exception) {
-            return Result.failure(IllegalArgumentException("Invalid URL: ${e.message}"))
+            return Result.failure(IllegalArgumentException(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_url_invalid_details, e.message.orEmpty())))
         }
         val userTypedName = name.isNotBlank()
         val safeName = if (userTypedName) {
             name.take(MAX_SUB_NAME_LENGTH)
         } else {
-            hostFromUrl(trimmedUrl) ?: "Subscription"
+            hostFromUrl(trimmedUrl) ?: com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.subscription_default_name)
         }
         val sub = Subscription(
             name = safeName,

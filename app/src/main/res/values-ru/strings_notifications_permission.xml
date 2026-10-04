@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notifications_permission_title">Разрешить уведомления</string>
+    <string name="notifications_permission_settings">Android запретил уведомления приложения или его канала службы. Разреши их в системных настройках и вернись сюда.</string>
+    <string name="notifications_open_settings">Открыть настройки</string>
+    <string name="notifications_not_enabled">Уведомления запрещены в Android. Переключатель остаётся выключенным.</string>
+</resources>

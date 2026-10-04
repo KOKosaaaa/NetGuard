@@ -406,6 +406,37 @@ func Mount(d *Deps) http.Handler {
 		},
 	)))
 
+	mux.Handle("GET /v1/wbstream/health", authenticated(d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "transport_revision": 14})
+	})))
+	mux.Handle("GET /v1/wbstream/rooms", authenticated(d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, deploy.WBStreamRooms(r.Context()))
+	})))
+	mux.Handle("POST /v1/wbstream/deploy", authenticated(d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req deploy.WBDeployRequest
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		id, err := d.Tasks.Spawn("wbstream.deploy", deploy.DeployWBStream(&req))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id, "status": tasks.StatusPending})
+	})))
+	mux.Handle("POST /v1/wbstream/delete", authenticated(d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req deploy.WBDeployRequest
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		id, err := d.Tasks.Spawn("wbstream.delete", deploy.DeleteWBStream(&req))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "E_SPAWN", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id, "status": tasks.StatusPending})
+	})))
+
 	// --- telemost ---
 	mux.Handle("GET /v1/telemost/health", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
@@ -501,10 +532,16 @@ func Mount(d *Deps) http.Handler {
 	mux.Handle("POST /v1/agent/update-upload", authenticated(d, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			sha := r.URL.Query().Get("sha256")
+			// Ordinary requests retain the 30s body cap; only authenticated
+			// binary uploads receive this bounded extension.
+			if err := setUploadReadDeadline(w, 4*time.Minute); err != nil {
+				writeError(w, http.StatusInternalServerError, "E_AGENT_UPDATE", "could not configure upload deadline")
+				return
+			}
 			r.Body = http.MaxBytesReader(w, r.Body, 64<<20) // 64 MB cap
 			// Stream the body straight through (verify + swap happens inside)
 			// so the binary never sits whole in RAM on a low-memory VPS.
-			if err := deploy.ApplyUploadedAgent(r.Body, sha); err != nil {
+			if err := deploy.ApplyUploadedAgentContext(r.Context(), r.Body, sha); err != nil {
 				writeError(w, http.StatusBadRequest, "E_AGENT_UPDATE", err.Error())
 				return
 			}
@@ -691,6 +728,12 @@ func logMiddleware(h http.Handler) http.Handler {
 type statusWriter struct {
 	http.ResponseWriter
 	status int
+}
+
+func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+func setUploadReadDeadline(w http.ResponseWriter, timeout time.Duration) error {
+	return http.NewResponseController(w).SetReadDeadline(time.Now().Add(timeout))
 }
 
 func (s *statusWriter) WriteHeader(code int) {

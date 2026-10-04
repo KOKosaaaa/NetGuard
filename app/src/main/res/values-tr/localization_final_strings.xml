@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Geçersiz abonelik bağlantısı"</string>
+    <string name="subscription_url_required">"URL boş"</string>
+    <string name="subscription_room_invalid">"Geçersiz oda veya profil bağlantısı"</string>
+    <string name="subscription_profile_unsupported">"Desteklenmeyen profil URI’si"</string>
+    <string name="profile_default_name">"Profil"</string>
+    <string name="subscription_default_name">"Abonelik"</string>
+    <string name="subscription_profile_invalid_details">"Geçersiz profil bağlantısı: %1$s"</string>
+    <string name="subscription_profile_added">"Profil eklendi: %1$s"</string>
+    <string name="subscription_url_invalid_details">"Geçersiz URL: %1$s"</string>
+    <string name="subscription_deleted_name">"Silindi: %1$s"</string>
+    <string name="subscription_update_with_errors">"Güncellenen profil: %1$d. Hata: %2$d"</string>
+    <string name="profile_room_invalid">"Geçersiz oda bağlantısı"</string>
+    <string name="profile_address_invalid">"Geçersiz adres"</string>
+    <string name="profile_test_connect_first">"Gerçek IP adresinizin açığa çıkmasını önlemek için önce VPN’e bağlanın"</string>
+    <string name="profile_test_proxy_unready">"VPN kimlik bilgileri henüz hazır değil"</string>
+    <string name="profile_testing">"Test ediliyor…"</string>
+    <string name="profile_test_failed">"Başarısız"</string>
+    <string name="backup_empty_json">"Yapılandırma dosyası boş"</string>
+    <string name="import_profiles_with_errors">"İçe aktarılan profil: %1$d. Hata: %2$d"</string>
+    <string name="connection_room_not_ready">"Odadaki sunucu bağlantıyı onaylamadı"</string>
+    <string name="connection_whitelist_help">"Sunucu bir IP izin listesi nedeniyle engelleniyor olabilir. WB Stream veya Telemost’u deneyin."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">%1$d profil güncellendi</item>
+        <item quantity="other">%1$d profil güncellendi</item>
+    </plurals>
+</resources>

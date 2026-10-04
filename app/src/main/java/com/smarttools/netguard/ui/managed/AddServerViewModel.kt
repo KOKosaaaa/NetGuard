@@ -13,6 +13,11 @@ import com.smarttools.netguard.agent.SshBootstrap
 import com.smarttools.netguard.agent.SshBootstrapJsch
 import com.smarttools.netguard.agent.SshBootstrapTrilead
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import com.smarttools.netguard.agent.SshHostTrust
+import com.smarttools.netguard.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,6 +59,41 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _state = MutableStateFlow<State>(State.Input)
     val state: StateFlow<State> = _state.asStateFlow()
+    data class HostKeyPrompt(val id: Long, val host: String, val port: Int, val fingerprint: String)
+    private class TrustAnswer(val prompt: HostKeyPrompt) {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        @Volatile var accepted = false
+    }
+    private val _hostKeyPrompt = MutableStateFlow<HostKeyPrompt?>(null)
+    val hostKeyPrompt: StateFlow<HostKeyPrompt?> = _hostKeyPrompt.asStateFlow()
+    @Volatile private var trustAnswer: TrustAnswer? = null
+    private var deployJob: Job? = null
+    private var trustRequestId = java.util.concurrent.atomic.AtomicLong()
+
+    fun answerHostKey(id: Long, accepted: Boolean) {
+        trustAnswer?.takeIf { it.prompt.id == id }?.let {
+            it.accepted = accepted
+            it.latch.countDown()
+        }
+    }
+
+    fun cancelDeploy() { deployJob?.cancel(); trustAnswer?.latch?.countDown() }
+
+    private fun confirmHostKey(host: String, port: Int, fingerprint: String, owner: Job): Boolean {
+        val answer = TrustAnswer(HostKeyPrompt(trustRequestId.incrementAndGet(), host, port, fingerprint))
+        trustAnswer = answer
+        _hostKeyPrompt.value = answer.prompt
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(2)
+        return try {
+            while (owner.isActive && System.nanoTime() < deadline) {
+                if (answer.latch.await(100, java.util.concurrent.TimeUnit.MILLISECONDS)) return owner.isActive && answer.accepted
+            }
+            false
+        } finally {
+            if (trustAnswer === answer) { trustAnswer = null; _hostKeyPrompt.value = null }
+        }
+    }
+
 
     /**
      * Read both arch binaries + install script bundled in assets/.
@@ -83,7 +123,10 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
         sshUser: String,
         sshPassword: String,
     ) {
-        viewModelScope.launch {
+        if (deployJob?.isActive == true) return
+        deployJob = viewModelScope.launch {
+            val owner = coroutineContext[Job]!!
+            var hostTrust: SshHostTrust? = null
             try {
                 _state.value = State.Progress(SshBootstrap.Stage.CONNECTING)
                 val (binsByArch, script, _) = readAssets()
@@ -95,7 +138,13 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                 // that has passed at least one carrier DPI rig where sshj
                 // hangs. Any other failure surfaces normally.
                 val result = withContext(Dispatchers.IO) {
-                    try {
+                    val trust = SshHostTrust.stored(getApplication(), host.trim(), port)
+                    hostTrust = trust
+                    var completed: SshBootstrap.BootstrapResult? = null
+                    while (completed == null) {
+                      kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                      try {
+                        completed = try {
                         SshBootstrap(
                             host = host.trim(),
                             sshPort = port,
@@ -104,8 +153,10 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                             binariesByArch = binsByArch,
                             installScript = script,
                             onProgress = emit,
+                            verifyHostKey = trust::verify,
                         ).run()
                     } catch (banner: SshBootstrap.Failure.BannerTimeout) {
+                        trust.rethrowFailure()
                         Log.w(TAG, "sshj banner timeout; retrying via JSch")
                         emit(SshBootstrap.Stage.CONNECTING)
                         try {
@@ -117,8 +168,10 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                                 binariesByArch = binsByArch,
                                 installScript = script,
                                 onProgress = emit,
+                            verifyHostKey = trust::verify,
                             ).run()
                         } catch (banner2: SshBootstrap.Failure.BannerTimeout) {
+                            trust.rethrowFailure()
                             Log.w(TAG, "JSch banner timeout; final attempt via Trilead")
                             emit(SshBootstrap.Stage.CONNECTING)
                             SshBootstrapTrilead(
@@ -129,17 +182,25 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                                 binariesByArch = binsByArch,
                                 installScript = script,
                                 onProgress = emit,
+                            verifyHostKey = trust::verify,
                             ).run()
                         }
+                        }
+                      } catch (e: Exception) {
+                        val pending = trust.pendingFingerprint
+                        if (pending == null) { trust.rethrowFailure(); throw e }
+                        if (!confirmHostKey(host.trim(), port, pending, owner)) {
+                            trust.rethrowFailure()
+                            throw e
+                        }
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                        trust.approve(pending)
+                      }
                     }
+                    completed
                 }
 
-                // Pair the new agent using the freshly minted token.
-                // We ignore [result.spkiPinHex] from the SSH-side openssl
-                // chain — that path can disagree with the cert OkHttp
-                // sees in the live handshake (different cert format
-                // quirks / file race vs first-boot regen). Authoritative
-                // source is the TLS handshake itself.
+                // Authenticate the TLS peer with the pin delivered over SSH before sending the pair token.
                 val managed = withContext(Dispatchers.IO) {
                     val (pairResp, livePin) = AgentApiClient.bootstrapPair(
                         host = host.trim(),
@@ -147,6 +208,7 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                         pairToken = result.pairToken,
                         deviceName = android.os.Build.MODEL,
                         appVersion = BuildConfig.VERSION_NAME,
+                        expectedSpkiPin = result.spkiPinHex,
                     )
                     val expiresAt = parseIso(pairResp.expiresAt)
                     // Resolve the server's country once, now, so the Reality
@@ -181,7 +243,10 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 _state.value = State.Success(managed, result.transcript)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: SshBootstrap.Failure) {
+                if (showTrustFailure(hostTrust)) return@launch
                 Log.w(TAG, "bootstrap failed", e)
                 val code = e.message?.substringBefore(":")?.trim() ?: "E_BOOTSTRAP"
                 _state.value = State.Failure(
@@ -190,6 +255,7 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                     transcript = e.diagnostics.ifBlank { e.stackTraceToString() },
                 )
             } catch (e: Exception) {
+                if (showTrustFailure(hostTrust)) return@launch
                 Log.w(TAG, "bootstrap crashed", e)
                 _state.value = State.Failure(
                     code = "E_BOOTSTRAP_CRASH",
@@ -198,6 +264,16 @@ class AddServerViewModel(application: Application) : AndroidViewModel(applicatio
                 )
             }
         }
+    }
+
+    private fun showTrustFailure(trust: SshHostTrust?): Boolean {
+        val failure = try { trust?.rethrowFailure(); null } catch (e: SshHostTrust.Failure) { e } ?: return false
+        _state.value = State.Failure(
+            if (failure.changed) "E_SSH_HOST_KEY_CHANGED" else "E_SSH_HOST_KEY_REJECTED",
+            com.smarttools.netguard.util.LocalizedResources.string(getApplication(),
+                if (failure.changed) R.string.ssh_trust_changed else R.string.ssh_trust_rejected), ""
+        )
+        return true
     }
 
     /** Drop back to the input form so the user can retry / amend creds. */

@@ -31,6 +31,12 @@ func purgeScript() string {
 # the agent itself. Launched detached so it survives the agent dying.
 sleep 2
 
+# --- WB Stream (only units created by NetGuard) ---
+systemctl list-unit-files 'netguard-wbstream-*.service' --no-legend --plain | awk '{print $1}' | xargs -r systemctl disable --now
+rm -f /etc/systemd/system/netguard-wbstream-*.service /usr/local/bin/netguard-wbstream-creator
+rm -rf /etc/netguard-wbstream /var/lib/netguard-wbstream /opt/netguard-wbhost
+userdel netguard-wbhost 2>/dev/null || true
+
 # --- Telemost (wlb-telemost@N instances + binary + unit + data + user) ---
 systemctl list-units --type=service '%[1]s*' --no-legend --plain | awk '{print $1}' | xargs -r systemctl disable --now
 rm -f %[2]s %[3]s

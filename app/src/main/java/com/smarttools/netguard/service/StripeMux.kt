@@ -77,6 +77,13 @@ class StripeMux(
     /** One physical room pipe: a raw byte tunnel to the stripe-server. */
     @Volatile private var stopped = false
     private val opening = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
+    private val admission = Any()
+    private val clients = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
+
+    private fun register(socket: Socket): Boolean = synchronized(admission) {
+        clients.removeAll { it.isClosed }
+        if (stopped) { socket.close(); false } else { clients.add(socket); true }
+    }
 
     private class Pipe(
         val idx: Int,
@@ -148,7 +155,11 @@ class StripeMux(
     }
 
     fun stop() {
-        stopped = true
+        synchronized(admission) {
+            stopped = true
+            clients.forEach { runCatching { it.close() } }
+            clients.clear()
+        }
         opening.forEach { runCatching { it.close() } }; opening.clear()
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
@@ -253,7 +264,7 @@ class StripeMux(
                 try { Thread.sleep(100) } catch (_: InterruptedException) {}
                 continue
             }
-            scope?.launch(Dispatchers.IO) { handleClient(client) }
+            if (register(client)) scope?.launch(Dispatchers.IO) { handleClient(client) }
         }
     }
 
@@ -265,8 +276,10 @@ class StripeMux(
      * breaking Telegram: we used to reject everything but CONNECT).
      */
     private fun handleClient(client: Socket) {
-        client.tcpNoDelay = true
+        var admitted: StripeFlow? = null
         try {
+            if (stopped || client.isClosed) { client.close(); return }
+            client.tcpNoDelay = true
             client.soTimeout = 8_000
             val din = DataInputStream(client.getInputStream())
             val out = client.getOutputStream()
@@ -303,12 +316,15 @@ class StripeMux(
 
             when (cmd) {
                 0x01 -> { // CONNECT -> striped flow
-                    if (flows.size >= 64) { client.close(); return }
-                    client.soTimeout = 0
-                    out.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); out.flush()
                     val id = flowSeq.getAndIncrement()
                     val flow = StripeFlow(id, client, this)
-                    flows[id] = flow
+                    synchronized(admission) {
+                        if (stopped || flows.size >= 64) { client.close(); return }
+                        flows[id] = flow
+                        admitted = flow
+                    }
+                    client.soTimeout = 0
+                    out.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0)); out.flush()
                     // Broadcast OPEN on EVERY live pipe, not one round-robin pipe.
                     // OPEN bootstraps the whole flow (carries the dest the exit
                     // dials); a zombie room accepts the write but never delivers
@@ -318,7 +334,7 @@ class StripeMux(
                     // The exit dedups duplicate OPENs via dialOnce, so flooding
                     // it on all pipes is safe and makes flow bootstrap robust.
                     if (broadcast(StripeFrame(StripeProtocol.OPEN, id, 0, "$host:$port".toByteArray(Charsets.US_ASCII))) == 0) {
-                        flows.remove(id); client.close(); return
+                        flow.close(); return
                     }
                     flow.run()
                 }
@@ -333,7 +349,10 @@ class StripeMux(
                 }
             }
         } catch (e: Exception) {
+            admitted?.close()
             try { client.close() } catch (_: Exception) {}
+        } finally {
+            if (client.isClosed) clients.remove(client)
         }
     }
 
@@ -347,6 +366,7 @@ class StripeMux(
     private fun spliceToRelay(client: Socket, clientIn: DataInputStream, clientOut: OutputStream, rawReq: ByteArray) {
         val up = upstreams[(pipeCursor.getAndIncrement() and Int.MAX_VALUE) % upstreams.size]
         val us = Socket()
+        if (!register(us)) return
         try {
             us.tcpNoDelay = true
             us.connect(up, 8_000)
@@ -383,6 +403,7 @@ class StripeMux(
         } finally {
             try { us.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}
+            clients.remove(us); clients.remove(client)
         }
     }
 
@@ -586,5 +607,5 @@ class StripeMux(
         }
     }
 
-    fun dropFlow(id: Int) { flows.remove(id) }
+    fun dropFlow(id: Int) { flows.remove(id); clients.removeAll { it.isClosed } }
 }

@@ -172,7 +172,7 @@
     <string name="speed_test_desc">होम स्क्रीन पर स्पीड टेस्ट बटन</string>
     <string name="speed_test">स्पीड टेस्ट</string>
     <string name="auto_connect_wifi">WiFi पर ऑटो-कनेक्ट</string>
-    <string name="auto_connect_wifi_desc">अज्ञात WiFi पर VPN + Evil Twin सुरक्षा</string>
+    <string name="auto_connect_wifi_desc">अविश्वसनीय Wi-Fi पर VPN चालू करें। Android द्वारा छिपाई गई नेटवर्क जानकारी को भी अविश्वसनीय माना जाता है। VPN की अनुमति पहले देना आवश्यक है।</string>
     <string name="trusted_wifi">विश्वसनीय WiFi नेटवर्क</string>
     <string name="add_current_wifi">वर्तमान WiFi जोड़ें</string>
     <string name="location_needed_for_wifi">WiFi नाम पढ़ने के लिए स्थान अनुमति आवश्यक</string>

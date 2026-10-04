@@ -242,7 +242,7 @@ func DownloadAndVerify(ctx context.Context, url, dst, wantSha string) error {
 // with 1s sleep between attempts. Used as a generic healthcheck after a
 // service restart — if it never opens, the unit failed to bind.
 func WaitPortListening(host string, port int, maxAttempts int) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprint(port))
 	for i := 0; i < maxAttempts; i++ {
 		c, err := net.DialTimeout("tcp", addr, 1*time.Second)
 		if err == nil {

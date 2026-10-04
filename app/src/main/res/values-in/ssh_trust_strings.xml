@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Verifikasi server SSH</string>
+    <string name="ssh_trust_message">Bandingkan sidik jari ini dengan konsol server sebelum melanjutkan. Kata sandi SSH belum dikirim.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Percayai kunci ini</string>
+    <string name="ssh_trust_changed">Kunci host SSH berubah. Koneksi diblokir; verifikasi identitas server.</string>
+    <string name="ssh_trust_rejected">Kunci host SSH tidak disetujui. Kata sandi SSH tidak dikirim.</string>
+</resources>

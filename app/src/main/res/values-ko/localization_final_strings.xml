@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"잘못된 구독 링크"</string>
+    <string name="subscription_url_required">"URL이 비어 있습니다"</string>
+    <string name="subscription_room_invalid">"잘못된 방 또는 프로필 링크"</string>
+    <string name="subscription_profile_unsupported">"지원되지 않는 프로필 URI"</string>
+    <string name="profile_default_name">"프로필"</string>
+    <string name="subscription_default_name">"구독"</string>
+    <string name="subscription_profile_invalid_details">"잘못된 프로필 링크: %1$s"</string>
+    <string name="subscription_profile_added">"프로필 추가됨: %1$s"</string>
+    <string name="subscription_url_invalid_details">"잘못된 URL: %1$s"</string>
+    <string name="subscription_deleted_name">"삭제됨: %1$s"</string>
+    <string name="subscription_update_with_errors">"업데이트된 프로필: %1$d개. 오류: %2$d개"</string>
+    <string name="profile_room_invalid">"잘못된 방 링크"</string>
+    <string name="profile_address_invalid">"잘못된 주소"</string>
+    <string name="profile_test_connect_first">"실제 IP가 유출되지 않도록 먼저 VPN에 연결하세요"</string>
+    <string name="profile_test_proxy_unready">"VPN 인증 정보가 아직 준비되지 않았습니다"</string>
+    <string name="profile_testing">"테스트 중…"</string>
+    <string name="profile_test_failed">"실패"</string>
+    <string name="backup_empty_json">"설정 파일이 비어 있습니다"</string>
+    <string name="import_profiles_with_errors">"가져온 프로필: %1$d개. 오류: %2$d개"</string>
+    <string name="connection_room_not_ready">"방의 서버가 아직 연결을 확인하지 않았습니다"</string>
+    <string name="connection_whitelist_help">"IP 허용 목록 때문에 서버가 차단되었을 수 있습니다. WB Stream 또는 Telemost를 사용해 보세요."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="other">프로필 %1$d개 업데이트됨</item>
+    </plurals>
+</resources>

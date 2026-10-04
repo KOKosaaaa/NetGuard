@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">การยืนยันตัวตน SOCKS5 ของแอป</string>
+    <string name="security_name_2">VPN อื่น</string>
+    <string name="security_name_3">พร็อกซี SOCKS5</string>
+    <string name="security_name_4">พร็อกซี HTTP</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">สแกนพอร์ต</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">แฟล็ก VPN</string>
+    <string name="security_name_10">ตรวจสอบ MTU</string>
+    <string name="security_name_11">ชื่อแพ็กเกจ</string>
+    <string name="security_detail_1">ทันเนลไม่ทำงาน จึงทดสอบไม่ได้</string>
+    <string name="security_detail_2">เซิร์ฟเวอร์ปิดการเชื่อมต่อที่ไม่ยืนยันตัวตน — ถูกต้อง</string>
+    <string name="security_detail_3">เวอร์ชัน SOCKS ที่ไม่คาดคิด: %1$s</string>
+    <string name="security_detail_4">ร้ายแรง: SOCKS5 ของแอปยอมรับการเชื่อมต่อโดยไม่ยืนยันตัวตน — กระบวนการยืนยันตัวตนเสีย!</string>
+    <string name="security_detail_5">SOCKS5 ของแอปกำหนดให้ยืนยันตัวตนด้วยผู้ใช้และรหัสผ่านอย่างถูกต้อง</string>
+    <string name="security_detail_6">SOCKS5 ของแอปปฏิเสธการไม่ยืนยันตัวตน (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">SOCKS5 ของแอปส่งวิธีที่ไม่คาดคิดกลับมา: 0x%1$s</string>
+    <string name="security_detail_8">ทดสอบ SOCKS ของแอปไม่ได้: %1$s</string>
+    <string name="security_detail_9">ไม่ได้ติดตั้งไคลเอนต์ VPN อื่นที่รู้จัก</string>
+    <string name="security_detail_10">ติดตั้งไคลเอนต์ VPN อื่นอยู่ (บางตัวอาจได้รับผลจากการรั่วไหลของ SOCKS ในเครื่องเมื่อเมษายน 2026): %1$s</string>
+    <string name="security_detail_11">ไม่พบ SOCKS5 ที่ไม่ยืนยันตัวตนบนพอร์ตมาตรฐาน</string>
+    <string name="security_detail_12">มีช่องโหว่: SOCKS5 เปิดโดยไม่ยืนยันตัวตนบนพอร์ต: %1$s</string>
+    <string name="security_detail_13">ไม่พบพร็อกซี HTTP CONNECT ที่เปิดอยู่บนพอร์ตมาตรฐาน</string>
+    <string name="security_detail_14">มีช่องโหว่: พร็อกซี HTTP เปิดบนพอร์ต: %1$s</string>
+    <string name="security_detail_15">ไม่พบพอร์ต Xray gRPC API</string>
+    <string name="security_detail_16">มีช่องโหว่: พอร์ต Xray API เปิดอยู่: %1$s</string>
+    <string name="security_detail_17">ไม่พบ Clash REST API</string>
+    <string name="security_detail_18">มีช่องโหว่: Clash API เปิดบนพอร์ต: %1$s — /connections ทำให้ IP ทั้งหมดรั่วไหล</string>
+    <string name="security_detail_19">ไม่มีพอร์ต VPN ที่รู้จักเปิดอยู่บน localhost</string>
+    <string name="security_detail_20">พอร์ตที่ตรวจพบได้เปิดอยู่: %1$s</string>
+    <string name="security_detail_21">ไม่พบพอร์ต VPN ที่รู้จักใน /proc/net/tcp</string>
+    <string name="security_detail_22">ตรวจพบได้ใน /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">อ่าน /proc/net/tcp ไม่ได้ (อาจถูกจำกัด)</string>
+    <string name="security_detail_24">มองเห็น TRANSPORT_VPN ได้ (หลีกเลี่ยงไม่ได้บน Android) แอปตรวจพบว่า VPN ทำงานได้ แต่ไม่เห็น IP ของเซิร์ฟเวอร์</string>
+    <string name="security_detail_25">ไม่พบแฟล็ก TRANSPORT_VPN (VPN ไม่ทำงานหรือมีการตรวจสอบก่อนเชื่อมต่อ)</string>
+    <string name="security_detail_26">ตรวจสอบ NetworkCapabilities ไม่ได้</string>
+    <string name="security_detail_27">ไม่พบอินเทอร์เฟซ TUN</string>
+    <string name="security_detail_28">เป็นข้อมูลเท่านั้น: %1$s ค่า MTU เพียงอย่างเดียวไม่ใช่ตัวบ่งชี้ VPN ที่เชื่อถือได้</string>
+    <string name="security_detail_29">ตรวจสอบ MTU ของอินเทอร์เฟซไม่ได้</string>
+    <string name="security_detail_30">มีช่องโหว่: ชื่อแพ็กเกจ \'%1$s\' มีคำสำคัญเกี่ยวกับ VPN</string>
+    <string name="security_detail_31">ชื่อแพ็กเกจ \'%1$s\' ไม่มีคำบ่งชี้เฉพาะ</string>
+</resources>

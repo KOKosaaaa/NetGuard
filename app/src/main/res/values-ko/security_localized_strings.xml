@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">앱 자체 SOCKS5 인증</string>
+    <string name="security_name_2">다른 VPN</string>
+    <string name="security_name_3">SOCKS5 프록시</string>
+    <string name="security_name_4">HTTP 프록시</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">포트 스캔</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">VPN 플래그</string>
+    <string name="security_name_10">MTU 검사</string>
+    <string name="security_name_11">패키지 이름</string>
+    <string name="security_detail_1">터널이 활성화되지 않아 테스트할 수 없음</string>
+    <string name="security_detail_2">서버가 인증 없는 연결을 닫음 — 정상</string>
+    <string name="security_detail_3">예상하지 못한 SOCKS 버전: %1$s</string>
+    <string name="security_detail_4">심각: 앱 자체 SOCKS5가 인증 없는 연결을 허용함 — 인증 체인이 작동하지 않음!</string>
+    <string name="security_detail_5">앱 자체 SOCKS5가 사용자 이름과 비밀번호 인증을 올바르게 요구함</string>
+    <string name="security_detail_6">앱 자체 SOCKS5가 인증 없는 연결을 거부함(NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">앱 자체 SOCKS5가 예상하지 못한 방식을 반환함: 0x%1$s</string>
+    <string name="security_detail_8">앱 자체 SOCKS를 테스트하지 못함: %1$s</string>
+    <string name="security_detail_9">다른 알려진 VPN 클라이언트가 설치되지 않음</string>
+    <string name="security_detail_10">다른 VPN 클라이언트가 설치됨(일부는 2026년 4월 로컬 SOCKS 유출의 영향을 받을 수 있음): %1$s</string>
+    <string name="security_detail_11">표준 포트에서 인증 없는 SOCKS5를 찾지 못함</string>
+    <string name="security_detail_12">취약: 다음 포트에 인증 없는 SOCKS5가 열려 있음: %1$s</string>
+    <string name="security_detail_13">표준 포트에서 열린 HTTP CONNECT 프록시를 찾지 못함</string>
+    <string name="security_detail_14">취약: 다음 포트에 HTTP 프록시가 열려 있음: %1$s</string>
+    <string name="security_detail_15">Xray gRPC API 포트가 감지되지 않음</string>
+    <string name="security_detail_16">취약: Xray API 포트가 열려 있음: %1$s</string>
+    <string name="security_detail_17">Clash REST API가 감지되지 않음</string>
+    <string name="security_detail_18">취약: 다음 포트에 Clash API가 열려 있음: %1$s — /connections에서 모든 IP가 유출됨</string>
+    <string name="security_detail_19">localhost에 알려진 VPN 포트가 열려 있지 않음</string>
+    <string name="security_detail_20">감지 가능한 포트가 열려 있음: %1$s</string>
+    <string name="security_detail_21">/proc/net/tcp에서 알려진 VPN 포트를 찾지 못함</string>
+    <string name="security_detail_22">/proc/net/tcp에서 감지 가능: %1$s</string>
+    <string name="security_detail_23">/proc/net/tcp를 읽을 수 없음(제한되었을 수 있음)</string>
+    <string name="security_detail_24">TRANSPORT_VPN이 표시됩니다(Android에서는 피할 수 없음). 앱은 VPN 활성화를 감지할 수 있지만 서버 IP는 볼 수 없습니다.</string>
+    <string name="security_detail_25">TRANSPORT_VPN 플래그가 감지되지 않음(VPN이 비활성 상태이거나 연결 전에 검사됨)</string>
+    <string name="security_detail_26">NetworkCapabilities를 검사할 수 없음</string>
+    <string name="security_detail_27">TUN 인터페이스가 감지되지 않음</string>
+    <string name="security_detail_28">참고 정보: %1$s. MTU만으로는 VPN 사용 여부를 신뢰할 만하게 판단할 수 없습니다.</string>
+    <string name="security_detail_29">인터페이스 MTU를 검사할 수 없음</string>
+    <string name="security_detail_30">취약: 패키지 이름 \'%1$s\'에 VPN 키워드가 포함됨</string>
+    <string name="security_detail_31">패키지 이름 \'%1$s\'은 중립적임</string>
+</resources>

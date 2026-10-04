@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Ungültiger Abonnementlink"</string>
+    <string name="subscription_url_required">"URL ist leer"</string>
+    <string name="subscription_room_invalid">"Ungültiger Raum- oder Profillink"</string>
+    <string name="subscription_profile_unsupported">"Nicht unterstützter Profil-URI"</string>
+    <string name="profile_default_name">"Profil"</string>
+    <string name="subscription_default_name">"Abonnement"</string>
+    <string name="subscription_profile_invalid_details">"Ungültiger Profillink: %1$s"</string>
+    <string name="subscription_profile_added">"Profil hinzugefügt: %1$s"</string>
+    <string name="subscription_url_invalid_details">"Ungültige URL: %1$s"</string>
+    <string name="subscription_deleted_name">"Gelöscht: %1$s"</string>
+    <string name="subscription_update_with_errors">"Aktualisierte Profile: %1$d. Fehler: %2$d"</string>
+    <string name="profile_room_invalid">"Ungültiger Raumlink"</string>
+    <string name="profile_address_invalid">"Ungültige Adresse"</string>
+    <string name="profile_test_connect_first">"Verbinde zuerst das VPN, damit deine tatsächliche IP-Adresse nicht offengelegt wird"</string>
+    <string name="profile_test_proxy_unready">"VPN-Zugangsdaten noch nicht bereit"</string>
+    <string name="profile_testing">"Wird getestet…"</string>
+    <string name="profile_test_failed">"Fehlgeschlagen"</string>
+    <string name="backup_empty_json">"Die Konfigurationsdatei ist leer"</string>
+    <string name="import_profiles_with_errors">"Importierte Profile: %1$d. Fehler: %2$d"</string>
+    <string name="connection_room_not_ready">"Der Server im Raum hat die Verbindung noch nicht bestätigt"</string>
+    <string name="connection_whitelist_help">"Der Server wird möglicherweise durch eine IP-Zulassungsliste blockiert. Versuche WB Stream oder Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">%1$d Profil aktualisiert</item>
+        <item quantity="other">%1$d Profile aktualisiert</item>
+    </plurals>
+</resources>

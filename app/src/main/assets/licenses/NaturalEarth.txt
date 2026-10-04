@@ -1,0 +1,8 @@
+Made with Natural Earth. The 1:110m land data is in the public domain.
+Source: https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_110m_land.geojson
+Terms: https://www.naturalearthdata.com/about/terms-of-use/
+
+The Android vector derives geographic polygons directly from the land dataset.
+Its extent matches the connection-marker projection (north 91.75, south -58.22).
+Antarctica lies outside this overview. Ocean pixels are transparent, with no JPG
+background, noise mask, country boundaries or raster compression artifacts.

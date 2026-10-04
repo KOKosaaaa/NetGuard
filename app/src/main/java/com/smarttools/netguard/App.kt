@@ -52,6 +52,17 @@ class App : Application() {
 
         // Apply Dynamic Colors before any UI is created (Android 12+)
         val settings = loadSettings()
+        // Before Android 13, AppCompat's locale is process-local unless auto-storage
+        // is configured. Restore our existing language preference before any Activity
+        // inflates; Android 13+ already persists the selection through LocaleManager.
+        if (android.os.Build.VERSION.SDK_INT < 33 && settings.language != "system") {
+            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+                androidx.core.os.LocaleListCompat.forLanguageTags(
+                    if (settings.language == "in") "id" else settings.language
+                )
+            )
+        }
+        com.smarttools.netguard.util.LauncherIcons.sync(this, settings.launcherIconTheme ?: settings.themeMode)
         if (settings.themeMode == ThemeMode.DYNAMIC) {
             DynamicColors.applyToActivitiesIfAvailable(this)
         }
@@ -170,6 +181,9 @@ class App : Application() {
             themeMode = safeEnum(
                 prefs.getString("theme_mode", null), ThemeMode.DARK
             ),
+            launcherIconTheme = prefs.getString("launcher_icon_theme", null)?.let {
+                runCatching { ThemeMode.valueOf(it) }.getOrNull()
+            },
             language = prefs.getString("language", "system") ?: "system",
             bypassLan = prefs.getBoolean("bypass_lan", true),
             enableIpv6 = prefs.getBoolean("enable_ipv6", true),
@@ -177,11 +191,13 @@ class App : Application() {
                 prefs.getString("per_app_mode", null), PerAppMode.DISABLED
             ),
             perAppList = prefs.getStringSet("per_app_list", emptySet()) ?: emptySet(),
+            alwaysVpnApps = prefs.getStringSet("always_vpn_apps", emptySet()) ?: emptySet(),
             showSpeedInNotification = prefs.getBoolean("show_speed_notification", false),
             showConnectionMap = prefs.getBoolean("show_connection_map", true),
             showSpeedTest = prefs.getBoolean("show_speed_test", true),
             autoConnectWifi = prefs.getBoolean("auto_connect_wifi", false),
             trustedWifiList = prefs.getStringSet("trusted_wifi_list", emptySet()) ?: emptySet(),
+            localDpiEnabled = prefs.getBoolean("local_dpi_enabled", true),
             tlsFragmentEnabled = prefs.getBoolean("tls_fragment_enabled", false),
             tlsFragmentPackets = prefs.getString("tls_fragment_packets", "tlshello") ?: "tlshello",
             tlsFragmentLength = prefs.getString("tls_fragment_length", "100-200") ?: "100-200",
@@ -246,22 +262,26 @@ class App : Application() {
     }
 
     fun saveSettings(settings: AppSettings) {
+        val previousIconTheme = loadSettings().let { it.launcherIconTheme ?: it.themeMode }
         getPreferences().edit().apply {
             putString("routing_mode", settings.routingMode.name)
             putString("primary_dns", settings.primaryDns)
             putString("secondary_dns", settings.secondaryDns)
             putBoolean("doh_enabled", settings.dohEnabled)
             putString("theme_mode", settings.themeMode.name)
+            putString("launcher_icon_theme", settings.launcherIconTheme?.name)
             putBoolean("bypass_lan", settings.bypassLan)
             putBoolean("enable_ipv6", settings.enableIpv6)
             putString("per_app_mode", settings.perAppMode.name)
             putStringSet("per_app_list", settings.perAppList)
+            putStringSet("always_vpn_apps", settings.alwaysVpnApps)
             putString("language", settings.language)
             putBoolean("show_speed_notification", settings.showSpeedInNotification)
             putBoolean("show_connection_map", settings.showConnectionMap)
             putBoolean("show_speed_test", settings.showSpeedTest)
             putBoolean("auto_connect_wifi", settings.autoConnectWifi)
             putStringSet("trusted_wifi_list", settings.trustedWifiList)
+            putBoolean("local_dpi_enabled", settings.localDpiEnabled)
             putBoolean("tls_fragment_enabled", settings.tlsFragmentEnabled)
             putString("tls_fragment_packets", settings.tlsFragmentPackets)
             putString("tls_fragment_length", settings.tlsFragmentLength)
@@ -280,6 +300,10 @@ class App : Application() {
             putBoolean("auto_switch_on_throttle", settings.autoSwitchOnThrottle)
             putStringSet("health_check_services", settings.healthCheckServices)
             apply()
+        }
+        val iconTheme = settings.launcherIconTheme ?: settings.themeMode
+        if (previousIconTheme != iconTheme) {
+            com.smarttools.netguard.util.LauncherIcons.sync(this, iconTheme)
         }
     }
 

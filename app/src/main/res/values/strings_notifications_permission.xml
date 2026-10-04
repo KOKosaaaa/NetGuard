@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- RU override below; other locales intentionally use this English fallback. -->
+    <string name="notifications_permission_title" tools:ignore="MissingTranslation">Allow notifications</string>
+    <string name="notifications_permission_settings" tools:ignore="MissingTranslation">Android has blocked this app’s notifications or its service channel. Enable them in system settings, then return here.</string>
+    <string name="notifications_open_settings" tools:ignore="MissingTranslation">Open settings</string>
+    <string name="notifications_not_enabled" tools:ignore="MissingTranslation">Notifications are disabled in Android. The switch remains off.</string>
+</resources>

@@ -1,0 +1,3 @@
+<resources>
+    <string name="server_quality_failed">Could not check the servers. Check your connection and try again.</string>
+</resources>

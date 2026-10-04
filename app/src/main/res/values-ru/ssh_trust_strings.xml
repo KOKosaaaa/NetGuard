@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Проверка SSH-сервера</string>
+    <string name="ssh_trust_message">Сверьте отпечаток с консолью сервера перед продолжением. Пароль SSH ещё не отправлен.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Доверять ключу</string>
+    <string name="ssh_trust_changed">Ключ SSH-сервера изменился. Подключение заблокировано; проверьте подлинность сервера.</string>
+    <string name="ssh_trust_rejected">Ключ SSH не подтверждён. Пароль SSH не отправлен.</string>
+</resources>

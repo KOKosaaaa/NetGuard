@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"订阅链接无效"</string>
+    <string name="subscription_url_required">"URL 为空"</string>
+    <string name="subscription_room_invalid">"房间或配置链接无效"</string>
+    <string name="subscription_profile_unsupported">"不支持的配置 URI"</string>
+    <string name="profile_default_name">"配置"</string>
+    <string name="subscription_default_name">"订阅"</string>
+    <string name="subscription_profile_invalid_details">"配置链接无效：%1$s"</string>
+    <string name="subscription_profile_added">"已添加配置：%1$s"</string>
+    <string name="subscription_url_invalid_details">"URL 无效：%1$s"</string>
+    <string name="subscription_deleted_name">"已删除：%1$s"</string>
+    <string name="subscription_update_with_errors">"已更新配置：%1$d。错误：%2$d"</string>
+    <string name="profile_room_invalid">"房间链接无效"</string>
+    <string name="profile_address_invalid">"地址无效"</string>
+    <string name="profile_test_connect_first">"请先连接 VPN，以避免泄漏真实 IP"</string>
+    <string name="profile_test_proxy_unready">"VPN 凭据尚未就绪"</string>
+    <string name="profile_testing">"正在测试…"</string>
+    <string name="profile_test_failed">"失败"</string>
+    <string name="backup_empty_json">"配置文件为空"</string>
+    <string name="import_profiles_with_errors">"已导入配置：%1$d。错误：%2$d"</string>
+    <string name="connection_room_not_ready">"房间中的服务器尚未确认连接"</string>
+    <string name="connection_whitelist_help">"服务器可能被 IP 允许列表限制。请尝试 WB Stream 或 Telemost。"</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="other">已更新 %1$d 个配置</item>
+    </plurals>
+</resources>

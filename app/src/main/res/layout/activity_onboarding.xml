@@ -40,7 +40,7 @@
         android:layout_height="0dp"
         android:layout_marginTop="20dp"
         android:layout_marginBottom="12dp"
-        app:layout_constraintBottom_toTopOf="@id/btn_back"
+        app:layout_constraintBottom_toTopOf="@id/guide_footer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/progress_steps">
@@ -86,150 +86,40 @@
             </LinearLayout>
         </ScrollView>
 
-        <!-- Step 1: Welcome -->
+        <!-- The same four-page guide is used for first launch and About. -->
         <ScrollView
             android:id="@+id/step_welcome"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:fillViewport="true"
-            android:paddingHorizontal="20dp"
-            android:visibility="gone"
-            tools:visibility="visible">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/tv_welcome_title"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/onb_welcome_title"
-                    android:textSize="26sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorOnSurface" />
-
-                <TextView
-                    android:id="@+id/tv_welcome_subtitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="@string/onb_welcome_subtitle"
-                    android:textSize="15sp"
-                    android:textColor="?attr/colorPrimary" />
-
-                <TextView
-                    android:id="@+id/tv_welcome_body"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="@string/onb_welcome_body"
-                    android:textSize="14sp"
+            android:paddingHorizontal="24dp"
+            android:visibility="gone">
+            <LinearLayout android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical"
+                android:paddingBottom="16dp">
+                <TextView android:id="@+id/tv_welcome_subtitle"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:textColor="?attr/colorPrimary" android:textSize="14sp"
+                    tools:text="1 из 4" />
+                <TextView android:id="@+id/tv_welcome_title"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" android:text="@string/guide_app_title"
+                    android:textColor="?attr/colorOnSurface" android:textSize="26sp"
+                    android:textStyle="bold" android:accessibilityHeading="true" />
+                <TextView android:id="@+id/tv_welcome_body"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp" android:text="@string/guide_app_body"
+                    android:textColor="?attr/colorOnSurfaceVariant" android:textSize="16sp"
+                    android:lineSpacingExtra="5dp" />
+                <TextView android:id="@+id/tv_guide_version"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp" android:textSize="12sp"
                     android:textColor="?attr/colorOnSurfaceVariant" />
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                    app:cardCornerRadius="14dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:id="@+id/tv_feature_trigger_title"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/onb_feature_trigger_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tv_feature_trigger_body"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/onb_feature_trigger"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                    app:cardCornerRadius="14dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:id="@+id/tv_feature_perapp_title"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/onb_feature_perapp_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tv_feature_perapp_body"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/onb_feature_perapp"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="8dp"
-                    app:cardBackgroundColor="?attr/colorSurfaceVariant"
-                    app:cardCornerRadius="14dp"
-                    app:cardElevation="0dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:id="@+id/tv_feature_protocols_title"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/onb_feature_protocols_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tv_feature_protocols_body"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/onb_feature_protocols"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_guide_skip"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" android:text="@string/guide_skip"
+                    style="@style/Widget.Material3.Button.TextButton" />
             </LinearLayout>
         </ScrollView>
 
@@ -777,28 +667,24 @@
         </ScrollView>
     </FrameLayout>
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_back"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginBottom="20dp"
-        android:minWidth="100dp"
-        android:filterTouchesWhenObscured="true"
-        android:text="@string/onb_back"
+    <LinearLayout
+        android:id="@+id/guide_footer"
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginHorizontal="16dp" android:layout_marginBottom="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        style="@style/Widget.Material3.Button.TextButton" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_next"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="20dp"
-        android:minWidth="120dp"
-        android:filterTouchesWhenObscured="true"
-        android:text="@string/onb_next"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_back" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1"
+            android:minWidth="0dp" android:layout_marginEnd="8dp"
+            android:filterTouchesWhenObscured="true" android:text="@string/onb_back"
+            style="@style/Widget.Material3.Button.TextButton" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_next" android:layout_width="0dp"
+            android:layout_height="wrap_content" android:layout_weight="1"
+            android:minWidth="0dp" android:filterTouchesWhenObscured="true"
+            android:text="@string/onb_next" />
+    </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

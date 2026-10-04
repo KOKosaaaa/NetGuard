@@ -76,16 +76,30 @@ class ProfileListViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    data class DeleteResult(val profile: ServerProfile, val error: String? = null)
+    private val _deleteResult = Channel<DeleteResult>(Channel.BUFFERED)
+    val deleteResult = _deleteResult.receiveAsFlow()
+    private val deleting = mutableSetOf<Long>()
+
+    private suspend fun removeProfile(profile: ServerProfile) {
+        if (!deleting.add(profile.id)) return
+        try {
+            com.smarttools.netguard.agent.WbProfileDeletion.delete(app, profile)
+            _deleteResult.send(DeleteResult(profile))
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            _deleteResult.send(DeleteResult(profile, com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_delete_unconfirmed)))
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) {
+            _deleteResult.send(DeleteResult(profile, com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_delete_failed_details, (if (e is com.smarttools.netguard.agent.WbRoomDeletionException) com.smarttools.netguard.util.LocalizedResources.string(app, e.messageId) else e.message) ?: com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.server_unavailable))))
+        } finally { deleting.remove(profile.id) }
+    }
+
     fun deleteProfile(profile: ServerProfile) {
-        viewModelScope.launch {
-            profileRepo.delete(profile)
-        }
+        viewModelScope.launch { removeProfile(profile) }
     }
 
     fun deleteProfiles(ids: Set<Long>) {
-        viewModelScope.launch {
-            ids.forEach { profileRepo.deleteById(it) }
-        }
+        viewModelScope.launch { ids.forEach { id -> profileRepo.getById(id)?.let { removeProfile(it) } } }
     }
 
     fun selectProfile(id: Long) {

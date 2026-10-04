@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="TextAppearance.NetGuard.Navigation" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:fontFamily">@font/manrope_semibold</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+    <style name="Widget.NetGuard.HomeCard" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardCornerRadius">24dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+    <style name="Widget.NetGuard.HomeAction" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:maxLines">3</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="cornerRadius">18dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+    </style>
+</resources>

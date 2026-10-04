@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">SSH 서버 확인</string>
+    <string name="ssh_trust_message">계속하기 전에 이 지문을 서버 콘솔과 비교하세요. SSH 비밀번호는 아직 전송되지 않았습니다.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">이 키 신뢰</string>
+    <string name="ssh_trust_changed">SSH 호스트 키가 변경되었습니다. 연결이 차단되었습니다. 서버의 신원을 확인하세요.</string>
+    <string name="ssh_trust_rejected">SSH 호스트 키가 승인되지 않았습니다. SSH 비밀번호는 전송되지 않았습니다.</string>
+</resources>

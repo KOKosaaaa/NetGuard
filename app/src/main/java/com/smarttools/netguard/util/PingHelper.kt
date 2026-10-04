@@ -59,7 +59,8 @@ object PingHelper {
     suspend fun pingForProfile(host: String, port: Int, protocol: Protocol): Int {
         return when (protocol) {
             Protocol.HYSTERIA2 -> icmpPing(host)
-            Protocol.TELEMOST -> tcpPing("telemost.yandex.ru", 443)
+            Protocol.TELEMOST -> tcpPing(if (com.smarttools.netguard.model.WbStreamLink.looksLike(host)) "stream.wb.ru" else "telemost.yandex.ru", 443)
+            Protocol.WBSTREAM -> tcpPing("stream.wb.ru", 443)
             else -> tcpPing(host, port)
         }
     }

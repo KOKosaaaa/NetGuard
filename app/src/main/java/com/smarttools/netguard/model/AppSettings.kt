@@ -2,15 +2,19 @@ package com.smarttools.netguard.model
 
 data class AppSettings(
     val routingMode: RoutingMode = RoutingMode.AUTO,
+    val localDpiEnabled: Boolean = true,
     val primaryDns: String = "1.1.1.1",
     val secondaryDns: String = "8.8.8.8",
     val dohEnabled: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.DARK,
+    /** Null follows the app theme; a value pins only the launcher artwork. */
+    val launcherIconTheme: ThemeMode? = null,
     val language: String = "system",
     val bypassLan: Boolean = true,
     val enableIpv6: Boolean = true,
     val perAppMode: PerAppMode = PerAppMode.DISABLED,
     val perAppList: Set<String> = emptySet(),
+    val alwaysVpnApps: Set<String> = emptySet(),
     val showSpeedInNotification: Boolean = false,
     val showConnectionMap: Boolean = true,
     val showSpeedTest: Boolean = true,

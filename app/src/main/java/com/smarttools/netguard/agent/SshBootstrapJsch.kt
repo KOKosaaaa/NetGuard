@@ -29,6 +29,7 @@ class SshBootstrapJsch(
     private val agentListenAddr: String = ":9443",
     private val timeoutMs: Long = 90_000,
     private val onProgress: (SshBootstrap.Stage) -> Unit = {},
+    private val verifyHostKey: (ByteArray) -> Boolean,
 ) {
 
     fun run(): SshBootstrap.BootstrapResult {
@@ -104,9 +105,17 @@ class SshBootstrapJsch(
             }
             val session = jsch.getSession(sshUser, host, sshPort)
             if (!sshPassword.isNullOrEmpty()) session.setPassword(sshPassword)
-            // Skip host-key verification — we're bootstrapping a brand-new
-            // host. Same security model as sshj's PromiscuousVerifier.
-            session.setConfig("StrictHostKeyChecking", "no")
+            jsch.hostKeyRepository = object : com.jcraft.jsch.HostKeyRepository {
+                override fun check(host: String, key: ByteArray): Int =
+                    if (verifyHostKey(key)) com.jcraft.jsch.HostKeyRepository.OK else com.jcraft.jsch.HostKeyRepository.CHANGED
+                override fun add(hostkey: com.jcraft.jsch.HostKey, ui: com.jcraft.jsch.UserInfo?) = Unit
+                override fun remove(host: String, type: String?) = Unit
+                override fun remove(host: String, type: String?, key: ByteArray?) = Unit
+                override fun getKnownHostsRepositoryID(): String = "NetGuard confirmed keys"
+                override fun getHostKey(): Array<com.jcraft.jsch.HostKey> = emptyArray()
+                override fun getHostKey(host: String?, type: String?): Array<com.jcraft.jsch.HostKey> = emptyArray()
+            }
+            session.setConfig("StrictHostKeyChecking", "yes")
             session.setConfig("PreferredAuthentications", "password,publickey")
             // JSch will negotiate the strongest mutual algo from this set.
             session.connect(timeoutMs.toInt())
@@ -147,8 +156,8 @@ class SshBootstrapJsch(
             while (!ch.isClosed && System.currentTimeMillis() < deadline) Thread.sleep(50)
             return CommandResult(
                 exit = ch.exitStatus,
-                stdout = outBuf.toString(Charsets.UTF_8),
-                stderr = errBuf.toString(Charsets.UTF_8),
+                stdout = outBuf.toString("UTF-8"),
+                stderr = errBuf.toString("UTF-8"),
             )
         } finally {
             try { ch.disconnect() } catch (_: Exception) {}
@@ -172,8 +181,8 @@ class SshBootstrapJsch(
             while (!ch.isClosed && System.currentTimeMillis() < deadline) Thread.sleep(50)
             return CommandResult(
                 exit = ch.exitStatus,
-                stdout = outBuf.toString(Charsets.UTF_8),
-                stderr = errBuf.toString(Charsets.UTF_8),
+                stdout = outBuf.toString("UTF-8"),
+                stderr = errBuf.toString("UTF-8"),
             )
         } finally {
             try { ch.disconnect() } catch (_: Exception) {}

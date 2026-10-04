@@ -2,22 +2,22 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/nav_home"
-        android:icon="@drawable/ic_home"
+        android:icon="@drawable/ic_nav_home"
         android:title="@string/nav_home" />
     <item
         android:id="@+id/nav_profiles"
-        android:icon="@drawable/ic_servers"
+        android:icon="@drawable/ic_nav_servers"
         android:title="@string/nav_profiles" />
     <item
         android:id="@+id/nav_subscriptions"
-        android:icon="@drawable/ic_subscriptions"
+        android:icon="@drawable/ic_nav_subscriptions"
         android:title="@string/nav_subscriptions" />
     <item
         android:id="@+id/nav_settings"
-        android:icon="@drawable/ic_settings"
+        android:icon="@drawable/ic_nav_settings"
         android:title="@string/nav_settings" />
     <item
         android:id="@+id/nav_logs"
-        android:icon="@drawable/ic_log"
+        android:icon="@drawable/ic_nav_logs"
         android:title="@string/nav_logs" />
 </menu>

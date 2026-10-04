@@ -33,6 +33,8 @@ class AddServerFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: AddServerViewModel by viewModels()
+    private var trustDialog: androidx.appcompat.app.AlertDialog? = null
+    private var trustDialogId: Long? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -75,7 +77,22 @@ class AddServerFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.state.collect { render(it) }
+                launch { viewModel.state.collect { render(it) } }
+                launch { viewModel.hostKeyPrompt.collect { prompt ->
+                    if (prompt == null) {
+                        trustDialog?.dismiss(); trustDialog = null; trustDialogId = null
+                    } else if (trustDialogId != prompt.id) {
+                        trustDialog?.dismiss()
+                        trustDialogId = prompt.id
+                        trustDialog = MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(R.string.ssh_trust_title)
+                            .setMessage(getString(R.string.ssh_trust_message, prompt.host, prompt.port, prompt.fingerprint))
+                            .setPositiveButton(R.string.ssh_trust_accept) { _, _ -> viewModel.answerHostKey(prompt.id, true) }
+                            .setNegativeButton(android.R.string.cancel) { _, _ -> viewModel.answerHostKey(prompt.id, false) }
+                            .setOnCancelListener { viewModel.answerHostKey(prompt.id, false) }
+                            .show()
+                    }
+                } }
             }
         }
     }
@@ -185,8 +202,9 @@ class AddServerFragment : Fragment() {
     private fun confirmCancel() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.add_server)
-            .setMessage("Deploy in progress. Cancel and back out?")
+            .setMessage(getString(com.smarttools.netguard.R.string.deploy_cancel_confirmation))
             .setPositiveButton(android.R.string.ok) { _, _ ->
+                viewModel.cancelDeploy()
                 findNavController().navigateUp()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -208,6 +226,7 @@ class AddServerFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        trustDialog?.dismiss(); trustDialog = null; trustDialogId = null
         _binding = null
         super.onDestroyView()
     }

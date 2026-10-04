@@ -21,7 +21,7 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Protocol" android:textSize="12sp" android:layout_marginTop="12dp" />
+            android:text="@string/field_protocol" android:textSize="12sp" android:layout_marginTop="12dp" />
         <Spinner android:id="@+id/sp_protocol"
             android:layout_width="match_parent" android:layout_height="48dp" />
 
@@ -37,6 +37,9 @@
                 android:inputType="textUri" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <LinearLayout android:id="@+id/protocol_details"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical">
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -61,7 +64,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Password">
+            android:hint="@string/field_password">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_password"
                 android:layout_width="match_parent"
@@ -72,7 +75,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Encryption">
+            android:hint="@string/field_encryption">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_encryption"
                 android:layout_width="match_parent"
@@ -90,17 +93,17 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Network" android:textSize="12sp" android:layout_marginTop="12dp" />
+            android:text="@string/field_network" android:textSize="12sp" android:layout_marginTop="12dp" />
         <Spinner android:id="@+id/sp_network"
             android:layout_width="match_parent" android:layout_height="48dp" />
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Security" android:textSize="12sp" android:layout_marginTop="12dp" />
+            android:text="@string/field_security" android:textSize="12sp" android:layout_marginTop="12dp" />
         <Spinner android:id="@+id/sp_security"
             android:layout_width="match_parent" android:layout_height="48dp" />
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="Fingerprint" android:textSize="12sp" android:layout_marginTop="12dp" />
+            android:text="@string/field_fingerprint" android:textSize="12sp" android:layout_marginTop="12dp" />
         <Spinner android:id="@+id/sp_fingerprint"
             android:layout_width="match_parent" android:layout_height="48dp" />
 
@@ -127,7 +130,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Host">
+            android:hint="@string/field_host">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_host"
                 android:layout_width="match_parent"
@@ -137,7 +140,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Path">
+            android:hint="@string/field_path">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_path"
                 android:layout_width="match_parent"
@@ -147,7 +150,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Service Name (gRPC)">
+            android:hint="@string/field_grpc_service">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_service_name"
                 android:layout_width="match_parent"
@@ -157,7 +160,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Public Key (Reality)">
+            android:hint="@string/field_reality_public_key">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_public_key"
                 android:layout_width="match_parent"
@@ -167,7 +170,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Short ID (Reality)">
+            android:hint="@string/field_reality_short_id">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_short_id"
                 android:layout_width="match_parent"
@@ -190,6 +193,8 @@
             android:layout_height="wrap_content"
             android:text="@string/allow_insecure"
             android:layout_marginTop="8dp" />
+
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_test_result"

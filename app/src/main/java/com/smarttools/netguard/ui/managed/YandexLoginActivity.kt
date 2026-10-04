@@ -54,6 +54,11 @@ class YandexLoginActivity : AppCompatActivity() {
         toolbar.setNavigationOnClickListener { finishCancelled() }
 
         webView = findViewById(R.id.web_view)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) webView.goBack() else finishCancelled()
+            }
+        })
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         // Yandex's login page hard-renders for desktop without a phone
@@ -89,9 +94,6 @@ class YandexLoginActivity : AppCompatActivity() {
         webView.loadUrl(LOGIN_URL)
     }
 
-    override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack() else finishCancelled()
-    }
 
     /**
      * Returns true when the harvest succeeded and the activity is

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"粘贴 JSON 配置"</string>
+    <string name="subscription_tls_date_error">"TLS 错误：请检查设备日期和时间。%1$s"</string>
+    <string name="subscription_tls_pin_error">"TLS 证书固定校验不匹配。证书可能在此应用版本发布后发生了变化。%1$s"</string>
+    <string name="subscription_tls_chain_error">"服务器 TLS 证书链不完整。这是服务器配置问题。%1$s"</string>
+    <string name="subscription_fetch_failed">"无法加载订阅"</string>
+    <string name="trigger_apps_removed_from_bypass">"已从 VPN 绕过列表移除应用：%1$d。这些应用原本会绕过自动连接。"</string>
+    <string name="server_installing_xray">"正在服务器上安装 xray…"</string>
+    <string name="server_upstream_added">"已添加上游"</string>
+    <string name="server_upstream_deleted">"已删除上游"</string>
+    <string name="server_rule_added">"已添加规则"</string>
+    <string name="server_rule_deleted">"已删除规则"</string>
+    <string name="wb_room_stop_failed">"无法停止服务器上的 WB Stream 房间。配置已保留；请再次尝试删除。"</string>
+    <string name="wb_room_still_present">"WB Stream 房间仍存在于服务器上"</string>
+    <string name="rule_label_domain">"域名"</string>
+    <string name="rule_label_cidr">"IP 范围（CIDR）"</string>
+    <string name="rule_label_geosite">"网站组（geosite）"</string>
+    <string name="rule_label_geoip">"IP 组（geoip）"</string>
+    <string name="rule_label_direct">"直接连接"</string>
+    <string name="rule_label_block">"屏蔽"</string>
+    <string name="rule_label_via">"通过上游"</string>
+    <string name="rule_no_upstreams">"尚未添加上游"</string>
+</resources>

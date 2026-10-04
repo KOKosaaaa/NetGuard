@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"رابط الاشتراك غير صالح"</string>
+    <string name="subscription_url_required">"عنوان URL فارغ"</string>
+    <string name="subscription_room_invalid">"رابط الغرفة أو ملف التعريف غير صالح"</string>
+    <string name="subscription_profile_unsupported">"URI ملف التعريف غير مدعوم"</string>
+    <string name="profile_default_name">"ملف تعريف"</string>
+    <string name="subscription_default_name">"اشتراك"</string>
+    <string name="subscription_profile_invalid_details">"رابط ملف التعريف غير صالح: %1$s"</string>
+    <string name="subscription_profile_added">"تمت إضافة ملف التعريف: %1$s"</string>
+    <string name="subscription_url_invalid_details">"عنوان URL غير صالح: %1$s"</string>
+    <string name="subscription_deleted_name">"تم الحذف: %1$s"</string>
+    <string name="subscription_update_with_errors">"ملفات التعريف المحدَّثة: %1$d. الأخطاء: %2$d"</string>
+    <string name="profile_room_invalid">"رابط الغرفة غير صالح"</string>
+    <string name="profile_address_invalid">"العنوان غير صالح"</string>
+    <string name="profile_test_connect_first">"اتصل بـ VPN أولًا لتجنب كشف عنوان IP الحقيقي"</string>
+    <string name="profile_test_proxy_unready">"بيانات اعتماد VPN غير جاهزة"</string>
+    <string name="profile_testing">"جارٍ الاختبار…"</string>
+    <string name="profile_test_failed">"فشل"</string>
+    <string name="backup_empty_json">"ملف الإعدادات فارغ"</string>
+    <string name="import_profiles_with_errors">"ملفات التعريف المستوردة: %1$d. الأخطاء: %2$d"</string>
+    <string name="connection_room_not_ready">"لم يؤكد الخادم في الغرفة الاتصال"</string>
+    <string name="connection_whitelist_help">"قد يكون الخادم محجوبًا بسبب قائمة عناوين IP المسموح بها. جرّب WB Stream أو Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="zero">لم تُحدَّث ملفات تعريف (%1$d)</item>
+        <item quantity="one">تم تحديث ملف تعريف واحد (%1$d)</item>
+        <item quantity="two">تم تحديث ملفي تعريف (%1$d)</item>
+        <item quantity="few">تم تحديث %1$d ملفات تعريف</item>
+        <item quantity="many">تم تحديث %1$d ملف تعريف</item>
+        <item quantity="other">تم تحديث %1$d ملف تعريف</item>
+    </plurals>
+</resources>

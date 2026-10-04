@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Incolla la configurazione JSON"</string>
+    <string name="subscription_tls_date_error">"Errore TLS: controlla data e ora del dispositivo. %1$s"</string>
+    <string name="subscription_tls_pin_error">"Il certificato TLS non corrisponde a quello fissato. Potrebbe essere cambiato dopo il rilascio di questa versione dell’app. %1$s"</string>
+    <string name="subscription_tls_chain_error">"La catena di certificati TLS del server è incompleta. È un problema di configurazione del server. %1$s"</string>
+    <string name="subscription_fetch_failed">"Impossibile caricare l’abbonamento"</string>
+    <string name="trigger_apps_removed_from_bypass">"App rimosse dall’elenco delle esclusioni VPN: %1$d. Avrebbero evitato la connessione automatica."</string>
+    <string name="server_installing_xray">"Installazione di xray sul server…"</string>
+    <string name="server_upstream_added">"Server upstream aggiunto"</string>
+    <string name="server_upstream_deleted">"Server upstream eliminato"</string>
+    <string name="server_rule_added">"Regola aggiunta"</string>
+    <string name="server_rule_deleted">"Regola eliminata"</string>
+    <string name="wb_room_stop_failed">"Impossibile fermare la stanza WB Stream sul server. Il profilo è stato conservato; riprova a eliminarlo."</string>
+    <string name="wb_room_still_present">"La stanza WB Stream è ancora presente sul server"</string>
+    <string name="rule_label_domain">"Dominio"</string>
+    <string name="rule_label_cidr">"Intervallo IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Gruppo di siti (geosite)"</string>
+    <string name="rule_label_geoip">"Gruppo IP (geoip)"</string>
+    <string name="rule_label_direct">"Connessione diretta"</string>
+    <string name="rule_label_block">"Blocca"</string>
+    <string name="rule_label_via">"Tramite un server upstream"</string>
+    <string name="rule_no_upstreams">"Nessun server upstream aggiunto"</string>
+</resources>

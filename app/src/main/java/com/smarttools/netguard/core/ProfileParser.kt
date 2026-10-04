@@ -332,37 +332,17 @@ object ProfileParser {
             trimmed.startsWith("ss://") -> parseShadowsocks(trimmed)
             trimmed.startsWith("hysteria2://") || trimmed.startsWith("hy2://") -> parseHysteria2(trimmed)
             trimmed.startsWith("telemost://") -> parseTelemost(trimmed)
-            trimmed.startsWith("https://stream.wb.ru/room/") ||
-                trimmed.startsWith("wbstream://") -> parseWbStream(trimmed)
+            WbStreamLink.looksLike(trimmed) -> parseWbStream(trimmed)
             else -> null
         }
     }
 
-    // WB Stream carrier bypass: the user pastes a room link straight from the
-    // headless room-host (https://stream.wb.ru/room/<id>, optional #name). It
-    // rides the same relay path as Telemost (Protocol.TELEMOST -> librelay.so),
-    // and TelemostRelayManager auto-detects the stream.wb.ru address to launch the
-    // wbstream-headless-joiner mode with per-conn ARQ instead of the Telemost mode.
-    // Multi-room (newline-separated links) is supported for future throughput
-    // scaling; a single link is the N=1 case.
     private fun parseWbStream(uri: String): ServerProfile {
-        val normalized = if (uri.startsWith("wbstream://"))
-            "https://stream.wb.ru/room/" + uri.removePrefix("wbstream://")
-        else uri
-        val (body, fragment) = splitFragment(normalized)
-        val name = urlDecode(fragment)
-        val links = body.split('\n', '\r', ' ').map { it.trim() }.filter { it.isNotEmpty() }
-        for (l in links) {
-            if (!l.startsWith("https://stream.wb.ru/room/")) {
-                throw IllegalArgumentException("WB Stream link must be https://stream.wb.ru/room/<id>, got: ${l.take(60)}")
-            }
-        }
-        if (links.isEmpty()) throw IllegalArgumentException("No WB Stream room link found")
+        val room = WbStreamLink.parse(uri)
         return ServerProfile(
-            name = safeName(name, if (links.size > 1) "WB Stream-x${links.size}" else "WB Stream"),
-            protocol = Protocol.TELEMOST,
-            address = links.joinToString("\n"),
-            port = 443
+            name = safeName(room.name, if (room.links.size > 1) "WB Stream-x${room.links.size}" else "WB Stream"),
+            protocol = Protocol.WBSTREAM,
+            address = room.links.joinToString("\n"), port = 443
         )
     }
 
@@ -385,6 +365,11 @@ object ProfileParser {
         val links = decoded.split('\n', '\r').map { it.trim() }.filter { it.isNotEmpty() }
         if (links.isEmpty()) {
             throw IllegalArgumentException("Telemost URI has no join links after decoding")
+        }
+        if (links.all { WbStreamLink.looksLike(it) }) {
+            return parseWbStream(links.joinToString("\n")).let { p ->
+                if (name.isNotEmpty()) p.copy(name = safeName(name, p.name)) else p
+            }
         }
         for (l in links) {
             if (!l.startsWith("https://telemost.yandex.ru/j/")) {

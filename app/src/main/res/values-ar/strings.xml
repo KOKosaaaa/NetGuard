@@ -172,7 +172,7 @@
     <string name="speed_test_desc">زر اختبار السرعة على الشاشة الرئيسية</string>
     <string name="speed_test">اختبار السرعة</string>
     <string name="auto_connect_wifi">اتصال تلقائي بالواي فاي</string>
-    <string name="auto_connect_wifi_desc">VPN على واي فاي غير معروف + حماية Evil Twin</string>
+    <string name="auto_connect_wifi_desc">تشغيل VPN على شبكات Wi-Fi غير الموثوقة. تُعامل بيانات الشبكة التي يخفيها Android على أنها غير موثوقة أيضًا. يلزم منح إذن VPN مسبقًا.</string>
     <string name="trusted_wifi">شبكات واي فاي موثوقة</string>
     <string name="add_current_wifi">إضافة الواي فاي الحالي</string>
     <string name="location_needed_for_wifi">إذن الموقع مطلوب لقراءة اسم الواي فاي</string>

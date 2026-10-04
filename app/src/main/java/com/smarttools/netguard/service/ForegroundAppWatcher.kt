@@ -18,6 +18,7 @@ import com.smarttools.netguard.App
 import com.smarttools.netguard.MainActivity
 import com.smarttools.netguard.R
 import com.smarttools.netguard.model.ConnectionState
+import com.smarttools.netguard.util.LocalizedResources
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,16 +50,34 @@ class TriggerWatcherService : Service() {
         private const val NOTIFICATION_ID = 2
         private const val CHANNEL_ID = "trigger_watcher"
 
+        /** Channel labels follow the app locale, while sound, importance and badge stay user-owned. */
+        fun refreshChannel(context: Context, createIfMissing: Boolean = false) {
+            val nm = context.getSystemService(android.app.NotificationManager::class.java) ?: return
+            val localized = LocalizedResources.context(context)
+            val name = localized.getString(R.string.trigger_watcher_channel)
+            val channel = nm.getNotificationChannel(CHANNEL_ID) ?: if (createIfMissing)
+                android.app.NotificationChannel(CHANNEL_ID, name, android.app.NotificationManager.IMPORTANCE_MIN)
+                    .apply { setShowBadge(false) } else return
+            channel.name = name
+            channel.description = localized.getString(R.string.trigger_watcher_channel_desc)
+            nm.createNotificationChannel(channel)
+        }
+
         const val ACTION_START = "com.smarttools.netguard.TRIGGER_WATCH_START"
         const val ACTION_STOP = "com.smarttools.netguard.TRIGGER_WATCH_STOP"
 
         fun hasUsageStatsPermission(ctx: Context): Boolean {
             val ops = ctx.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = ops.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                ctx.packageName
-            )
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ops.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                ops.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName
+                )
+            }
             return mode == AppOpsManager.MODE_ALLOWED
         }
 
@@ -122,20 +141,12 @@ class TriggerWatcherService : Service() {
     }
 
     private fun ensureChannel() {
-        val nm = getSystemService(android.app.NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
-        val ch = android.app.NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.trigger_watcher_channel),
-            android.app.NotificationManager.IMPORTANCE_MIN
-        ).apply {
-            description = getString(R.string.trigger_watcher_channel_desc)
-            setShowBadge(false)
-        }
-        nm.createNotificationChannel(ch)
+        refreshChannel(this, createIfMissing = true)
     }
 
     private fun buildNotification(): Notification {
+        ensureChannel()
+        val localized = LocalizedResources.context(this)
         val tap = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
@@ -147,11 +158,11 @@ class TriggerWatcherService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.trigger_watcher_title))
-            .setContentText(getString(R.string.trigger_watcher_text))
+            .setContentTitle(localized.getString(R.string.trigger_watcher_title))
+            .setContentText(localized.getString(R.string.trigger_watcher_text))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tap)
-            .addAction(R.drawable.ic_stop, getString(R.string.trigger_watcher_stop), stop)
+            .addAction(R.drawable.ic_stop, localized.getString(R.string.trigger_watcher_stop), stop)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_MIN)

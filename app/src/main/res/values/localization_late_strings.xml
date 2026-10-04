@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Paste JSON configuration"</string>
+    <string name="subscription_tls_date_error">"TLS error: check your device date and time. %1$s"</string>
+    <string name="subscription_tls_pin_error">"TLS certificate pin mismatch. The certificate may have changed since this app release. %1$s"</string>
+    <string name="subscription_tls_chain_error">"The server TLS certificate chain is incomplete. This is a server configuration issue. %1$s"</string>
+    <string name="subscription_fetch_failed">"Could not load the subscription"</string>
+    <string name="trigger_apps_removed_from_bypass">"Apps removed from the VPN bypass list: %1$d. They would have bypassed automatic connection."</string>
+    <string name="server_installing_xray">"Installing xray on the server…"</string>
+    <string name="server_upstream_added">"Upstream added"</string>
+    <string name="server_upstream_deleted">"Upstream deleted"</string>
+    <string name="server_rule_added">"Rule added"</string>
+    <string name="server_rule_deleted">"Rule deleted"</string>
+    <string name="wb_room_stop_failed">"Could not stop the WB Stream room on the server. The profile has been kept; try deleting again."</string>
+    <string name="wb_room_still_present">"The WB Stream room is still present on the server"</string>
+    <string name="rule_label_domain">"Domain"</string>
+    <string name="rule_label_cidr">"IP range (CIDR)"</string>
+    <string name="rule_label_geosite">"Site group (geosite)"</string>
+    <string name="rule_label_geoip">"IP group (geoip)"</string>
+    <string name="rule_label_direct">"Direct connection"</string>
+    <string name="rule_label_block">"Block"</string>
+    <string name="rule_label_via">"Through an upstream"</string>
+    <string name="rule_no_upstreams">"No upstreams added"</string>
+</resources>

@@ -35,19 +35,17 @@ intentionally rebuilding the agent; the tests verify exact decoded bytes and
 reject corrupt or oversized installers. The APK itself uses standard Android ZIP
 packaging and installs directly; users do not extract any archive.
 
-## Where to get it
+## Exact release-preparation input
 
-Option A — prebuilt release (fastest):
-
-1. Open https://github.com/AnyaKovaleva/libXray/releases
-2. Download the latest `libXray-v*.aar` (tested: v1.8.12, arm64-v8a).
-3. Save it as `app/libs/libXray.aar`.
-
-Option B — build from source:
-
-1. `git clone https://github.com/2dust/AndroidLibXrayLite`
-2. Follow the README there (requires `gomobile`, Go 1.21+, NDK r26).
-3. Copy the resulting `libv2ray.aar` into `app/libs/`.
+The local input audited for the 3.0.0 preparation is `libXray.aar`,
+11,341,899 bytes, SHA-256
+`8e4aa74d10b85a40d2f5fe634c31a33caaa4180d413bf2f54edc71a7167ed0c7`.
+It exposes `libXray.LibXray` and `go.Seq`; an arbitrary `libv2ray.aar` is not
+API-compatible. Preserve this input when reproducing the audited build.
+The upstream source revision/build recipe of this existing local AAR has not
+been established by this audit; obtaining reproducible provenance remains a
+release input follow-up. Do not substitute a supposedly equivalent upstream
+artifact without rechecking the API, native payloads and runtime behavior.
 
 ## After placing the AAR
 
@@ -59,8 +57,10 @@ The build should succeed and produce `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Verifying the binary
 
-The AAR bundles a native `libgojni.so` (Go runtime) and `libxray.so`. If you want to confirm it is the version you expect:
+The current APK packages the AAR's ARM64 `libgojni.so`. Inspect the actual AAR
+contents and hash, rather than assuming an additional `libxray.so` exists:
 
 ```bash
-unzip -p app/libs/libXray.aar jni/arm64-v8a/libxray.so | strings | grep -i "xray/v"
+sha256sum app/libs/libXray.aar
+unzip -l app/libs/libXray.aar
 ```

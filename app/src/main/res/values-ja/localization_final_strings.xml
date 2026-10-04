@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"無効な購読リンク"</string>
+    <string name="subscription_url_required">"URL が空です"</string>
+    <string name="subscription_room_invalid">"無効なルームまたはプロファイルのリンク"</string>
+    <string name="subscription_profile_unsupported">"未対応のプロファイル URI"</string>
+    <string name="profile_default_name">"プロファイル"</string>
+    <string name="subscription_default_name">"購読"</string>
+    <string name="subscription_profile_invalid_details">"無効なプロファイルリンク：%1$s"</string>
+    <string name="subscription_profile_added">"プロファイルを追加しました：%1$s"</string>
+    <string name="subscription_url_invalid_details">"無効な URL：%1$s"</string>
+    <string name="subscription_deleted_name">"削除しました：%1$s"</string>
+    <string name="subscription_update_with_errors">"更新したプロファイル：%1$d。エラー：%2$d"</string>
+    <string name="profile_room_invalid">"無効なルームリンク"</string>
+    <string name="profile_address_invalid">"無効なアドレス"</string>
+    <string name="profile_test_connect_first">"実際の IP の漏えいを防ぐため、先に VPN に接続してください"</string>
+    <string name="profile_test_proxy_unready">"VPN の認証情報がまだ準備できていません"</string>
+    <string name="profile_testing">"テスト中…"</string>
+    <string name="profile_test_failed">"失敗"</string>
+    <string name="backup_empty_json">"設定ファイルが空です"</string>
+    <string name="import_profiles_with_errors">"インポートしたプロファイル：%1$d。エラー：%2$d"</string>
+    <string name="connection_room_not_ready">"ルーム内のサーバーが接続をまだ確認していません"</string>
+    <string name="connection_whitelist_help">"IP 許可リストによってサーバーがブロックされている可能性があります。WB Stream または Telemost をお試しください。"</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="other">%1$d 個のプロファイルを更新しました</item>
+    </plurals>
+</resources>

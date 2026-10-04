@@ -51,13 +51,6 @@ class TrafficChartView @JvmOverloads constructor(
     private var textColor = 0
     private var subtextColor = 0
 
-    private val themeAttrs = intArrayOf(
-        com.google.android.material.R.attr.colorPrimary,
-        com.google.android.material.R.attr.colorSurfaceVariant,
-        com.google.android.material.R.attr.colorOnSurface,
-        com.google.android.material.R.attr.colorOnSurfaceVariant
-    )
-
     init {
         resolveDimensions()
         resolveThemeColors()
@@ -83,18 +76,20 @@ class TrafficChartView @JvmOverloads constructor(
     }
 
     private fun resolveThemeColors() {
-        val ta = context.obtainStyledAttributes(themeAttrs)
+        val ta = context.obtainStyledAttributes(com.smarttools.netguard.R.styleable.ThemePalette)
         try {
-            primaryColor = ta.getColor(0, 0xFF888888.toInt())
-            surfaceVariantColor = ta.getColor(1, 0xFF888888.toInt())
-            textColor = ta.getColor(2, 0xFF888888.toInt())
-            subtextColor = ta.getColor(3, 0xFF888888.toInt())
+            primaryColor = ta.getColor(com.smarttools.netguard.R.styleable.ThemePalette_colorPrimary, 0xFF888888.toInt())
+            surfaceVariantColor = ta.getColor(com.smarttools.netguard.R.styleable.ThemePalette_colorSurfaceVariant, 0xFF888888.toInt())
+            textColor = ta.getColor(com.smarttools.netguard.R.styleable.ThemePalette_colorOnSurface, 0xFF888888.toInt())
+            subtextColor = ta.getColor(com.smarttools.netguard.R.styleable.ThemePalette_colorOnSurfaceVariant, 0xFF888888.toInt())
         } finally {
             ta.recycle()
         }
     }
 
     private fun applyPaintStyles() {
+        labelPaint.typeface=AppTypography.body(context)
+        valuePaint.typeface=AppTypography.mono(context)
         barPaint.color = primaryColor
         emptyBarPaint.color = surfaceVariantColor
         labelPaint.color = subtextColor
@@ -105,6 +100,9 @@ class TrafficChartView @JvmOverloads constructor(
 
     fun setData(history: List<StatsRepository.DayTraffic>) {
         data = history
+        contentDescription = context.getString(com.smarttools.netguard.R.string.home_chart_accessibility,
+            history.joinToString("; ") { "${it.dayOfWeek}: ${TrafficFormatter.formatBytes(it.total)}" })
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         invalidate()
     }
 
@@ -124,6 +122,7 @@ class TrafficChartView @JvmOverloads constructor(
         if (data.isEmpty()) return
 
         val maxVal = data.maxOfOrNull { it.total } ?: 0L
+        val peakIndex = data.indexOfFirst { it.total == maxVal }
         val labelHeight = sp11 + dp6
         val valueHeight = sp9 + dp4
         val topPadding = valueHeight + dp2
@@ -144,12 +143,13 @@ class TrafficChartView @JvmOverloads constructor(
                 barRect.set(left, top, right, topPadding + chartHeight)
                 canvas.drawRoundRect(barRect, dp4, dp4, barPaint)
 
-                canvas.drawText(
-                    TrafficFormatter.formatBytes(day.total),
-                    cx,
-                    top - dp3,
-                    valuePaint
-                )
+                // A compact chart labels one peak; dense daily values overlap at large font sizes.
+                if (i == peakIndex) {
+                    val value = TrafficFormatter.formatBytes(day.total)
+                    val halfText = valuePaint.measureText(value) / 2
+                    val valueX = cx.coerceIn(halfText, (width - halfText).coerceAtLeast(halfText))
+                    canvas.drawText(value, valueX, top - dp3, valuePaint)
+                }
             } else {
                 barRect.set(left, topPadding + chartHeight - minBarHeight, right, topPadding + chartHeight)
                 canvas.drawRoundRect(barRect, dp4, dp4, emptyBarPaint)

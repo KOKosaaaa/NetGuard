@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"الصق إعدادات JSON"</string>
+    <string name="subscription_tls_date_error">"خطأ TLS: تحقق من تاريخ جهازك ووقته. %1$s"</string>
+    <string name="subscription_tls_pin_error">"شهادة TLS لا تطابق الشهادة المثبّتة. ربما تغيرت الشهادة منذ إصدار هذه النسخة من التطبيق. %1$s"</string>
+    <string name="subscription_tls_chain_error">"سلسلة شهادات TLS للخادم غير مكتملة. هذه مشكلة في إعداد الخادم. %1$s"</string>
+    <string name="subscription_fetch_failed">"تعذر تحميل الاشتراك"</string>
+    <string name="trigger_apps_removed_from_bypass">"التطبيقات التي أُزيلت من قائمة تجاوز VPN: %1$d. كانت ستتخطى الاتصال التلقائي."</string>
+    <string name="server_installing_xray">"جارٍ تثبيت xray على الخادم…"</string>
+    <string name="server_upstream_added">"تمت إضافة الخادم المنبع"</string>
+    <string name="server_upstream_deleted">"تم حذف الخادم المنبع"</string>
+    <string name="server_rule_added">"تمت إضافة القاعدة"</string>
+    <string name="server_rule_deleted">"تم حذف القاعدة"</string>
+    <string name="wb_room_stop_failed">"تعذر إيقاف غرفة WB Stream على الخادم. تم الاحتفاظ بملف التعريف؛ حاول حذفه مجددًا."</string>
+    <string name="wb_room_still_present">"لا تزال غرفة WB Stream موجودة على الخادم"</string>
+    <string name="rule_label_domain">"النطاق"</string>
+    <string name="rule_label_cidr">"نطاق عناوين IP ‏(CIDR)"</string>
+    <string name="rule_label_geosite">"مجموعة مواقع (geosite)"</string>
+    <string name="rule_label_geoip">"مجموعة عناوين IP ‏(geoip)"</string>
+    <string name="rule_label_direct">"اتصال مباشر"</string>
+    <string name="rule_label_block">"حظر"</string>
+    <string name="rule_label_via">"عبر خادم منبع"</string>
+    <string name="rule_no_upstreams">"لم تُضف خوادم منبع"</string>
+</resources>

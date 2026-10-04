@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="connection_map_overview">Карта подключения</string>
+    <string name="always_vpn_apps">Приложения — всегда через VPN</string>
+    <string name="always_vpn_apps_hint">При включённом VPN выбранные приложения всегда идут через него. Автоопределение сайтов и правила обхода не отправят их напрямую. После изменения списка переподключи VPN. На Android 8–9 этот список переводит через VPN все захваченные приложения.</string>
+    <string name="always_vpn_apps_saved">Сохранено. Переподключи VPN, чтобы применить правила приложений.</string>
     <string name="app_name">NetGuard</string>
 
     <string name="sub_expires_at">истекает %1$s</string>
@@ -223,7 +227,7 @@
     <string name="onb_mode_global">Глобальный VPN</string>
     <string name="onb_mode_global_desc">Все приложения идут через VPN. Стандартный режим.</string>
     <string name="onb_mode_trigger">Триггер-режим (рекомендуется)</string>
-    <string name="onb_mode_trigger_desc">⚠ Через VPN идут ТОЛЬКО приложения из списка триггеров - для них туннель сам включается при открытии и выключается когда закрываешь. Все остальные (банки, карты, Яндекс, браузер) идут напрямую и НЕ используют VPN никогда.</string>
+    <string name="onb_mode_trigger_desc">VPN автоматически запускается при открытии выбранного приложения. Фактический путь трафика определяется настройками маршрутизации. Список приложений и поведение при закрытии можно изменить позже.</string>
     <string name="onb_mode_perapp">Per-App VPN</string>
     <string name="onb_mode_perapp_desc">Вручную выбрать какие приложения идут через VPN, а какие в обход.</string>
     <string name="onb_mode_skip">Решить позже</string>
@@ -311,7 +315,7 @@
     <string name="speed_test_desc">Кнопка теста скорости на главном экране</string>
     <string name="speed_test">Тест скорости</string>
     <string name="auto_connect_wifi">Автоподключение по WiFi</string>
-    <string name="auto_connect_wifi_desc">VPN в незнакомых WiFi + защита от Evil Twin</string>
+    <string name="auto_connect_wifi_desc">VPN в недоверенных сетях Wi-Fi. Если Android скрывает данные сети, она тоже считается недоверенной. Нужно заранее разрешить VPN.</string>
     <string name="trusted_wifi">Доверенные WiFi-сети</string>
     <string name="add_current_wifi">Добавить текущую сеть</string>
     <string name="location_needed_for_wifi">Для определения имени WiFi необходимо разрешение на геолокацию</string>
@@ -393,7 +397,7 @@
     <string name="telemost_streams_explain">Каждая комната - отдельный туннель через твой сервер. Больше комнат = больше суммарная скорость, но только до предела:\n• телефон подключается к комнатам по очереди, поэтому больше комнат = дольше ждать, пока заработает;\n• каждая комната грузит CPU сервера - примерно 2-3 комнаты на ядро. Сверх этого ядра захлёбываются и всё становится медленнее.\nДержись близко к рекомендованному числу выше.</string>
     <string name="telemost_capacity_unknown">Лимит сервера проверится после первого подключения</string>
     <string name="telemost_striping">Striping Telemost (эксперимент)</string>
-    <string name="telemost_striping_desc">Распределяет каждое соединение по ВСЕМ комнатам Telemost, чтобы одна большая загрузка шла на их суммарной скорости. Нужен обновлённый сервер-эксит. Если загрузки зависают - выключи.</string>
+    <string name="telemost_striping_desc">Делит данные соединения между комнатами Telemost. Нужен сервер с поддержкой striping. Если при запуске каналы striping не отвечают, используются обычные соединения через те же комнаты. При зависаниях во время работы выключи этот режим.</string>
     <string name="auto_switch_throttle">Автоматический выбор сервера</string>
     <string name="auto_switch_throttle_desc">Меняет сервер при устойчивой потере связи с выбранными сервисами, если нет входящего трафика. Сбой одного сервиса не прерывает работающий VPN. Для проверки нужны минимум два сервиса; пауза между переключениями — 5 минут.</string>
     <string name="save_logs_to_file">Сохранить логи в файл</string>
@@ -473,4 +477,14 @@
     <string name="subscription_network_error">Не удалось загрузить подписку. Проверьте соединение или попробуйте другой VPN-сервер.</string>
     <string name="subscription_format_error">Сервер ответил, но не вернул поддерживаемые профили.</string>
     <string name="subscription_size_error">Ответ подписки превышает 2 МБ.</string>
+    <string name="add_wb_stream">WB Stream</string>
+    <string name="wb_stream_room_hint">https://stream.wb.ru/room/…</string>
+    <string name="wb_stream_room_help">Вставь ссылку комнаты WB Stream с работающим сервером обхода. Обычная видеовстреча сама по себе не даёт доступ в интернет. Можно вставить до 12 ссылок, каждую с новой строки.</string>
+    <string name="wb_stream_invalid_room">Вставь корректную ссылку комнаты WB Stream (не более 12 комнат).</string>
+    <string name="relay_test_hint">Подключи этот профиль, затем запусти тест скорости на главной, чтобы проверить трафик через комнату.</string>
+    <string name="srv_proto_wb_title">Видеоконференции (WB Stream)</string>
+    <string name="srv_proto_wb_desc">Создай встречу в WB Stream прямо в приложении. NetGuard подключит твой сервер и сохранит профиль. Нужен вход в WB; в комнату можно войти без камеры и микрофона.</string>
+    <string name="local_dpi_enable">Адаптивный локальный обход DPI</string>
+    <string name="local_dpi_desc">В режиме Авто проверяет два способа разделения TLS, если прямой HTTPS не работает. Применяет после двух полных тестовых загрузок. Приложения «только VPN» остаются в VPN, открытые соединения сохраняются. Проверки расходуют и мобильный трафик. Отключение действует на новые соединения.</string>
+    <string name="route_diagnostics">Проверка обхода</string>
 </resources>

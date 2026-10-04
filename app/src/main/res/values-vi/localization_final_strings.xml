@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Liên kết gói đăng ký không hợp lệ"</string>
+    <string name="subscription_url_required">"URL trống"</string>
+    <string name="subscription_room_invalid">"Liên kết phòng hoặc hồ sơ không hợp lệ"</string>
+    <string name="subscription_profile_unsupported">"URI hồ sơ không được hỗ trợ"</string>
+    <string name="profile_default_name">"Hồ sơ"</string>
+    <string name="subscription_default_name">"Gói đăng ký"</string>
+    <string name="subscription_profile_invalid_details">"Liên kết hồ sơ không hợp lệ: %1$s"</string>
+    <string name="subscription_profile_added">"Đã thêm hồ sơ: %1$s"</string>
+    <string name="subscription_url_invalid_details">"URL không hợp lệ: %1$s"</string>
+    <string name="subscription_deleted_name">"Đã xóa: %1$s"</string>
+    <string name="subscription_update_with_errors">"Hồ sơ đã cập nhật: %1$d. Lỗi: %2$d"</string>
+    <string name="profile_room_invalid">"Liên kết phòng không hợp lệ"</string>
+    <string name="profile_address_invalid">"Địa chỉ không hợp lệ"</string>
+    <string name="profile_test_connect_first">"Kết nối VPN trước để tránh rò rỉ IP thật"</string>
+    <string name="profile_test_proxy_unready">"Thông tin xác thực VPN chưa sẵn sàng"</string>
+    <string name="profile_testing">"Đang kiểm tra…"</string>
+    <string name="profile_test_failed">"Thất bại"</string>
+    <string name="backup_empty_json">"Tệp cấu hình trống"</string>
+    <string name="import_profiles_with_errors">"Hồ sơ đã nhập: %1$d. Lỗi: %2$d"</string>
+    <string name="connection_room_not_ready">"Máy chủ trong phòng chưa xác nhận kết nối"</string>
+    <string name="connection_whitelist_help">"Máy chủ có thể bị chặn do danh sách IP được phép. Hãy thử WB Stream hoặc Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="other">Đã cập nhật %1$d hồ sơ</item>
+    </plurals>
+</resources>

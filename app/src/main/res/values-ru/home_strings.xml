@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="map_server_location_unknown">Местоположение сервера неизвестно</string>
+    <string name="home_auto_select_short">Автовыбор</string>
+    <string name="home_speed_test_short">Скорость</string>
+    <string name="home_choose_server">Выбрать сервер</string>
+    <string name="home_details">Статистика трафика</string>
+    <string name="home_chart_accessibility">Трафик по дням: %1$s</string>
+    <string name="disconnect">Отключить</string>
+    <string name="speed_cancel">Отмена</string>
+    <string name="home_server">СЕРВЕР</string>
+    <string name="home_download">↓ Получение</string>
+    <string name="home_upload">↑ Отправка</string>
+    <string name="speed_hint">Через VPN · до сервера теста</string>
+    <string name="speed_latency_stage">Проверяю задержку…</string>
+    <string name="speed_download_stage">Измеряю получение…</string>
+    <string name="speed_upload_stage">Измеряю отправку…</string>
+    <string name="speed_unmeasured">не измерено</string>
+    <string name="speed_value">%1$s Мбит/с</string>
+    <string name="speed_latency_value">%1$d мс</string>
+    <string name="speed_results">Получение: %1$s\nОтправка: %2$s\nHTTP-задержка: %3$s</string>
+    <string name="speed_not_ready">Туннель ещё не готов. Повтори чуть позже.</string>
+    <string name="speed_failed">Сервер теста не завершил передачу. Повтори проверку. Это не обязательно означает, что VPN недоступен.</string>
+    <string name="speed_timeout">Время проверки истекло. Завершённые замеры сохранены; незавершённые отмечены как «не измерено».</string>
+</resources>

@@ -27,17 +27,28 @@ data class FriendlyError(
 )
 
 object AgentErrorMessages {
+    fun explain(throwable: Throwable, context: android.content.Context): FriendlyError = Presenter(context).explain(throwable)
+
+    private class Presenter(private val context: android.content.Context) {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(context, id, *args)
+
 
     /** Build a [FriendlyError] from whatever blew up in the API call. */
     fun explain(throwable: Throwable): FriendlyError {
+        if (throwable is WbRoomDeletionException) return FriendlyError(l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_7), l10n(throwable.messageId), true, throwable.message.orEmpty())
         // Agent returned a structured E_ error
         if (throwable is AgentApiError) {
-            val raw = "Код: ${throwable.code}\n${throwable.errorMessage}"
+            val raw = "HTTP ${throwable.httpCode}; ${throwable.code}\n${throwable.errorMessage}"
+            if (throwable.code == "E_AGENT_UPDATE" && throwable.errorMessage.contains("timeout", ignoreCase = true)) {
+                return FriendlyError(
+                    l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_3),
+                    l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_4), true, raw,
+                )
+            }
             return mapCode(throwable.code, throwable.errorMessage, raw)
                 ?: FriendlyError(
-                    title = "Что-то пошло не так",
-                    body = "Сервер вернул ошибку. Можно попробовать ещё раз; " +
-                        "если повторится — посмотри подробности.",
+                    title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_1),
+                    body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_2),
                     retryable = true,
                     rawDetails = raw,
                 )
@@ -56,9 +67,8 @@ object AgentErrorMessages {
         }
         if (msg.contains("timed out")) {
             return FriendlyError(
-                title = "Сервер не ответил вовремя",
-                body = "Сервер сейчас занят или есть проблемы со связью. " +
-                    "Попробуй ещё раз через минуту.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_3),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_4),
                 retryable = true,
                 rawDetails = msg,
             )
@@ -69,38 +79,21 @@ object AgentErrorMessages {
         // substring match on the agent-injected sentinel.
         if (msg.contains("OOM_KILLED")) {
             return FriendlyError(
-                title = "Серверу не хватило памяти",
-                body = "Telemost-сборка убита OOM-киллером. На этом " +
-                    "VPS не хватает RAM даже на один поток. " +
-                    "Попробуй меньше потоков, либо возьми VPS с " +
-                    "1 GB+ RAM — этого хватит для 3-6 потоков.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_5),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_6),
                 retryable = true,
                 rawDetails = msg,
             )
         }
-        // Hand-written user-facing messages from our own code (the chain
-        // orchestrator, for instance) come in as IllegalStateException
-        // with a long Russian text. If it looks like Russian prose, pass
-        // it through instead of swallowing it into the generic fallback.
-        if (msg.length >= 20 && containsCyrillic(msg)) {
-            return FriendlyError(
-                title = "Не получилось",
-                body = msg,
-                retryable = true,
-                rawDetails = msg,
-            )
-        }
+        // Server prose stays in rawDetails; display a localized fallback.
         // Generic last-resort
         return FriendlyError(
-            title = "Неизвестная ошибка",
-            body = "Не удалось завершить операцию. Можно повторить.",
+            title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_8),
+            body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_9),
             retryable = true,
             rawDetails = msg.ifBlank { throwable.javaClass.simpleName },
         )
     }
-
-    private fun containsCyrillic(s: String): Boolean =
-        s.any { it in 'Ѐ'..'ӿ' }
 
     /** Parse a "xray deploy failed: <code>: <message>" string from waitForTask. */
     private fun explainXrayTaskMessage(msg: String): FriendlyError {
@@ -112,10 +105,8 @@ object AgentErrorMessages {
         }
         // No code — show the network-y bit if present.
         return FriendlyError(
-            title = "Не удалось установить xray",
-            body = "Сервер не смог завершить установку. Часто помогает " +
-                "просто повторить. Если ошибка повторяется — посмотри " +
-                "подробности.",
+            title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_10),
+            body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_11),
             retryable = true,
             rawDetails = msg,
         )
@@ -128,11 +119,8 @@ object AgentErrorMessages {
         // streams or a bigger VPS).
         if (code == "E_TELEMOST_PENDING" && message.contains("OOM_KILLED")) {
             return FriendlyError(
-                title = "Серверу не хватило памяти",
-                body = "Telemost-сборка убита OOM-киллером. На этом " +
-                    "VPS не хватает RAM даже на один поток. " +
-                    "Попробуй меньше потоков, либо возьми VPS с " +
-                    "1 GB+ RAM — этого хватит для 3-6 потоков.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_5),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_6),
                 retryable = true,
                 rawDetails = raw,
             )
@@ -140,10 +128,8 @@ object AgentErrorMessages {
         return when (code) {
             "E_DOWNLOAD",
             "E_APT_CURL" -> FriendlyError(
-                title = "Сервер не смог скачать xray",
-                body = "У сервера временные проблемы с сетью или GitHub " +
-                    "не отдал файл. Это часто чинится повтором — " +
-                    "нажми «Повторить» через минуту.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_12),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_13),
                 retryable = true,
                 rawDetails = raw,
             )
@@ -151,10 +137,8 @@ object AgentErrorMessages {
             "E_EXTRACT_MKDIR",
             "E_EXTRACT_NO_BIN",
             "E_APT_UNZIP" -> FriendlyError(
-                title = "Архив с xray повреждён",
-                body = "Файл скачался, но распаковать не получилось. " +
-                    "Можно попробовать ещё раз — обычно при повторной " +
-                    "загрузке всё проходит.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_14),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_15),
                 retryable = true,
                 rawDetails = raw,
             )
@@ -165,10 +149,8 @@ object AgentErrorMessages {
             "E_BACKUP_DIR",
             "E_BACKUP_CONFIG",
             "E_BACKUP_UNIT" -> FriendlyError(
-                title = "Не хватает прав на сервере",
-                body = "Агент не смог записать файлы. Обычно это из-за " +
-                    "переполненного диска или прав. Проверь, что на " +
-                    "сервере есть свободное место, и повтори.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_16),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_17),
                 retryable = true,
                 rawDetails = raw,
             )
@@ -177,101 +159,84 @@ object AgentErrorMessages {
             "E_HEALTHCHECK",
             "E_RESTART_XRAY",
             "E_SERVICE_FAILED" -> FriendlyError(
-                title = "xray установился, но не стартовал",
-                body = "Файлы на сервере есть, но xray не запустился. " +
-                    "Часто причина в занятом порту. Можно повторить, " +
-                    "выбрав другой SNI или порт.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_18),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_19),
                 retryable = true,
                 rawDetails = raw,
             )
             "E_XRAY_PREEXISTING" -> FriendlyError(
-                title = "На сервере уже стоит xray",
-                body = "На сервере найдена чужая установка xray. " +
-                    "Чтобы продолжить, удали её или нажми «Переустановить» " +
-                    "в меню сервера.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_20),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_21),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_UNSUPPORTED_ARCH" -> FriendlyError(
-                title = "Архитектура сервера не поддерживается",
-                body = "Агент работает только на серверах amd64 и arm64. " +
-                    "На этом сервере другая архитектура.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_22),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_23),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_BUILD_CONFIG",
             "E_BAD_REQUEST",
             "E_BAD_JSON" -> FriendlyError(
-                title = "Некорректные параметры профиля",
-                body = "Что-то не так с параметрами профиля. Проверь " +
-                    "SNI (должен быть доменом) и попробуй снова.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_24),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_25),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_UNAUTHORIZED" -> FriendlyError(
-                title = "Сервер не принял авторизацию",
-                body = "Ключ для общения с сервером устарел. Удали " +
-                    "сервер из приложения и добавь заново.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_26),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_27),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_AGENT_RESTARTED" -> FriendlyError(
-                title = "Агент перезапустился во время операции",
-                body = "Операция прервалась. Просто повтори — должно " +
-                    "пройти.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_28),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_29),
                 retryable = true,
                 rawDetails = raw,
             )
             "E_PORT_BUSY" -> FriendlyError(
-                title = "Порт уже занят",
-                body = "На сервере выбранный порт занят другой программой " +
-                    "(например, уже работающим VPN на этом же сервере). " +
-                    "Выбери другой порт в режиме эксперта или используй " +
-                    "отдельный сервер.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_30),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_31),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_TELEMOST_NOT_DEPLOYED" -> FriendlyError(
-                title = "Telemost ещё не развёрнут",
-                body = "Сначала разверни Telemost на сервере (кнопка " +
-                    "«Поднять Telemost»), потом можно менять число потоков.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_32),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_33),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_TELEMOST_NO_COOKIES" -> FriendlyError(
-                title = "Нужен вход в Яндекс",
-                body = "Чтобы создать больше комнат, нужны куки Яндекса. " +
-                    "Войди через «Войти через Яндекс» и повтори.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_34),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_35),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_OOM",
             "E_CREATE_ROOM" -> FriendlyError(
-                title = "Серверу не хватило памяти",
-                body = "Не получилось поднять столько потоков — серверу " +
-                    "мало RAM. Уменьши число потоков, добавь swap " +
-                    "(в меню сервера) или возьми VPS с 1 GB+ RAM.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_5),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_36),
                 retryable = true,
                 rawDetails = raw,
             )
             "E_NO_DISK" -> FriendlyError(
-                title = "Мало места на диске",
-                body = "На сервере недостаточно свободного места для " +
-                    "файла подкачки. Освободи место и повтори.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_37),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_38),
                 retryable = false,
                 rawDetails = raw,
             )
             "E_ALLOCATE",
             "E_MKSWAP",
             "E_SWAPON" -> FriendlyError(
-                title = "Не удалось включить swap",
-                body = "Сервер не смог создать файл подкачки. Можно " +
-                    "повторить; если не выходит — у провайдера может быть " +
-                    "запрещён swap на этом тарифе.",
+                title = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_39),
+                body = l10n(com.smarttools.netguard.R.string.loc_agent_error_messages_40),
                 retryable = true,
                 rawDetails = raw,
             )
             else -> null
         }
     }
+}
 }

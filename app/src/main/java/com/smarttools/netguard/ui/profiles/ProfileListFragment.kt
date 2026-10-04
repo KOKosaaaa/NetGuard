@@ -29,6 +29,8 @@ import com.smarttools.netguard.viewmodel.ProfileListViewModel
 import kotlinx.coroutines.launch
 
 class ProfileListFragment : Fragment() {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(requireContext(), id, *args)
+
 
     private var _binding: FragmentProfileListBinding? = null
     private val binding get() = _binding!!
@@ -113,12 +115,8 @@ class ProfileListFragment : Fragment() {
                 if (pos == RecyclerView.NO_POSITION) return
                 val item = adapter.itemAt(pos) as? ProfileAdapter.Item.Profile ?: return
                 val profile = item.profile
-                viewModel.deleteProfile(profile)
-                Snackbar.make(binding.root, R.string.profile_deleted, Snackbar.LENGTH_LONG)
-                    .setAction(R.string.undo) {
-                        viewModel.importFromText(profile.toUri())
-                    }
-                    .show()
+                adapter.notifyItemChanged(pos)
+                deleteProfile(profile)
             }
         }
         ItemTouchHelper(swipeCallback).attachToRecyclerView(binding.rvProfiles)
@@ -151,11 +149,24 @@ class ProfileListFragment : Fragment() {
                         }
                 }
                 launch {
+                    viewModel.deleteResult.collect { result ->
+                        if (result.error != null) {
+                            MaterialAlertDialogBuilder(requireContext()).setTitle(l10n(com.smarttools.netguard.R.string.loc_profile_list_fragment_1))
+                                .setMessage(result.error).setPositiveButton(android.R.string.ok, null).show()
+                        } else {
+                            val bar = Snackbar.make(binding.root, R.string.profile_deleted, Snackbar.LENGTH_LONG)
+                            // Restoring a local URI cannot recreate a stopped WB room.
+                            if (!result.profile.isWbStream) bar.setAction(R.string.undo) { viewModel.importFromText(result.profile.toUri()) }
+                            bar.show()
+                        }
+                    }
+                }
+                launch {
                     viewModel.importResult.collect { result ->
                         val msg = if (result.errors.isEmpty()) {
-                            "Imported ${result.added} profile(s)"
+                            resources.getQuantityString(com.smarttools.netguard.R.plurals.import_profiles_count, result.added, result.added)
                         } else {
-                            "Imported ${result.added}, errors: ${result.errors.size}"
+                            getString(com.smarttools.netguard.R.string.import_profiles_with_errors, result.added, result.errors.size)
                         }
                         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
                     }
@@ -181,6 +192,11 @@ class ProfileListFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun deleteProfile(profile: ServerProfile) {
+        Snackbar.make(binding.root, if (profile.isWbStream) l10n(com.smarttools.netguard.R.string.loc_profile_list_fragment_2) else l10n(com.smarttools.netguard.R.string.loc_profile_list_fragment_3), Snackbar.LENGTH_LONG).show()
+        viewModel.deleteProfile(profile)
     }
 
     private fun showProfileActions(profile: ServerProfile) {
@@ -209,10 +225,7 @@ class ProfileListFragment : Fragment() {
                         }, 30_000)
                     }
                     2 -> {
-                        viewModel.deleteProfile(profile)
-                        Snackbar.make(binding.root, R.string.profile_deleted, Snackbar.LENGTH_LONG)
-                            .setAction(R.string.undo) { viewModel.importFromText(profile.toUri()) }
-                            .show()
+                        deleteProfile(profile)
                     }
                 }
             }

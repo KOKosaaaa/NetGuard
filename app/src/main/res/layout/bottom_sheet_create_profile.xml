@@ -130,6 +130,21 @@
                     android:textAppearance="?attr/textAppearanceBodySmall" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_wbstream" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:clickable="true" android:focusable="true"
+            app:cardCornerRadius="16dp" app:strokeWidth="1dp" app:strokeColor="?attr/colorOutline">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:padding="14dp">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/srv_proto_wb_title" android:textAppearance="?attr/textAppearanceTitleSmall" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" android:text="@string/srv_proto_wb_desc"
+                    android:textColor="?attr/colorOnSurfaceVariant" android:textAppearance="?attr/textAppearanceBodySmall" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
 
         <!-- VLESS options -->
         <LinearLayout
@@ -231,7 +246,7 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Я.Музыка" />
+                    android:text="@string/brand_yandex_music" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chip_ozon"

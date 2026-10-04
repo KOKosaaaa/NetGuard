@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="connection_map_overview">Connection map</string>
+    <string name="always_vpn_apps">Apps always through VPN</string>
+    <string name="always_vpn_apps_hint">While VPN is connected, selected apps always use it. Automatic site routing and bypass rules cannot send their traffic directly. Reconnect VPN after changing this list. On Android 8–9, enabling this list routes all captured apps through VPN.</string>
+    <string name="always_vpn_apps_saved">Saved. Reconnect VPN to apply the application rules.</string>
     <!-- App name - NEUTRAL, no VPN/proxy keywords -->
     <string name="app_name">NetGuard</string>
 
@@ -121,7 +125,7 @@
     <string name="telemost_streams_explain">Each room is a separate tunnel through your server. More rooms = more total speed — but only up to a point:\n• the phone connects to rooms one by one, so more rooms = a longer wait before it\'s usable;\n• each room loads the server\'s CPU — roughly 2-3 rooms per core. Above that the cores thrash and everything gets slower.\nStick close to the recommended number above.</string>
     <string name="telemost_capacity_unknown">Server capacity will be checked after the first connect</string>
     <string name="telemost_striping">Telemost striping (experimental)</string>
-    <string name="telemost_striping_desc">Split each connection across ALL Telemost rooms so one big download uses their combined speed. Needs the exit server updated. If downloads stall, turn this off.</string>
+    <string name="telemost_striping_desc">Split a connection across Telemost rooms. Requires a server with striping support. If striping channels do not respond during startup, whole connections use the same joined rooms. Turn this off if transfers stall during use.</string>
     <string name="auto_switch_throttle">Automatic server selection</string>
     <string name="auto_switch_throttle_desc">Changes server after a sustained outage across selected services with no incoming traffic. A single service failure keeps the VPN connected. Select at least two services; automatic health switches are at least 5 minutes apart.</string>
     <string name="save_logs_to_file">Save logs to file</string>
@@ -214,32 +218,32 @@
     <string name="srv_uptime">Uptime</string>
     <string name="srv_services">Services</string>
     <!-- Profiles tab -->
-    <string name="srv_create_profile">Создать профиль</string>
-    <string name="srv_creating_profile">Создаю профиль…</string>
-    <string name="srv_profiles_empty_title">Здесь будут твои VPN-профили</string>
-    <string name="srv_profiles_empty_body">Профиль — это набор ключей для подключения к серверу. После создания можно подключаться прямо из NetGuard или поделиться ссылкой — она подойдёт для любого клиента (Hiddify, v2rayNG, Streisand).</string>
-    <string name="srv_profiles_empty_how_title">Как это работает</string>
-    <string name="srv_profiles_empty_how_body">1. Жми «Создать профиль».\n2. Выбери протокол и под какой сайт маскироваться.\n3. Через 30 сек профиль готов — он автоматом появится на главном экране, можно подключаться.</string>
+    <string name="srv_create_profile">Create profile</string>
+    <string name="srv_creating_profile">Creating a profile…</string>
+    <string name="srv_profiles_empty_title">Your VPN profiles will appear here</string>
+    <string name="srv_profiles_empty_body">A profile contains the keys for connecting to a server. Once created, you can connect directly from NetGuard or share the link with another client, such as Hiddify, v2rayNG or Streisand.</string>
+    <string name="srv_profiles_empty_how_title">How it works</string>
+    <string name="srv_profiles_empty_how_body">1. Tap “Create profile”.\n2. Choose a protocol and a site to disguise the connection as.\n3. When the profile is ready, it automatically appears on the home screen and you can connect.</string>
 
     <!-- Create-profile bottom sheet -->
-    <string name="srv_create_profile_subtitle">Настроим за 30 секунд. Менять можно потом.</string>
-    <string name="srv_protocol">Протокол</string>
-    <string name="srv_proto_vless_title">VLESS + REALITY · рекомендуется</string>
-    <string name="srv_proto_vless_desc">＋ Быстрый, почти не грузит сервер и телефон. Маскируется под крупный сайт.\n－ Не работает в «режиме БС», когда оператор режет по IP-адресам.\nПодходит для NetGuard, Hiddify, v2rayNG, Streisand.</string>
-    <string name="srv_proto_telemost_title">Видеоконференции (Telemost)</string>
-    <string name="srv_proto_telemost_desc">＋ Работает даже в «режиме БС», когда обычный VPN заблокирован.\n－ Медленнее VLESS и заметно сильнее грузит сервер и телефон.\nПрячет трафик внутри настоящей Telemost-конференции. Только NetGuard.</string>
-    <string name="srv_sni_title">Под какой сайт маскироваться</string>
-    <string name="srv_sni_help">Выбери крупный сайт, который точно не блокируется. Реалити-маска заставит провайдера думать, что ты подключаешься к нему.</string>
-    <string name="srv_sni_help_geo">Если сервер за границей — лучше международный сайт (Cloudflare/Microsoft). Российский SNI на зарубежный VPS провайдер режет на лету.</string>
-    <string name="srv_sni_custom">Свой…</string>
-    <string name="srv_sni_custom_hint">Домен, например vk.com</string>
-    <string name="srv_profile_name_hint">Название профиля (необязательно)</string>
+    <string name="srv_create_profile_subtitle">Set up in 30 seconds. You can change it later.</string>
+    <string name="srv_protocol">Protocol</string>
+    <string name="srv_proto_vless_title">VLESS + REALITY · recommended</string>
+    <string name="srv_proto_vless_desc">＋ Fast, with low server and phone resource use. Disguises the connection as a major site.\n－ Does not work in allowlist mode when the carrier blocks by IP address.\nWorks with NetGuard, Hiddify, v2rayNG and Streisand.</string>
+    <string name="srv_proto_telemost_title">Video conferencing (Telemost)</string>
+    <string name="srv_proto_telemost_desc">＋ Can work in allowlist mode when ordinary VPN connections are blocked.\n－ Slower than VLESS and uses significantly more server and phone resources.\nCarries traffic inside a real Telemost conference. NetGuard only.</string>
+    <string name="srv_sni_title">Disguise the connection as a site</string>
+    <string name="srv_sni_help">Choose a major site that is not blocked. The REALITY disguise makes the connection look like traffic to that site.</string>
+    <string name="srv_sni_help_geo">For a server abroad, prefer an international site such as Cloudflare or Microsoft. A Russian SNI on an overseas VPS may be blocked by your provider.</string>
+    <string name="srv_sni_custom">Custom…</string>
+    <string name="srv_sni_custom_hint">Domain, for example vk.com</string>
+    <string name="srv_profile_name_hint">Profile name (optional)</string>
 
     <!-- Profile-created success card -->
-    <string name="srv_profile_ready_title">Профиль готов</string>
-    <string name="srv_profile_ready_body">Ссылка добавлена в раздел «Серверы» — можешь подключаться прямо из NetGuard.\n\nЕсли хочешь подключаться из другого приложения (Hiddify, v2rayNG, Streisand, NekoBox) — просто скопируй ссылку и вставь в это приложение.</string>
-    <string name="srv_profile_ready_copy">Скопировать ссылку</string>
-    <string name="srv_profile_ready_close">Готово</string>
+    <string name="srv_profile_ready_title">Profile ready</string>
+    <string name="srv_profile_ready_body">The link has been added to Servers. You can connect directly from NetGuard.\n\nTo use another app, such as Hiddify, v2rayNG, Streisand or NekoBox, copy the link and paste it into that app.</string>
+    <string name="srv_profile_ready_copy">Copy link</string>
+    <string name="srv_profile_ready_close">Done</string>
     <!-- Rules tab -->
     <string name="srv_no_rules">No bypass rules</string>
     <string name="srv_upstreams">Upstream proxies</string>
@@ -357,7 +361,7 @@
     <string name="onb_mode_global">Global VPN</string>
     <string name="onb_mode_global_desc">All apps go through VPN. Standard mode.</string>
     <string name="onb_mode_trigger">Trigger mode (recommended)</string>
-    <string name="onb_mode_trigger_desc">⚠ ONLY the apps in your trigger list go through VPN - the tunnel auto-activates when you open one and drops when you close it. Everything else (banking, maps, browser) stays on your normal connection and never uses VPN.</string>
+    <string name="onb_mode_trigger_desc">The VPN starts automatically when a selected app opens. Your routing settings determine where traffic goes. You can change the app list and what happens when an app closes later.</string>
     <string name="onb_mode_perapp">Per-App VPN</string>
     <string name="onb_mode_perapp_desc">Manually whitelist or blacklist apps for the VPN.</string>
     <string name="onb_mode_skip">Decide later</string>
@@ -482,7 +486,7 @@
     <string name="speed_test_desc">Speed test button on home screen</string>
     <string name="speed_test">Speed Test</string>
     <string name="auto_connect_wifi">Auto-connect on WiFi</string>
-    <string name="auto_connect_wifi_desc">Connect VPN on untrusted WiFi + Evil Twin protection</string>
+    <string name="auto_connect_wifi_desc">Connect VPN on untrusted Wi-Fi. Network details hidden by Android are treated as untrusted too. Requires prior VPN permission.</string>
     <string name="trusted_wifi">Trusted WiFi Networks</string>
     <string name="add_current_wifi">Add current WiFi</string>
     <string name="location_needed_for_wifi">Location permission is needed to read WiFi name</string>
@@ -526,4 +530,15 @@
     <string name="subscription_network_error">Could not download the subscription. Check the connection or try another VPN server.</string>
     <string name="subscription_format_error">The server responded but returned no supported profiles.</string>
     <string name="subscription_size_error">The subscription response exceeds 2 MB.</string>
+    <string name="add_wb_stream">WB Stream</string>
+    <string name="wb_stream_room_hint">https://stream.wb.ru/room/…</string>
+    <string name="wb_stream_room_help">Paste a WB Stream room link with an active bypass server. An ordinary video meeting does not provide Internet access. You can paste up to 12 room links, one per line.</string>
+    <string name="wb_stream_invalid_room">Enter a valid WB Stream room link (up to 12 rooms).</string>
+    <string name="relay_test_hint">Connect this profile, then use the speed test on Home to check traffic through the room.</string>
+    <string name="srv_proto_wb_title">Video meetings (WB Stream)</string>
+    <string name="srv_proto_wb_desc">Create a meeting in WB Stream inside the app. NetGuard connects your server and saves the profile. Sign in to WB, then join without camera or microphone.</string>
+    <!-- This experimental feature has RU and English text; other locales use English. -->
+    <string name="local_dpi_enable" tools:ignore="MissingTranslation">Adaptive local DPI bypass</string>
+    <string name="local_dpi_desc" tools:ignore="MissingTranslation">In Auto mode, test two TLS record strategies when direct HTTPS fails. Use only after two complete test downloads. Always-VPN apps stay on VPN; active connections stay open. Test downloads use mobile data too. Turn off to use ordinary routes for new connections.</string>
+    <string name="route_diagnostics" tools:ignore="MissingTranslation">Bypass diagnostics</string>
 </resources>

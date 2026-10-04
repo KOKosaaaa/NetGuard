@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">SSH sunucusunu doğrulayın</string>
+    <string name="ssh_trust_message">Devam etmeden önce bu parmak izini sunucu konsoluyla karşılaştırın. SSH parolası henüz gönderilmedi.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Bu anahtara güven</string>
+    <string name="ssh_trust_changed">SSH sunucu anahtarı değişti. Bağlantı engellendi; sunucunun kimliğini doğrulayın.</string>
+    <string name="ssh_trust_rejected">SSH sunucu anahtarı onaylanmadı. SSH parolası gönderilmedi.</string>
+</resources>

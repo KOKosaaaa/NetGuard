@@ -19,11 +19,26 @@ internal class AdaptiveSiteProxy(
     private val contextKey: () -> String,
     private val loadCache: () -> String? = { null },
     private val saveCache: (String) -> Unit = {},
+    private val forceVpn: (AppConnection?) -> Boolean = { false },
+    private val automatic: Boolean = true,
+    private val localDpi: () -> Boolean = { false },
+    private val diagnostics: RouteDiagnostics? = null,
+    private val observeSource: (String?) -> Unit = {},
     private val routeAllowed: (SocksDestination, SiteOrigin) -> Boolean = { destination, _ ->
         !AddressValidator.isPrivateOrReserved(destination.host)
     },
     private val now: () -> Long = System::currentTimeMillis
 ) : AutoCloseable {
+    private val diagnosticSession = diagnostics?.begin(automatic)
+    @Volatile private var diagnosticContext = diagnosticSession
+    private var diagnosticKey: String? = null
+    @Synchronized private fun observeNetwork(key: String): RouteDiagnostics.Token? {
+        if (diagnostics != null && diagnosticKey != key) {
+            diagnosticKey = key
+            diagnosticContext = diagnosticSession?.let { diagnostics.network(it) }
+        }
+        return diagnosticContext
+    }
     private val running = AtomicBoolean(true)
     private val dirty = AtomicBoolean(false)
     private val listener = ServerSocketChannel.open()
@@ -35,7 +50,7 @@ internal class AdaptiveSiteProxy(
         .apply { removeOnCancelPolicy = true }
     private val deadlines = ScheduledThreadPoolExecutor(1) { r -> Thread(r, "site-accept-timeout").apply { isDaemon = true } }
         .apply { removeOnCancelPolicy = true }
-    private data class State(val key: String, val policy: SiteRoutingPolicy, val chooser: SiteRouteChooser)
+    private data class State(val key: String, val policy: SiteRoutingPolicy, val chooser: SiteRouteChooser, val token: RouteDiagnostics.Token?)
     private var state: State? = null
     val endpoint: LocalSocks
     private val thread: Thread
@@ -43,34 +58,43 @@ internal class AdaptiveSiteProxy(
     init {
         try {
             listener.bind(InetSocketAddress("127.0.0.1", 0), 128)
-            endpoint = LocalSocks((listener.localAddress as InetSocketAddress).port, UUID.randomUUID().toString(), UUID.randomUUID().toString())
+            endpoint = LocalSocks((listener.localAddress as InetSocketAddress).port, "ngsrc-" + UUID.randomUUID().toString(), UUID.randomUUID().toString())
             thread = Thread(::accept, "site-accept").apply { isDaemon = true; start() }
             maintenance.scheduleWithFixedDelay({
                 runCatching { synchronized(this) { if (dirty.getAndSet(false)) state?.let { saveCache(it.policy.export()) } } }
             }, 2, 2, TimeUnit.SECONDS)
             maintenance.scheduleWithFixedDelay({
-                runCatching {
-                    val s = current()
-                    // Failed probes retry on demand, not continuously in the background.
-                    s.policy.expired().firstOrNull { it.direct.quality > 0 || it.vpn.quality > 0 }?.let {
-                        s.chooser.refresh(it.origin, it.origin.host)
-                    }
-                }
+                runCatching { maintainRoutes() }
             }, 60, 60, TimeUnit.SECONDS)
         } catch (e: Exception) {
             running.set(false); listener.close(); workers.shutdownNow(); maintenance.shutdownNow(); deadlines.shutdownNow()
-            relay.close(); udp.close(); transport.close(); throw e
+            relay.close(); udp.close(); transport.close(); diagnosticSession?.let { diagnostics?.stop(it) }; throw e
+        }
+    }
+
+    internal fun maintainRoutes() {
+        if (!automatic || !running.get()) return
+        val s = current()
+        // Failed probes retry on demand, not continuously in the background.
+        s.policy.expired().firstOrNull { it.direct.quality > 0 || it.vpn.quality > 0 }?.let {
+            s.chooser.refresh(it.origin, it.origin.host)
         }
     }
 
     @Synchronized private fun current(): State {
         check(running.get())
         val key = contextKey()
-        state?.takeIf { it.key == key }?.let { return it }
+        observeNetwork(key)
+        state?.takeIf { it.key == key }?.let { old ->
+            // A -> B (only ordinary/forced flows) -> A can reuse the route policy,
+            // but new observations belong to the latest network visit.
+            old.chooser.updateDiagnosticToken(diagnosticContext)
+            return old.copy(token = diagnosticContext).also { state = it }
+        }
         state?.let { runCatching { saveCache(it.policy.export()) }; it.chooser.close() }
         val policy = SiteRoutingPolicy(key, now) { dirty.set(true) }
         runCatching { policy.restore(loadCache()) }
-        return State(key, policy, SiteRouteChooser(policy, transport)).also { state = it }
+        return State(key, policy, SiteRouteChooser(policy, transport, localDpi, diagnostics, diagnosticContext) { running.get() && contextKey() == key }, diagnosticContext).also { state = it }
     }
 
     private fun accept() {
@@ -95,7 +119,7 @@ internal class AdaptiveSiteProxy(
         }
     }
 
-    private fun authenticate(client: SocketChannel): DataInputStream {
+    private fun authenticate(client: SocketChannel): Pair<DataInputStream, AppConnection?> {
         val input = DataInputStream(client.socket().getInputStream())
         val output = client.socket().getOutputStream()
         if (input.readUnsignedByte() != 5) throw IOException("SOCKS version")
@@ -105,20 +129,25 @@ internal class AdaptiveSiteProxy(
         if (input.readUnsignedByte() != 1) throw IOException("SOCKS auth version")
         val user = ByteArray(input.readUnsignedByte()).also { input.readFully(it) }
         val pass = ByteArray(input.readUnsignedByte()).also { input.readFully(it) }
-        val ok = MessageDigest.isEqual(user, endpoint.user.toByteArray()) && MessageDigest.isEqual(pass, endpoint.password.toByteArray())
+        val presented = user.toString(Charsets.US_ASCII).split('|', limit = 2)
+        val ok = MessageDigest.isEqual(presented[0].toByteArray(), endpoint.user.toByteArray()) && MessageDigest.isEqual(pass, endpoint.password.toByteArray())
         output.write(byteArrayOf(1, if (ok) 0 else 1))
         if (!ok) throw IOException("SOCKS authentication")
-        return input
+        observeSource(presented.getOrNull(1))
+        return input to presented.getOrNull(1)?.let(AppConnection::parse)
     }
 
     private fun handle(client: SocketChannel, scope: SocketScope, expiry: ScheduledFuture<*>) {
         var lease: Triple<SiteRoutingPolicy, SiteOrigin, SitePath>? = null
         var recheck: (() -> Unit)? = null
         var association: SiteUdpRelay.Session? = null
+        var observedFlow: RouteDiagnostics.Flow? = null
         try {
             client.socket().tcpNoDelay = true
             client.socket().soTimeout = 4000
-            val input = authenticate(client)
+            val (input, connection) = authenticate(client)
+            if (diagnostics != null) runCatching { observeNetwork(contextKey()) }
+            val vpnOnly = forceVpn(connection)
             if (input.readUnsignedByte() != 5) throw IOException("SOCKS request version")
             val command = input.readUnsignedByte()
             if (input.readUnsignedByte() != 0) throw IOException("SOCKS reserved byte")
@@ -126,13 +155,14 @@ internal class AdaptiveSiteProxy(
             val output = client.socket().getOutputStream()
             if (command == 3) {
                 // The upstream UDP endpoint belongs to the app-owned SOCKS server.
-                val (server, bound) = transport.viaProxy(SocksDestination("0.0.0.0", 0), scope, transport.normal, 3)
+                val (server, bound) = transport.viaProxy(SocksDestination("0.0.0.0", 0), scope, if (vpnOnly) transport.vpn else transport.normal, 3)
                 val session = udp.associate(bound)
                 association = session
                 output.write(SocksWire.reply(session.port))
                 expiry.cancel(false)
                 scope.detach(client.socket()); scope.detach(server.socket())
-                relay.attach(client, server, control = true) { session.close() }
+                val controlFlow = diagnosticContext?.let { diagnostics?.flow(it, null, if (vpnOnly) "VPN_UDP_CONTROL" else "RULES_UDP_CONTROL", "UDP") }
+                relay.attach(client, server, control = true) { controlFlow?.close(it); session.close() }
                 association = null
                 return
             }
@@ -140,38 +170,65 @@ internal class AdaptiveSiteProxy(
             // A SOCKS success permits hev to send the already buffered ClientHello.
             // Do not emit any of the user's bytes upstream until the route is fixed.
             output.write(SocksWire.reply())
-            val first = if (destination.port == 53 || destination.port == 853) byteArrayOf() else peek(client, input)
+            val first = if (vpnOnly || !automatic || destination.port == 53 || destination.port == 853) byteArrayOf() else peek(client, input)
             val hello = WebHello.inspect(first)
+            var outgoing = first
             val origin = (hello as? WebHello.Result.Site)?.let { SiteOrigin(it.host, destination.port, it.tls) }
-            val server = if (origin != null && routeAllowed(destination, origin)) {
+            var observedPath = if (vpnOnly) "VPN" else "RULES"
+            var reason = when { vpnOnly -> "ONLY_VPN"; !automatic -> "AUTO_OFF"; origin == null -> "OPAQUE"; else -> "EXCLUDED" }
+            var token = diagnosticContext
+            val server = if (vpnOnly) transport.viaProxy(destination, scope, transport.vpn).first
+            else if (automatic && origin != null && routeAllowed(destination, origin)) {
                 val s = current()
+                token = s.token
                 val record = s.policy.forConnection(origin, destination.host)
+                if (record.checkedAt > 0) token?.let { diagnostics?.decision(it, record, true) }
                 val path = s.policy.pin(record)
                 lease = Triple(s.policy, origin, path)
                 recheck = { s.chooser.refresh(origin, destination.host); Unit }
-                // Probe on separate, bounded workers. Neither a slow HEAD nor
+                // Probe on separate, bounded workers. Neither a slow GET nor
                 // a full probe queue may hold the user's first ClientHello/POST.
                 s.chooser.refresh(origin, destination.host)
-                try { transport.connect(destination, path, scope) }
-                catch (e: Exception) { s.policy.connectionFailed(origin, path); recheck?.invoke(); throw e }
+                var actualPath = path
+                reason = "FIRST_OR_CACHE"
+                if (path in LocalDpi.paths) {
+                    val modified = if (localDpi()) LocalDpi.transform(first, path) else null
+                    // Real application hellos may differ from the probe (ECH/PSK/PQ).
+                    // Choose VPN before sending any bytes when the strategy cannot apply.
+                    if (modified == null) {
+                        actualPath = SitePath.VPN
+                        reason = if (localDpi()) "UNSUPPORTED_HELLO" else "DPI_DISABLED"
+                    } else outgoing = modified
+                }
+                observedPath = actualPath.name
+                try { transport.connect(destination, actualPath, scope) }
+                catch (e: Exception) {
+                    token?.let { diagnostics?.connectFailed(it, origin, actualPath) }
+                    s.policy.connectionFailed(origin, path); recheck?.invoke(); throw e
+                }
             } else transport.viaProxy(destination, scope, transport.normal).first
+            observedFlow = token?.let { diagnostics?.flow(it, origin, observedPath, reason) }
+            val traffic = observedFlow
             val pinned = lease
             val retryCheck = recheck
             expiry.cancel(false)
             scope.detach(client.socket()); scope.detach(server.socket())
-            relay.attach(client, server, first) { failed -> pinned?.let {
+            relay.attach(client, server, outgoing, progress = traffic?.let { { up, down -> it.progress(up, down) } }) { failed ->
+                traffic?.close(failed)
+                pinned?.let {
                 // SOCKS can acknowledge CONNECT before its remote dial finishes.
                 // A remote close without any response also invalidates the cache.
                 if (failed) it.first.connectionFailed(it.second, it.third)
                 it.first.release(it.second)
                 if (failed) retryCheck?.invoke()
             } }
+            observedFlow = null
             lease = null
         } catch (_: Exception) {
             // A failed connection is closed, never replayed on another path. The
             // client can retry; the next attempt rechecks a failed cached route.
         } finally {
-            expiry.cancel(false); scope.close(); association?.close()
+            expiry.cancel(false); scope.close(); association?.close(); observedFlow?.close(true)
             lease?.let { it.first.release(it.second) }
         }
     }
@@ -199,6 +256,7 @@ internal class AdaptiveSiteProxy(
             state?.let { it.chooser.close(); runCatching { saveCache(it.policy.export()) } }
         }
         transport.close(); relay.close(); udp.close()
+        diagnosticSession?.let { diagnostics?.stop(it) }
         if (Thread.currentThread() !== thread) runCatching { thread.join(1000) }
     }
 }

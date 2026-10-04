@@ -7,6 +7,7 @@ import android.util.AttributeSet
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.LinearInterpolator
+import com.smarttools.netguard.R
 import com.smarttools.netguard.util.GeoLookup
 
 class ConnectionMapView @JvmOverloads constructor(
@@ -19,12 +20,16 @@ class ConnectionMapView @JvmOverloads constructor(
     private var serverLocation: GeoLookup.LatLon? = null
     private var serverLabel: String? = null
     private var isConnected = false
+    /** Transparent overview; motion runs only while the connected map is visible. */
+    var overview = false
+        set(value) { field = value; updateMotion(); invalidate() }
     private var lineProgress = 0f
     private var pulsePhase = 0f
     private var dashPhase = 0f
     private var lineAnimator: ValueAnimator? = null
     private var pulseAnimator: ValueAnimator? = null
     private var dashAnimator: ValueAnimator? = null
+    private var motionAllowed = true
 
     private val dp = resources.displayMetrics.density
     private val primaryColor: Int
@@ -38,12 +43,9 @@ class ConnectionMapView @JvmOverloads constructor(
     private val dotCenterColor: Int
 
     init {
-        val ta = context.obtainStyledAttributes(intArrayOf(
-            com.google.android.material.R.attr.colorPrimary,
-            com.google.android.material.R.attr.colorSurface,
-        ))
-        primaryColor = ta.getColor(0, Color.parseColor("#7C4DFF"))
-        surfaceColor = ta.getColor(1, Color.BLACK)
+        val ta = context.obtainStyledAttributes(com.smarttools.netguard.R.styleable.ThemePalette)
+        primaryColor = ta.getColor(com.smarttools.netguard.R.styleable.ThemePalette_colorPrimary, Color.parseColor("#7C4DFF"))
+        surfaceColor = ta.getColor(com.smarttools.netguard.R.styleable.ThemePalette_colorSurface, Color.BLACK)
         ta.recycle()
 
         val luminance = (0.299 * Color.red(surfaceColor) +
@@ -75,9 +77,18 @@ class ConnectionMapView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
-    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    private val labelPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = AppTypography.body(context)
         textAlign = Paint.Align.CENTER
+    }
+    private var measuredLabelSource: String? = null
+    private var measuredLabelLimit = -1f
+    private var measuredLabel = ""
+    private var measuredLabelWidth = 0f
+    fun setTerminalTypography(terminal: Boolean) {
+        labelPaint.typeface = if (terminal) AppTypography.mono(context) else AppTypography.body(context)
+        measuredLabelSource = null
+        invalidate()
     }
     private val labelBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val gridLinePaint = Paint().apply {
@@ -98,6 +109,7 @@ class ConnectionMapView @JvmOverloads constructor(
 
     // Optional map image (from drawable resource)
     private var mapBitmap: Bitmap? = null
+    private var mapVector: android.graphics.drawable.Drawable? = null
     private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
         if (isLightTheme) {
             // Grayscale + invert: dark JPG becomes light-themed
@@ -108,6 +120,18 @@ class ConnectionMapView @JvmOverloads constructor(
                 0f, 0f, 0f, 1f, 0f
             )))
         }
+    }
+    private val overviewBitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        val ink=if(isLightTheme)30f else 238f
+        // Convert the existing dark atlas to translucent land, preserving the
+        // shared green/neutral backdrop rather than drawing a black rectangle.
+        colorFilter=ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+            0f,0f,0f,0f,ink,
+            0f,0f,0f,0f,ink,
+            0f,0f,0f,0f,ink,
+            1.196f,2.348f,.456f,0f,-56f
+        )))
+        alpha=160
     }
 
     // Cached continent paths (fallback when no image)
@@ -121,13 +145,25 @@ class ConnectionMapView @JvmOverloads constructor(
      * Image should be an equirectangular world map (dark themed, transparent or dark ocean).
      */
     fun setMapImage(resId: Int) {
+        mapVector = null
         mapBitmap = android.graphics.BitmapFactory.decodeResource(resources, resId)
+        invalidate()
+    }
+
+    /** Geographic paths on transparent ocean; no JPEG noise or brightness mask. */
+    fun setVectorMap(resId: Int) {
+        mapBitmap = null
+        mapVector = requireNotNull(androidx.appcompat.content.res.AppCompatResources.getDrawable(context, resId)).mutate().apply {
+            setTint(if (isLightTheme) Color.rgb(30, 30, 30) else Color.rgb(238, 238, 238))
+            alpha = 140
+        }
         invalidate()
     }
 
     fun setLocations(user: GeoLookup.LatLon, server: GeoLookup.LatLon?) {
         userLocation = user
         serverLocation = server
+        updateMotion()
         invalidate()
     }
 
@@ -136,47 +172,65 @@ class ConnectionMapView @JvmOverloads constructor(
         invalidate()
     }
 
-    fun setConnected(connected: Boolean) {
-        if (connected && !isConnected) {
-            lineAnimator?.cancel()
-            lineAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+    fun setConnected(connected: Boolean, animate: Boolean = true) {
+        val entering = connected && !isConnected
+        isConnected = connected
+        motionAllowed = animate
+        if (entering) lineProgress = 0f
+        if (!connected) { lineProgress = 0f; dashPhase = 0f; pulsePhase = 0f }
+        updateMotion()
+        invalidate()
+    }
+
+    private fun stopMotion() {
+        lineAnimator?.cancel(); pulseAnimator?.cancel(); dashAnimator?.cancel()
+        lineAnimator = null; pulseAnimator = null; dashAnimator = null
+    }
+
+    private fun updateMotion() {
+        val visible = isAttachedToWindow && windowVisibility == VISIBLE && isShown
+        val run = isConnected && visible && userLocation != null && serverLocation != null &&
+            motionAllowed && ValueAnimator.areAnimatorsEnabled()
+        if (!run) {
+            stopMotion()
+            lineProgress = if (isConnected) 1f else 0f
+            return
+        }
+        if (dashAnimator != null) return
+        if (lineProgress < 1f) {
+            lineAnimator = ValueAnimator.ofFloat(lineProgress, 1f).apply {
                 duration = 800
                 interpolator = AccelerateDecelerateInterpolator()
                 addUpdateListener { lineProgress = it.animatedValue as Float; invalidate() }
                 start()
             }
-            pulseAnimator?.cancel()
-            pulseAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 2000
-                repeatCount = ValueAnimator.INFINITE
-                addUpdateListener { pulsePhase = it.animatedValue as Float; invalidate() }
-                start()
-            }
-            // Dash flow: one full pattern cycle = 5+3 dp. Negative phase → dashes move user→server
-            dashAnimator?.cancel()
-            dashAnimator = ValueAnimator.ofFloat(0f, 8f * dp).apply {
-                duration = 600
-                repeatCount = ValueAnimator.INFINITE
-                interpolator = LinearInterpolator()
-                addUpdateListener { dashPhase = -(it.animatedValue as Float); invalidate() }
-                start()
-            }
-        } else if (!connected) {
-            lineAnimator?.cancel()
-            pulseAnimator?.cancel()
-            dashAnimator?.cancel()
-            lineProgress = 0f
-            pulsePhase = 0f
-            dashPhase = 0f
         }
-        isConnected = connected
-        invalidate()
+        // Arc path starts at the user. A negative phase moves dashes towards the server.
+        dashAnimator = ValueAnimator.ofFloat(0f, 8f * dp).apply {
+            duration = 900
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener { dashPhase = -(it.animatedValue as Float); invalidate() }
+            start()
+        }
+    }
+
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); updateMotion() }
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        updateMotion()
+    }
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        updateMotion()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val w = width.toFloat()
-        val h = height.toFloat()
+        val h = if(overview)height.toFloat().coerceAtMost(w*.48f) else height.toFloat()
+        if(w<12*dp || h<12*dp)return
+        if(overview) {canvas.save();canvas.translate(0f,(height-h)/2f)}
         val pad = 4f * dp
         val mapW = w - pad * 2
         val mapH = h - pad * 2
@@ -189,10 +243,18 @@ class ConnectionMapView @JvmOverloads constructor(
         clipPath.addRoundRect(reuseRect, cr, cr, Path.Direction.CW)
         canvas.save()
         canvas.clipPath(clipPath)
-        canvas.drawRect(0f, 0f, w, h, bgPaint)
+        if (!overview) canvas.drawRect(0f, 0f, w, h, bgPaint)
 
         // Map image (if set) takes priority over programmatic drawing
-        if (mapBitmap != null) {
+        if (mapVector != null) {
+            val drawable = mapVector!!
+            canvas.save()
+            canvas.translate(pad, pad)
+            canvas.scale(mapW / 1024f, mapH / 430f)
+            drawable.setBounds(0, 0, 1024, 430)
+            drawable.draw(canvas)
+            canvas.restore()
+        } else if (mapBitmap != null) {
             drawMapBitmap(canvas, pad, mapW, mapH)
         } else {
             // Subtle grid lines
@@ -275,12 +337,21 @@ class ConnectionMapView @JvmOverloads constructor(
 
             // Server label
             serverLabel?.let { label ->
-                val cleanLabel = label.replace(LABEL_PREFIX_RE, "").trim()
-                if (cleanLabel.isEmpty()) return@let
                 labelPaint.textSize = 10f * dp
                 labelPaint.color = Color.WHITE
-                val textW = labelPaint.measureText(cleanLabel)
-                val lx = sx.coerceIn(pad + textW / 2 + 6 * dp, w - pad - textW / 2 - 6 * dp)
+                val limit = (w - 2 * pad - 12 * dp).coerceAtLeast(0f)
+                if (measuredLabelSource != label || measuredLabelLimit != limit) {
+                    measuredLabelSource = label
+                    measuredLabelLimit = limit
+                    measuredLabel = android.text.TextUtils.ellipsize(label.replace(LABEL_PREFIX_RE, "").trim(),
+                        labelPaint, limit, android.text.TextUtils.TruncateAt.END).toString()
+                    measuredLabelWidth = labelPaint.measureText(measuredLabel)
+                }
+                if (measuredLabel.isEmpty()) return@let
+                val textW = measuredLabelWidth
+                val minX = pad + textW / 2 + 6 * dp
+                val maxX = (w - pad - textW / 2 - 6 * dp).coerceAtLeast(minX)
+                val lx = sx.coerceIn(minX, maxX)
                 val ly = (sy + 14f * dp).coerceAtMost(h - pad - 6 * dp)
 
                 labelBgPaint.color = Color.BLACK
@@ -289,7 +360,7 @@ class ConnectionMapView @JvmOverloads constructor(
                 canvas.drawRoundRect(labelRect, 3 * dp, 3 * dp, labelBgPaint)
 
                 labelPaint.alpha = (255 * lineProgress).toInt()
-                canvas.drawText(cleanLabel, lx, ly, labelPaint)
+                canvas.drawText(measuredLabel, lx, ly, labelPaint)
             }
         } else {
             // Disconnected — user dot
@@ -308,20 +379,36 @@ class ConnectionMapView @JvmOverloads constructor(
                 canvas.drawCircle(x, y, 1f * dp, dotPaint)
             }
         }
+        if (isConnected && serverXY == null) {
+            labelPaint.textSize = 11f * dp
+            labelPaint.color = primaryColor
+            labelPaint.alpha = 180
+            val message = android.text.TextUtils.ellipsize(
+                resources.getString(R.string.map_server_location_unknown), labelPaint,
+                (mapW - 8f * dp).coerceAtLeast(0f), android.text.TextUtils.TruncateAt.END
+            ).toString()
+            // Align.CENTER already offsets half the text width. Use the view's
+            // center directly, so the beginning cannot disappear beyond the edge.
+            canvas.drawText(message, w / 2f, pad + mapH - 4f * dp, labelPaint)
+        } else if (isConnected && userXY == null && serverXY != null) {
+            dotPaint.color = accentGreen; dotPaint.alpha = 255
+            canvas.drawCircle(serverXY.first, serverXY.second, 4f * dp, dotPaint)
+        }
         canvas.restore()
+        if(overview)canvas.restore()
     }
 
     private fun drawMapBitmap(canvas: Canvas, pad: Float, mapW: Float, mapH: Float) {
         val bmp = mapBitmap ?: return
         bmpSrc.set(0, 0, bmp.width, bmp.height)
         bmpDst.set(pad, pad, pad + mapW, pad + mapH)
-        canvas.drawBitmap(bmp, bmpSrc, bmpDst, bitmapPaint)
+        canvas.drawBitmap(bmp, bmpSrc, bmpDst, if(overview)overviewBitmapPaint else bitmapPaint)
     }
 
     private fun toXY(loc: GeoLookup.LatLon, pad: Float, mapW: Float, mapH: Float): Pair<Float, Float> {
         // Calibrated for the specific map image via pixel analysis
-        val latN = if (mapBitmap != null) MAP_LAT_NORTH else 90.0
-        val latS = if (mapBitmap != null) MAP_LAT_SOUTH else -90.0
+        val latN = if (mapBitmap != null || mapVector != null) MAP_LAT_NORTH else 90.0
+        val latS = if (mapBitmap != null || mapVector != null) MAP_LAT_SOUTH else -90.0
         val x = pad + ((loc.lon + 180.0) / 360.0 * mapW).toFloat()
         val y = pad + ((latN - loc.lat) / (latN - latS) * mapH).toFloat()
         return x to y
@@ -478,12 +565,7 @@ class ConnectionMapView @JvmOverloads constructor(
     }
 
     override fun onDetachedFromWindow() {
-        lineAnimator?.cancel()
-        pulseAnimator?.cancel()
-        dashAnimator?.cancel()
-        lineAnimator = null
-        pulseAnimator = null
-        dashAnimator = null
+        stopMotion()
         super.onDetachedFromWindow()
     }
 }

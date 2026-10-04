@@ -172,7 +172,7 @@
     <string name="speed_test_desc">主屏幕上的速度测试按钮</string>
     <string name="speed_test">速度测试</string>
     <string name="auto_connect_wifi">WiFi自动连接</string>
-    <string name="auto_connect_wifi_desc">在未知WiFi上启用VPN + Evil Twin防护</string>
+    <string name="auto_connect_wifi_desc">在不受信任的 Wi-Fi 上连接 VPN。Android 隐藏网络信息时，也将其视为不受信任。需要事先授予 VPN 权限。</string>
     <string name="trusted_wifi">受信任的WiFi网络</string>
     <string name="add_current_wifi">添加当前WiFi</string>
     <string name="location_needed_for_wifi">读取WiFi名称需要位置权限</string>

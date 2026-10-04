@@ -172,7 +172,7 @@
     <string name="speed_test_desc">홈 화면에 속도 테스트 버튼</string>
     <string name="speed_test">속도 테스트</string>
     <string name="auto_connect_wifi">WiFi 자동 연결</string>
-    <string name="auto_connect_wifi_desc">알 수 없는 WiFi에서 VPN + Evil Twin 보호</string>
+    <string name="auto_connect_wifi_desc">신뢰할 수 없는 Wi-Fi에서 VPN에 연결합니다. Android가 네트워크 정보를 숨긴 경우도 신뢰하지 않습니다. VPN 권한을 미리 허용해야 합니다.</string>
     <string name="trusted_wifi">신뢰할 수 있는 WiFi 네트워크</string>
     <string name="add_current_wifi">현재 WiFi 추가</string>
     <string name="location_needed_for_wifi">WiFi 이름을 읽으려면 위치 권한이 필요합니다</string>

@@ -31,9 +31,10 @@ func telemostUnit(i int) string {
 
 // TelemostInstanceStatus is one provisioned room + its live systemd state.
 type TelemostInstanceStatus struct {
-	Index  int    `json:"index"`
-	Room   string `json:"room"`
-	Active bool   `json:"active"`
+	Index      int    `json:"index"`
+	Room       string `json:"room"`
+	Active     bool   `json:"active"`
+	OwnerState string `json:"owner_state,omitempty"`
 }
 
 // TelemostRoomsResult is the GET /v1/telemost/rooms body.

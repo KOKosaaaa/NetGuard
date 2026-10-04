@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Verificar servidor SSH</string>
+    <string name="ssh_trust_message">Compare esta impressão digital com a consola do servidor antes de continuar. A palavra-passe SSH ainda não foi enviada.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Confiar nesta chave</string>
+    <string name="ssh_trust_changed">A chave do servidor SSH mudou. Ligação bloqueada; verifique a identidade do servidor.</string>
+    <string name="ssh_trust_rejected">A chave do servidor SSH não foi aprovada. A palavra-passe SSH não foi enviada.</string>
+</resources>

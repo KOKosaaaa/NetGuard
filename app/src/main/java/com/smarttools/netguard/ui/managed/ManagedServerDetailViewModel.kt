@@ -12,6 +12,7 @@ import com.smarttools.netguard.agent.AddProfileRequest
 import com.smarttools.netguard.agent.AgentApiClient
 import com.smarttools.netguard.agent.AgentApiError
 import com.smarttools.netguard.agent.AgentErrorMessages
+import com.smarttools.netguard.agent.confirmsRestartOf
 import com.smarttools.netguard.agent.FriendlyError
 import com.smarttools.netguard.agent.BypassOutbound
 import com.smarttools.netguard.agent.BypassRule
@@ -42,6 +43,8 @@ import kotlinx.coroutines.withContext
  * for the list cell — that path is unrelated to this fast-poll one.
  */
 class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(application) {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(getApplication<android.app.Application>(), id, *args)
+
 
     private val repo = ManagedServerRepository.get(application)
     private val chainRepo = com.smarttools.netguard.agent.ChainRepository.get(application)
@@ -73,6 +76,70 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private val _telemost = MutableStateFlow<com.smarttools.netguard.agent.TelemostRooms?>(null)
     val telemost: StateFlow<com.smarttools.netguard.agent.TelemostRooms?> = _telemost.asStateFlow()
 
+    private val _wbStream = MutableStateFlow<com.smarttools.netguard.agent.TelemostRooms?>(null)
+    val wbStream = _wbStream.asStateFlow()
+    fun refreshWbStream() {
+        if (!::client.isInitialized) return
+        viewModelScope.launch {
+            _wbStream.value = withContext(Dispatchers.IO) { runCatching { client.wbStreamRooms() }.getOrNull() }
+        }
+    }
+
+    fun updateWbStream(onDone: (Boolean, String) -> Unit) {
+        if (_busy.value || !::client.isInitialized) { onDone(false, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_1)); return }
+        val cli = client
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val count = withContext(Dispatchers.IO) {
+                    com.smarttools.netguard.agent.WbStreamUpdater.ensureTransport(cli, getApplication<App>().assets)
+                    val rooms = cli.wbStreamRooms().instances.map { it.room }.distinct()
+                    check(rooms.isNotEmpty()) { l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_2) }
+                    for (room in rooms) {
+                        val task = cli.deployWbStream(room, update = true)
+                        waitForTask(task.taskId, timeoutSec = 180, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_3))
+                    }
+                    _wbStream.value = cli.wbStreamRooms()
+                    rooms.size
+                }
+                onDone(true, l10n(com.smarttools.netguard.R.string.wb_update_complete, count))
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) { onDone(false, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_4)) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body) }
+            finally { _busy.value = false }
+        }
+    }
+
+    fun deleteWbStream(onDone: (Boolean, String) -> Unit) {
+        if (_busy.value || !::client.isInitialized) { onDone(false, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_5)); return }
+        val cli = client
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                withContext(Dispatchers.IO) {
+                    val app = getApplication<App>()
+                    com.smarttools.netguard.agent.WbStreamUpdater.ensureTransport(cli, app.assets)
+                    val rooms = cli.wbStreamRooms().instances.map { it.room }.toSet()
+                    for (room in rooms) {
+                    com.smarttools.netguard.agent.WbProfileDeletion.removeRoom(cli, room)
+                    // Remove only these rooms from imported composites, preserving
+                    // any other rooms and their profile settings.
+                    for (profile in app.profileRepository.getAll().filter { it.isWbStream }) {
+                        val old = com.smarttools.netguard.model.WbStreamLink.parse(profile.address).links
+                        val keep = old.filterNot { it == room }
+                        if (keep.isEmpty()) app.profileRepository.delete(profile)
+                        else if (keep.size != old.size) app.profileRepository.update(profile.copy(address = keep.joinToString("\n")))
+                    }
+                    }
+                    _wbStream.value = cli.wbStreamRooms()
+                }
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_6))
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) { onDone(false, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_7)) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body) }
+            finally { _busy.value = false; refreshWbStream() }
+        }
+    }
     private val _logs = MutableStateFlow("")
     val logs: StateFlow<String> = _logs.asStateFlow()
 
@@ -94,16 +161,16 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     val createStep: StateFlow<String?> = _createStep.asStateFlow()
 
     private fun translateStep(step: String): String = when (step) {
-        "detect" -> "Проверка сервера…"
-        "prereqs" -> "Установка зависимостей…"
-        "download_xray" -> "Загрузка xray…"
-        "extract_xray" -> "Распаковка…"
-        "geo_dat" -> "Загрузка гео-данных…"
-        "write_config" -> "Запись конфигурации…"
-        "systemd_unit", "systemd_start" -> "Запуск службы…"
-        "sysctl", "firewall" -> "Настройка системы…"
-        "healthcheck" -> "Проверка соединения…"
-        else -> "Настройка…"
+        "detect" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_8)
+        "prereqs" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_9)
+        "download_xray" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_10)
+        "extract_xray" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_11)
+        "geo_dat" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_12)
+        "write_config" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_13)
+        "systemd_unit", "systemd_start" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_14)
+        "sysctl", "firewall" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_15)
+        "healthcheck" -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_16)
+        else -> l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_17)
     }
 
     private val _toast = MutableStateFlow<String?>(null)
@@ -171,10 +238,10 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     client.restartService(name)
                     _status.value = client.status() // reflect fresh pid + since
                 }
-                post("$name перезапущен")
+                post(l10n(com.smarttools.netguard.R.string.service_restart_complete, name))
             } catch (e: Exception) {
                 Log.w(TAG, "restartService failed", e)
-                post(AgentErrorMessages.explain(e).body)
+                post(AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -191,10 +258,10 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     client.restartService(name)
                     _status.value = client.status()
                 }
-                onDone(true, "Сервис перезапущен.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_18))
             } catch (e: Exception) {
                 Log.w(TAG, "restartService failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -208,15 +275,15 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.scaleTelemost(targetCount)
-                    waitForTask(ack.taskId, timeoutSec = 120, op = "Изменение Telemost")
+                    waitForTask(ack.taskId, timeoutSec = 120, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_19))
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                     _telemost.value?.let { updateImportedTelemostProfile(it) }
                 }
-                onDone(true, "Готово.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_20))
             } catch (e: Exception) {
                 Log.w(TAG, "scaleTelemost(cb) failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -241,7 +308,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.uninstallTelemost()
-                    waitForTask(ack.taskId, timeoutSec = 60, op = "Удаление Telemost")
+                    waitForTask(ack.taskId, timeoutSec = 60, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_21))
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                     // Remove the imported Telemost profile(s) from the Servers
@@ -254,10 +321,10 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                         }
                         .forEach { app.profileRepository.delete(it) }
                 }
-                onDone(true, "Профиль Telemost удалён с сервера.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_22))
             } catch (e: Exception) {
                 Log.w(TAG, "uninstallTelemost failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -276,17 +343,17 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.scaleTelemost(targetCount)
-                    waitForTask(ack.taskId, timeoutSec = 120, op = "Изменение Telemost")
+                    waitForTask(ack.taskId, timeoutSec = 120, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_19))
                     _telemost.value = try { client.telemostRooms() } catch (_: Exception) { null }
                     _status.value = client.status()
                     _telemost.value?.let { updateImportedTelemostProfile(it) }
                 }
-                post(if (targetCount == 0) "Telemost остановлен"
-                    else getApplication<App>().resources.getQuantityString(
+                post(if (targetCount == 0) l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_23)
+                    else com.smarttools.netguard.util.LocalizedResources.context(getApplication<App>()).resources.getQuantityString(
                         com.smarttools.netguard.R.plurals.telemost_stream_count, targetCount, targetCount))
             } catch (e: Exception) {
                 Log.w(TAG, "scaleTelemost failed", e)
-                post(AgentErrorMessages.explain(e).body)
+                post(AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -305,13 +372,13 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.setupSwap()
-                    waitForTask(ack.taskId, timeoutSec = 90, op = "Файл подкачки")
+                    waitForTask(ack.taskId, timeoutSec = 90, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_24))
                     _status.value = client.status()
                 }
-                onDone(true, "Файл подкачки включён. Теперь сервер выдержит больше потоков Telemost.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_25))
             } catch (e: Exception) {
                 Log.w(TAG, "setupSwap failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -331,7 +398,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             } catch (e: Exception) {
                 Log.w(TAG, "addProfile failed", e)
                 _lastProfileError.value = ProfileFailure(
-                    error = AgentErrorMessages.explain(e),
+                    error = AgentErrorMessages.explain(e, getApplication<android.app.Application>()),
                     label = label,
                     port = port,
                     serverName = serverName,
@@ -357,7 +424,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             val notInstalled = e.code == "E_XRAY_ADD_PROFILE" ||
                 e.errorMessage.contains("not installed", ignoreCase = true)
             if (!notInstalled) throw e
-            post("Installing xray on server…")
+            post(l10n(com.smarttools.netguard.R.string.server_installing_xray))
             val ack = client.deployXray(
                 DeployXrayRequest(
                     firstInbound = InboundSpec(
@@ -368,7 +435,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     ),
                 ),
             )
-            waitForTask(ack.taskId, timeoutSec = 180, op = "Установка xray") { step ->
+            waitForTask(ack.taskId, timeoutSec = 180, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_26)) { step ->
                 _createStep.value = translateStep(step)
             }
             // After deploy, the first inbound is already in xray — pick
@@ -405,7 +472,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         }
         _profiles.value = client.inbounds()
         _lastCreatedUri.value = fixedUri
-        post("Профиль создан")
+        post(l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_27))
     }
 
     /**
@@ -418,11 +485,12 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
      * server's arch (reported by /status), upload it over HTTPS, then poll
      * /health until the restarted agent answers. No public hosting needed.
      */
-    fun updateAgent(onDone: (ok: Boolean, msg: String) -> Unit) {
+    fun updateAgent(onDone: (ok: Boolean, msg: String, error: com.smarttools.netguard.agent.FriendlyError?) -> Unit) {
         viewModelScope.launch {
             _busy.value = true
             try {
                 withContext(Dispatchers.IO) {
+                    val previous = client.health()
                     val arch = client.status().agentArch.ifEmpty { "amd64" }
                     val bytes = com.smarttools.netguard.agent.BundledAgent.read(getApplication<App>().assets, arch)
                     val sha = java.security.MessageDigest.getInstance("SHA-256")
@@ -434,15 +502,17 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     var back = false
                     while (System.currentTimeMillis() < deadline) {
                         kotlinx.coroutines.delay(2000)
-                        if (runCatching { client.health() }.getOrNull() != null) { back = true; break }
+                        if (runCatching { client.health() }.getOrNull()
+                                ?.confirmsRestartOf(previous) == true) { back = true; break }
                     }
                     _status.value = runCatching { client.status() }.getOrNull() ?: _status.value
-                    if (!back) throw IllegalStateException("агент не ответил после обновления")
+                    if (!back) throw IllegalStateException(l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_28))
                 }
-                onDone(true, "Агент обновлён и перезапущен.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_29), null)
             } catch (e: Exception) {
                 Log.w(TAG, "updateAgent failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                val error = AgentErrorMessages.explain(e, getApplication<android.app.Application>())
+                onDone(false, error.body, error)
             } finally {
                 _busy.value = false
             }
@@ -469,6 +539,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
         val app = getApplication<App>()
         val existing = app.profileRepository.getAll().firstOrNull {
             it.protocol == com.smarttools.netguard.model.Protocol.TELEMOST &&
+                !it.isWbStream &&
                 it.name.startsWith(server.name)
         }
         if (existing != null) {
@@ -489,7 +560,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     private suspend fun waitForTask(
         taskId: String,
         timeoutSec: Int,
-        op: String = "Операция",
+        op: String = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_30),
         onStep: ((String) -> Unit)? = null,
     ) {
         val deadline = System.currentTimeMillis() + timeoutSec * 1000L
@@ -538,7 +609,7 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
 
     fun deleteProfile(inboundId: String) = api {
         doDeleteProfile(inboundId)
-        post("Профиль удалён")
+        post(l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_31))
     }
 
     /** Delete a VLESS profile + report completion via callback, so the UI
@@ -548,10 +619,10 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             _busy.value = true
             try {
                 withContext(Dispatchers.IO) { doDeleteProfile(inboundId) }
-                onDone(true, "Профиль удалён с сервера.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_32))
             } catch (e: Exception) {
                 Log.w(TAG, "deleteProfile(cb) failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -575,25 +646,25 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     fun addUpstream(req: AddBypassOutboundRequest) = api {
         client.addBypassOutbound(req)
         _outbounds.value = client.listBypassOutbounds()
-        post("Upstream added")
+        post(l10n(com.smarttools.netguard.R.string.server_upstream_added))
     }
 
     fun deleteUpstream(id: String) = api {
         client.deleteBypassOutbound(id)
         _outbounds.value = client.listBypassOutbounds()
-        post("Upstream deleted")
+        post(l10n(com.smarttools.netguard.R.string.server_upstream_deleted))
     }
 
     fun addRule(req: AddBypassRuleRequest) = api {
         client.addBypassRule(req)
         _rules.value = client.listBypassRules()
-        post("Rule added")
+        post(l10n(com.smarttools.netguard.R.string.server_rule_added))
     }
 
     fun deleteRule(id: String) = api {
         client.deleteBypassRule(id)
         _rules.value = client.listBypassRules()
-        post("Rule deleted")
+        post(l10n(com.smarttools.netguard.R.string.server_rule_deleted))
     }
 
     /** Uninstall xray + report completion via callback so the UI can show a
@@ -605,14 +676,14 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     val ack = client.uninstallXray()
-                    waitForTask(ack.taskId, timeoutSec = 90, op = "Удаление xray")
+                    waitForTask(ack.taskId, timeoutSec = 90, op = l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_33))
                     _profiles.value = client.inbounds() // empty now
                     _status.value = client.status()
                 }
-                onDone(true, "xray и его настройки удалены с сервера.")
+                onDone(true, l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_34))
             } catch (e: Exception) {
                 Log.w(TAG, "uninstallXray failed", e)
-                onDone(false, AgentErrorMessages.explain(e).body)
+                onDone(false, AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body)
             } finally {
                 _busy.value = false
             }
@@ -659,18 +730,16 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
                     down
                 }
                 onDone(true, if (gone)
-                    "Сервер полностью очищен и удалён из приложения."
+                    l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_35)
                 else
-                    "Команда на очистку отправлена. Сервер удалён из приложения; " +
-                        "очистка завершится на сервере в течение минуты.")
+                    l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_36))
             } catch (e: Exception) {
                 Log.w(TAG, "purgeServer failed", e)
                 // Old agents (pre-0.3.0) lack /agent/purge → 404. Nudge the
                 // user to update the agent first instead of a vague error.
                 val msg = if (e is AgentApiError && e.httpCode == 404)
-                    "Агент на сервере слишком старый и не умеет очищать сам себя. " +
-                        "Сначала обнови агента (меню -> «Обновить агента»), потом повтори."
-                else AgentErrorMessages.explain(e).body
+                    l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_37)
+                else AgentErrorMessages.explain(e, getApplication<android.app.Application>()).body
                 onDone(false, msg)
             } finally {
                 _busy.value = false
@@ -682,14 +751,14 @@ class ManagedServerDetailViewModel(application: Application) : AndroidViewModel(
     fun rename(newName: String, onDone: () -> Unit) = api {
         val trimmed = newName.trim()
         if (trimmed.isEmpty()) {
-            post("Имя не может быть пустым")
+            post(l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_38))
             return@api
         }
         repo.rename(server.id, trimmed)
         // Keep the in-memory copy in sync so subsequent calls see the
         // new label without a re-fetch.
         server = server.copy(name = trimmed)
-        post("Сервер переименован")
+        post(l10n(com.smarttools.netguard.R.string.loc_managed_server_detail_view_model_39))
         withContext(Dispatchers.Main) { onDone() }
     }
 

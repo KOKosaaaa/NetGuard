@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Tempel konfigurasi JSON"</string>
+    <string name="subscription_tls_date_error">"Kesalahan TLS: periksa tanggal dan waktu perangkat Anda. %1$s"</string>
+    <string name="subscription_tls_pin_error">"Pin sertifikat TLS tidak cocok. Sertifikat mungkin berubah sejak versi aplikasi ini dirilis. %1$s"</string>
+    <string name="subscription_tls_chain_error">"Rantai sertifikat TLS server tidak lengkap. Ini masalah konfigurasi server. %1$s"</string>
+    <string name="subscription_fetch_failed">"Tidak dapat memuat langganan"</string>
+    <string name="trigger_apps_removed_from_bypass">"Aplikasi dihapus dari daftar bypass VPN: %1$d. Aplikasi tersebut akan melewati koneksi otomatis."</string>
+    <string name="server_installing_xray">"Menginstal xray di server…"</string>
+    <string name="server_upstream_added">"Upstream ditambahkan"</string>
+    <string name="server_upstream_deleted">"Upstream dihapus"</string>
+    <string name="server_rule_added">"Aturan ditambahkan"</string>
+    <string name="server_rule_deleted">"Aturan dihapus"</string>
+    <string name="wb_room_stop_failed">"Tidak dapat menghentikan ruang WB Stream di server. Profil tetap disimpan; coba hapus lagi."</string>
+    <string name="wb_room_still_present">"Ruang WB Stream masih ada di server"</string>
+    <string name="rule_label_domain">"Domain"</string>
+    <string name="rule_label_cidr">"Rentang IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Grup situs (geosite)"</string>
+    <string name="rule_label_geoip">"Grup IP (geoip)"</string>
+    <string name="rule_label_direct">"Koneksi langsung"</string>
+    <string name="rule_label_block">"Blokir"</string>
+    <string name="rule_label_via">"Melalui upstream"</string>
+    <string name="rule_no_upstreams">"Belum ada upstream yang ditambahkan"</string>
+</resources>

@@ -16,8 +16,8 @@ object GeoLookup {
 
     data class LatLon(val lat: Double, val lon: Double)
 
-    private val ipCache = ConcurrentHashMap<String, LatLon>()
-    private val negativeLookups = ConcurrentHashMap.newKeySet<String>()
+    private val ipCache = GeoResultCache<LatLon>()
+    private val tunnelCache = GeoResultCache<LatLon>()
 
     private val COUNTRY_COORDS = mapOf(
         "US" to LatLon(39.8, -98.6),
@@ -203,23 +203,24 @@ object GeoLookup {
      * Extract 2-letter country code from profile name.
      * Returns null if country cannot be determined.
      */
+    private fun token(name: String, value: String) = Regex("(?<![\\p{L}\\p{N}])" +
+        Regex.escape(value) + "(?![\\p{L}\\p{N}])").containsMatchIn(name)
+
     fun countryCodeFromName(name: String): String? {
-        val upper = name.uppercase()
-        // Try 2-letter code at start: "US-NewYork", "DE Frankfurt", "[NL]"
-        for (code in COUNTRY_COORDS.keys) {
-            if (upper.startsWith("$code-") || upper.startsWith("$code ") ||
-                upper.startsWith("[$code]") || upper == code) {
-                return code
+        val upper = name.uppercase(java.util.Locale.ROOT)
+        val points = name.codePoints().toArray()
+        for (i in 0 until points.size - 1) {
+            if (points[i] in 0x1F1E6..0x1F1FF && points[i+1] in 0x1F1E6..0x1F1FF) {
+                val code = "${('A'.code + points[i] - 0x1F1E6).toChar()}${('A'.code + points[i+1] - 0x1F1E6).toChar()}"
+                if (code in COUNTRY_COORDS) return code
             }
         }
-        // Try city names
-        for ((city, code) in CITY_TO_CODE) {
-            if (upper.contains(city)) return code
-        }
-        // Try country names
-        for ((countryName, code) in NAME_TO_CODE) {
-            if (upper.contains(countryName)) return code
-        }
+        val codes = Regex("(?<![\\p{L}\\p{N}])([A-Z]{2})(?:[0-9]{1,3})?(?![\\p{L}\\p{N}])")
+        codes.findAll(upper).forEach { if (it.groupValues[1] in COUNTRY_COORDS) return it.groupValues[1] }
+        val airports = mapOf("HEL" to "FI", "FRA" to "DE", "AMS" to "NL", "LON" to "GB", "NYC" to "US", "TYO" to "JP")
+        airports.forEach { (word,code) -> if(token(upper,word)) return code }
+        CITY_TO_CODE.forEach { (city,code) -> if(token(upper,city)) return code }
+        NAME_TO_CODE.forEach { (country,code) -> if(token(upper,country)) return code }
         return null
     }
 
@@ -227,40 +228,61 @@ object GeoLookup {
      * Lookup server location by IP address via ipwho.is (HTTPS only).
      * Caches results. Returns null on failure.
      */
-    fun fromIp(ip: String): LatLon? {
-        ipCache[ip]?.let { return it }
-        if (negativeLookups.contains(ip)) return null
-        if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("127.")) return null
+    fun fromIp(ip: String): LatLon? = ipCache.lookup(ip) {
+        val resolved = try { java.net.InetAddress.getByName(ip.trim().removeSurrounding("[", "]")) }
+            catch (_: Exception) { return@lookup null }
+        if (resolved.isAnyLocalAddress || resolved.isLoopbackAddress || resolved.isSiteLocalAddress || resolved.isLinkLocalAddress)
+            return@lookup null
+        val address = resolved.hostAddress ?: return@lookup null
+        tryIpWhoIs(address) ?: tryIpApi(address)
+    }
 
-        // If it's a hostname (not an IP), resolve it first
-        val resolvedIp = if (ip.any { it.isLetter() }) {
+    /** Resolve the actual exit, rather than the CDN/meeting platform's location. */
+    internal fun fromTunnel(proxy: com.smarttools.netguard.core.CredentialManager.SpeedProxy): LatLon? =
+        tunnelCache.lookup("${proxy.generation}:${proxy.endpoint.port}") {
+            val client = okhttp3.OkHttpClient.Builder()
+                .proxy(java.net.Proxy.NO_PROXY)
+                .socketFactory(TunnelSpeedSocketFactory(proxy.endpoint))
+                .dns(object : okhttp3.Dns {
+                    override fun lookup(hostname: String) = listOf(java.net.InetAddress.getByAddress(hostname, byteArrayOf(127,0,0,1)))
+                })
+                .callTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
             try {
-                java.net.InetAddress.getByName(ip).hostAddress ?: ip
-            } catch (e: Exception) {
-                Log.w("GeoLookup", "Failed to resolve hostname $ip: ${e.message}")
-                ip
-            }
-        } else ip
-
-        // Check cache for resolved IP too
-        if (resolvedIp != ip) {
-            ipCache[resolvedIp]?.let {
-                ipCache[ip] = it
-                return it
-            }
+                for (url in listOf("https://ipwho.is/?fields=success,latitude,longitude", "https://ipapi.co/json/")) {
+                    val result = runCatching {
+                        client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { response ->
+                            if (!response.isSuccessful) return@use null
+                            val body = response.body ?: return@use null
+                            val source = body.source()
+                            if (source.request(65537)) return@use null
+                            val obj = JSONObject(source.readUtf8())
+                            if (obj.optBoolean("error",false) || obj.has("success") && !obj.optBoolean("success")) null else coordinates(obj)
+                        }
+                    }.getOrNull()
+                    if (result != null && com.smarttools.netguard.core.CredentialManager.isCurrent(proxy)) return@lookup result
+                }
+                null
+            } finally {client.dispatcher.cancelAll(); client.connectionPool.evictAll(); client.dispatcher.executorService.shutdown()}
         }
 
-        // HTTPS only — HTTP fallback to ip-api.com removed (audit P0): plaintext
-        // request would expose the real source IP to any on-path observer when
-        // the VPN tunnel itself is the subject of the lookup.
-        val result = tryIpWhoIs(resolvedIp)
-        if (result != null) {
-            ipCache[ip] = result
-            if (resolvedIp != ip) ipCache[resolvedIp] = result
-        } else {
-            negativeLookups.add(ip)
-        }
-        return result
+    private fun coordinates(obj: JSONObject): LatLon? {
+        val lat = obj.optDouble("latitude",Double.NaN); val lon = obj.optDouble("longitude",Double.NaN)
+        return if(lat.isFinite() && lon.isFinite() && lat in -90.0..90.0 && lon in -180.0..180.0) LatLon(lat,lon) else null
+    }
+
+    private fun tryIpApi(ip: String): LatLon? {
+        val conn = URL("https://ipapi.co/$ip/json/").openConnection() as HttpURLConnection
+        return try {
+            conn.connectTimeout=3000;conn.readTimeout=3000
+            conn.inputStream.bufferedReader().use {reader ->
+                val chars=CharArray(65537);var n=0
+                while(n<chars.size) {val read=reader.read(chars,n,chars.size-n);if(read<0)break;n+=read}
+                if(n>=chars.size)return null
+                val obj=JSONObject(String(chars,0,n))
+                if(obj.optBoolean("error",false))null else coordinates(obj)
+            }
+        }catch(_:Exception){null}finally{conn.disconnect()}
     }
 
     /**
@@ -305,7 +327,7 @@ object GeoLookup {
             conn.disconnect()
             val obj = JSONObject(json)
             if (obj.optBoolean("success", false)) {
-                LatLon(obj.getDouble("latitude"), obj.getDouble("longitude"))
+                coordinates(obj)
             } else null
         } catch (e: Exception) {
             Log.w("GeoLookup", "ipwho.is failed for $ip: ${e.message}")
@@ -429,7 +451,7 @@ object GeoLookup {
             conn.disconnect()
             val obj = JSONObject(json)
             if (obj.optBoolean("success", false)) {
-                LatLon(obj.getDouble("latitude"), obj.getDouble("longitude"))
+                coordinates(obj)
             } else null
         } catch (e: Exception) { null }
     }

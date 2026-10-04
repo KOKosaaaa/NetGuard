@@ -5,12 +5,12 @@ package hev.sockstun;
  *
  * The native library registers its methods dynamically in JNI_OnLoad via
  * RegisterNatives, looking up EXACTLY the class "hev/sockstun/TProxyService"
- * and binding these three names/signatures:
- *   TProxyStartService (Ljava/lang/String;I)V
- *   TProxyStopService  ()V
+ * and binding these names/signatures (pinned build: tools/build-hev.py):
+ *   TProxyStartService (Ljava/lang/String;I)Z
+ *   TProxyStopService  ()Z
+ *   TProxyIsRunning   ()Z
  *   TProxyGetStats     ()[J
- * (verified from the shipped .so's .rodata; source: heiher/sockstun 7.0,
- *  same author as hev-socks5-tunnel). The package/class name and signatures
+ * The package/class name and signatures
  *  must match or System.loadLibrary() -> JNI_OnLoad -> FindClass would fail.
  *
  * The shipped JNI wrapper starts native worker threads and returns. Stop them
@@ -23,8 +23,9 @@ package hev.sockstun;
  * Telegram/WebRTC voice+video calls work through the tunnel.
  */
 public class TProxyService {
-    public static native void TProxyStartService(String config_path, int fd);
-    public static native void TProxyStopService();
+    public static native boolean TProxyStartService(String config_path, int fd);
+    public static native boolean TProxyStopService();
+    public static native boolean TProxyIsRunning();
     public static native long[] TProxyGetStats();
 
     static {

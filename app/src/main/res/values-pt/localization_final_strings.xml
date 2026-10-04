@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Link de assinatura inválido"</string>
+    <string name="subscription_url_required">"A URL está vazia"</string>
+    <string name="subscription_room_invalid">"Link de sala ou perfil inválido"</string>
+    <string name="subscription_profile_unsupported">"URI do perfil não compatível"</string>
+    <string name="profile_default_name">"Perfil"</string>
+    <string name="subscription_default_name">"Assinatura"</string>
+    <string name="subscription_profile_invalid_details">"Link do perfil inválido: %1$s"</string>
+    <string name="subscription_profile_added">"Perfil adicionado: %1$s"</string>
+    <string name="subscription_url_invalid_details">"URL inválida: %1$s"</string>
+    <string name="subscription_deleted_name">"Excluído: %1$s"</string>
+    <string name="subscription_update_with_errors">"Perfis atualizados: %1$d. Erros: %2$d"</string>
+    <string name="profile_room_invalid">"Link da sala inválido"</string>
+    <string name="profile_address_invalid">"Endereço inválido"</string>
+    <string name="profile_test_connect_first">"Conecte a VPN primeiro para evitar expor seu IP real"</string>
+    <string name="profile_test_proxy_unready">"As credenciais da VPN ainda não estão prontas"</string>
+    <string name="profile_testing">"Testando…"</string>
+    <string name="profile_test_failed">"Falhou"</string>
+    <string name="backup_empty_json">"O arquivo de configuração está vazio"</string>
+    <string name="import_profiles_with_errors">"Perfis importados: %1$d. Erros: %2$d"</string>
+    <string name="connection_room_not_ready">"O servidor na sala não confirmou a conexão"</string>
+    <string name="connection_whitelist_help">"O servidor pode estar bloqueado por uma lista de IPs permitidos. Tente WB Stream ou Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">%1$d perfil atualizado</item>
+        <item quantity="other">%1$d perfis atualizados</item>
+    </plurals>
+</resources>

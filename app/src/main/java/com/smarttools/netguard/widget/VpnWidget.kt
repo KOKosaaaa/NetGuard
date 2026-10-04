@@ -12,6 +12,7 @@ import com.smarttools.netguard.R
 import com.smarttools.netguard.model.ConnectionState
 import com.smarttools.netguard.service.TunnelVpnService
 import com.smarttools.netguard.App
+import com.smarttools.netguard.util.LocalizedResources
 
 class VpnWidget : AppWidgetProvider() {
 
@@ -103,10 +104,10 @@ class VpnWidget : AppWidgetProvider() {
 
         // Status text
         val statusText = when (state) {
-            is ConnectionState.Connected -> context.getString(R.string.status_connected)
-            is ConnectionState.Connecting -> context.getString(R.string.status_connecting)
-            is ConnectionState.Error -> context.getString(R.string.status_error)
-            else -> context.getString(R.string.status_disconnected)
+            is ConnectionState.Connected -> LocalizedResources.string(context, R.string.status_connected)
+            is ConnectionState.Connecting -> LocalizedResources.string(context, R.string.status_connecting)
+            is ConnectionState.Error -> LocalizedResources.string(context, R.string.status_error)
+            else -> LocalizedResources.string(context, R.string.status_disconnected)
         }
         views.setTextViewText(R.id.tv_widget_status, statusText)
 
@@ -116,7 +117,7 @@ class VpnWidget : AppWidgetProvider() {
         val cachedName = app.getPreferences().getString("last_profile_name", null)
         views.setTextViewText(
             R.id.tv_widget_server,
-            cachedName?.takeIf { it.isNotEmpty() } ?: context.getString(R.string.no_profile_selected)
+            cachedName?.takeIf { it.isNotEmpty() } ?: LocalizedResources.string(context, R.string.no_profile_selected)
         )
 
         manager.updateAppWidget(widgetId, views)

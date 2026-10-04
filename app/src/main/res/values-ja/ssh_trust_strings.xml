@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">SSH サーバーの確認</string>
+    <string name="ssh_trust_message">続行する前に、サーバーコンソールのフィンガープリントと照合してください。SSH パスワードはまだ送信されていません。\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">この鍵を信頼する</string>
+    <string name="ssh_trust_changed">SSH ホスト鍵が変更されました。接続をブロックしました。サーバーの身元を確認してください。</string>
+    <string name="ssh_trust_rejected">SSH ホスト鍵が承認されませんでした。SSH パスワードは送信されていません。</string>
+</resources>

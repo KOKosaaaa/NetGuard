@@ -25,6 +25,8 @@ import com.smarttools.netguard.databinding.ItemServerProfileBinding
 import kotlinx.coroutines.launch
 
 class ServerProfilesFragment : Fragment() {
+    private fun l10n(id: Int, vararg args: Any): String = com.smarttools.netguard.util.LocalizedResources.string(requireContext(), id, *args)
+
 
     private var _b: FragmentServerProfilesBinding? = null
     private val b get() = _b!!
@@ -32,9 +34,10 @@ class ServerProfilesFragment : Fragment() {
     private lateinit var adapter: ProfilesAdapter
     private var hasProfiles = false
     private var hasTelemost = false
+    private var hasWbStream = false
 
     private fun updateEmpty() {
-        val empty = !hasProfiles && !hasTelemost
+        val empty = !hasProfiles && !hasTelemost && !hasWbStream
         b.emptyState.visibility = if (empty) View.VISIBLE else View.GONE
         // FAB hides on empty so the centered CTA is the only call-to-action.
         b.fabAdd.visibility = if (empty) View.GONE else View.VISIBLE
@@ -64,6 +67,79 @@ class ServerProfilesFragment : Fragment() {
                     adapter.submitList(list)
                     hasProfiles = list.isNotEmpty()
                     b.rvProfiles.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+                    updateEmpty()
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                vm.wbStream.collect { rooms ->
+                    hasWbStream = rooms != null && rooms.installed > 0
+                    b.wbstreamCard.visibility = if (hasWbStream) View.VISIBLE else View.GONE
+                    if (hasWbStream) {
+                        b.tvWbstreamSummary.text = getString(com.smarttools.netguard.R.string.wb_rooms_connected, rooms!!.activeCount, rooms.installed) +
+                            if (rooms.instances.any { it.ownerState == "wb_blocked" }) l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_1)
+                            else if (rooms.instances.any { it.ownerState == "needs_login" }) l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_2)
+                            else if (rooms.instances.all { it.ownerState == "hosting" }) l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_3)
+                            else l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_4)
+                        b.wbstreamCard.setOnClickListener {
+                            val links = rooms.instances.joinToString("\n") { it.room }
+                            val uri = com.smarttools.netguard.model.WbStreamLink.encode(links, "WB Stream")
+                            MaterialAlertDialogBuilder(requireContext()).setTitle("WB Stream")
+                                .setMessage(getString(com.smarttools.netguard.R.string.wb_rooms_recovery_help, rooms.installed) + rooms.instances.joinToString("\n") { "${it.index}: " + when(it.ownerState) {
+                                    "hosting" -> l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_5)
+                                    "needs_login" -> l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_6)
+                                    "wb_blocked" -> l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_7)
+                                    "starting", "reconnecting", "checking" -> l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_8)
+                                    "stopped" -> l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_9)
+                                    else -> l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_10)
+                                } })
+                                .setView(com.google.android.material.button.MaterialButton(requireContext()).apply {
+                                    text = l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_11)
+                                    setOnClickListener {
+                                        val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        cm.setPrimaryClip(ClipData.newPlainText("WB Stream", uri))
+                                        Toast.makeText(requireContext(), l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_12), Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                                .setNeutralButton(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_13)) { _, _ ->
+                                    val srv = vm.serverOrNull ?: return@setNeutralButton
+                                    fun openRoom(link: String) {
+                                        startActivity(android.content.Intent(requireContext(), CreateWbStreamActivity::class.java)
+                                            .putExtra(CreateWbStreamActivity.EXTRA_SERVER_ID, srv.id)
+                                            .putExtra(CreateWbStreamActivity.EXTRA_ROOM, link))
+                                    }
+                                    if (rooms.instances.size == 1) openRoom(rooms.instances.first().room)
+                                    else MaterialAlertDialogBuilder(requireContext()).setTitle(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_14))
+                                        .setItems(rooms.instances.map { it.room.substringAfterLast('/') }.toTypedArray()) { _, index -> openRoom(rooms.instances[index].room) }.show()
+                                }
+                                .setPositiveButton(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_15)) { _, _ ->
+                                    val progress = MaterialAlertDialogBuilder(requireContext())
+                                        .setTitle(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_16))
+                                        .setMessage(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_17))
+                                        .setCancelable(false).show()
+                                    vm.updateWbStream { ok, message ->
+                                        runCatching { progress.dismiss() }
+                                        if (isAdded) MaterialAlertDialogBuilder(requireContext())
+                                            .setTitle(if (ok) l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_18) else l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_19))
+                                            .setMessage(message).setPositiveButton(android.R.string.ok, null).show()
+                                    }
+                                }
+                                .setNegativeButton(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_20)) { _, _ ->
+                                    confirmPermanentDelete {
+                                        val progress = MaterialAlertDialogBuilder(requireContext())
+                                            .setTitle(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_21)).setMessage(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_22))
+                                            .setCancelable(false).show()
+                                        vm.deleteWbStream { ok, message ->
+                                            runCatching { progress.dismiss() }
+                                            if (isAdded) MaterialAlertDialogBuilder(requireContext())
+                                                .setTitle(if (ok) l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_18) else l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_23))
+                                                .setMessage(message).setPositiveButton(android.R.string.ok, null).show()
+                                        }
+                                    }
+                                }.show()
+                        }
+                    }
                     updateEmpty()
                 }
             }
@@ -151,7 +227,7 @@ class ServerProfilesFragment : Fragment() {
 
     private fun showRawDetails(err: com.smarttools.netguard.agent.FriendlyError) {
         val tv = android.widget.TextView(requireContext()).apply {
-            text = err.rawDetails.ifBlank { "(нет деталей)" }
+            text = err.rawDetails.ifBlank { l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_24) }
             textSize = 11f
             typeface = android.graphics.Typeface.MONOSPACE
             setPadding(32, 24, 32, 24)
@@ -305,7 +381,7 @@ class ServerProfilesFragment : Fragment() {
     // Spinner dialog while an operation runs, then a clear result — used for
     // "change room count" so it doesn't feel like nothing happened.
     private fun showApplying(
-        message: String = "Применяю изменения…",
+        message: String = l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_25),
         run: ((ok: Boolean, msg: String) -> Unit) -> Unit,
     ) {
         val row = android.widget.LinearLayout(requireContext()).apply {
@@ -336,7 +412,7 @@ class ServerProfilesFragment : Fragment() {
     // intermediate stages are indicative, not literal — but the user sees it
     // working and gets a clear Done/Error instead of a silent toast.
     private fun showRestartProgress(run: ((ok: Boolean, msg: String) -> Unit) -> Unit) {
-        val stages = listOf("Остановка…", "Проверка остановки…", "Проверка системы…", "Запуск…")
+        val stages = listOf(l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_26), l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_27), l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_28), l10n(com.smarttools.netguard.R.string.loc_server_profiles_fragment_29))
         val tv = android.widget.TextView(requireContext()).apply {
             setPadding(dp(20), 0, 0, 0); text = stages[0]
         }
@@ -380,6 +456,7 @@ class ServerProfilesFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        vm.refreshWbStream()
         // Re-pull so a profile created elsewhere (or just now) shows up
         // without leaving and re-entering the tab.
         vm.refreshProfiles()

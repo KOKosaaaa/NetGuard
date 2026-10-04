@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">SSH सर्वर की पुष्टि करें</string>
+    <string name="ssh_trust_message">आगे बढ़ने से पहले इस फ़िंगरप्रिंट का सर्वर कंसोल से मिलान करें। SSH पासवर्ड अभी नहीं भेजा गया है।\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">इस कुंजी पर भरोसा करें</string>
+    <string name="ssh_trust_changed">SSH होस्ट कुंजी बदल गई है। कनेक्शन रोका गया है; सर्वर की पहचान जाँचें।</string>
+    <string name="ssh_trust_rejected">SSH होस्ट कुंजी स्वीकृत नहीं हुई। SSH पासवर्ड नहीं भेजा गया।</string>
+</resources>

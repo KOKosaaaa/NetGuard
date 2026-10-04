@@ -29,6 +29,7 @@ class PerAppFragment : Fragment() {
     private val selectedPackages = mutableSetOf<String>()
     private var showSystemApps = false
     private var searchQuery = ""
+    private val alwaysVpn get() = arguments?.getBoolean("always_vpn", false) == true
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentPerAppBinding.inflate(inflater, container, false)
@@ -42,14 +43,15 @@ class PerAppFragment : Fragment() {
         // with Russian banking / gov apps; on other locales it would be
         // misleading and the strings have no native translation.
         val lang = java.util.Locale.getDefault().language
-        binding.btnAddRuBypass.visibility = if (lang == "ru" || lang == "en") {
+        binding.tvAppRouteHint.visibility = if (alwaysVpn) View.VISIBLE else View.GONE
+        binding.btnAddRuBypass.visibility = if (!alwaysVpn && (lang == "ru" || lang == "en")) {
             View.VISIBLE
         } else {
             View.GONE
         }
 
         val settings = viewModel.settings.value
-        selectedPackages.addAll(settings.perAppList)
+        selectedPackages.addAll(if (alwaysVpn) settings.alwaysVpnApps else settings.perAppList)
 
         val adapter = AppListAdapter { item ->
             if (item.isChecked) selectedPackages.add(item.packageName)
@@ -72,8 +74,11 @@ class PerAppFragment : Fragment() {
 
         binding.btnSaveApps.setOnClickListener {
             viewModel.updateSettings { s ->
-                s.copy(perAppList = selectedPackages.toSet())
+                if (alwaysVpn) s.copy(alwaysVpnApps = selectedPackages.toSet(), perAppList =
+                    if (s.perAppMode == com.smarttools.netguard.model.PerAppMode.BLACKLIST) s.perAppList - selectedPackages else s.perAppList)
+                else s.copy(perAppList = selectedPackages.toSet())
             }
+            if (alwaysVpn) Toast.makeText(requireContext(), R.string.always_vpn_apps_saved, Toast.LENGTH_LONG).show()
             findNavController().popBackStack()
         }
 
@@ -124,7 +129,7 @@ class PerAppFragment : Fragment() {
     private fun loadApps(): List<AppItem> {
         val pm = requireContext().packageManager
         val apps = pm.getInstalledApplications(0)
-        return apps.map { info ->
+        return apps.filter { !alwaysVpn || it.packageName != requireContext().packageName }.map { info ->
             AppItem(
                 packageName = info.packageName,
                 label = info.loadLabel(pm).toString(),

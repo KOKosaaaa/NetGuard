@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Verifica server SSH</string>
+    <string name="ssh_trust_message">Confronta questa impronta con la console del server prima di continuare. La password SSH non è ancora stata inviata.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Considera attendibile</string>
+    <string name="ssh_trust_changed">La chiave host SSH è cambiata. Connessione bloccata; verifica l’identità del server.</string>
+    <string name="ssh_trust_rejected">La chiave host SSH non è stata approvata. La password SSH non è stata inviata.</string>
+</resources>

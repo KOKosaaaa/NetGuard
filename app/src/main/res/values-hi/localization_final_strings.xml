@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"अमान्य सदस्यता लिंक"</string>
+    <string name="subscription_url_required">"URL खाली है"</string>
+    <string name="subscription_room_invalid">"अमान्य रूम या प्रोफ़ाइल लिंक"</string>
+    <string name="subscription_profile_unsupported">"असमर्थित प्रोफ़ाइल URI"</string>
+    <string name="profile_default_name">"प्रोफ़ाइल"</string>
+    <string name="subscription_default_name">"सदस्यता"</string>
+    <string name="subscription_profile_invalid_details">"अमान्य प्रोफ़ाइल लिंक: %1$s"</string>
+    <string name="subscription_profile_added">"प्रोफ़ाइल जोड़ी गई: %1$s"</string>
+    <string name="subscription_url_invalid_details">"अमान्य URL: %1$s"</string>
+    <string name="subscription_deleted_name">"हटाया गया: %1$s"</string>
+    <string name="subscription_update_with_errors">"अपडेट हुई प्रोफ़ाइल: %1$d। त्रुटियाँ: %2$d"</string>
+    <string name="profile_room_invalid">"अमान्य रूम लिंक"</string>
+    <string name="profile_address_invalid">"अमान्य पता"</string>
+    <string name="profile_test_connect_first">"असली IP लीक होने से बचाने के लिए पहले VPN कनेक्ट करें"</string>
+    <string name="profile_test_proxy_unready">"VPN क्रेडेंशियल अभी तैयार नहीं हैं"</string>
+    <string name="profile_testing">"टेस्ट हो रहा है…"</string>
+    <string name="profile_test_failed">"विफल"</string>
+    <string name="backup_empty_json">"कॉन्फ़िगरेशन फ़ाइल खाली है"</string>
+    <string name="import_profiles_with_errors">"इंपोर्ट हुई प्रोफ़ाइल: %1$d। त्रुटियाँ: %2$d"</string>
+    <string name="connection_room_not_ready">"रूम के सर्वर ने अभी कनेक्शन की पुष्टि नहीं की है"</string>
+    <string name="connection_whitelist_help">"IP अनुमति-सूची के कारण सर्वर ब्लॉक हो सकता है। WB Stream या Telemost आज़माएँ।"</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">%1$d प्रोफ़ाइल अपडेट हुई</item>
+        <item quantity="other">%1$d प्रोफ़ाइल अपडेट हुई</item>
+    </plurals>
+</resources>

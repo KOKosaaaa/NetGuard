@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"JSON yapılandırmasını yapıştırın"</string>
+    <string name="subscription_tls_date_error">"TLS hatası: cihazınızın tarih ve saatini kontrol edin. %1$s"</string>
+    <string name="subscription_tls_pin_error">"TLS sertifikası sabitlenmiş sertifikayla eşleşmiyor. Sertifika, uygulamanın bu sürümünden sonra değişmiş olabilir. %1$s"</string>
+    <string name="subscription_tls_chain_error">"Sunucunun TLS sertifika zinciri eksik. Bu, sunucu yapılandırmasıyla ilgili bir sorundur. %1$s"</string>
+    <string name="subscription_fetch_failed">"Abonelik yüklenemedi"</string>
+    <string name="trigger_apps_removed_from_bypass">"VPN hariç tutma listesinden kaldırılan uygulama sayısı: %1$d. Bu uygulamalar otomatik bağlantıyı atlayacaktı."</string>
+    <string name="server_installing_xray">"xray sunucuya kuruluyor…"</string>
+    <string name="server_upstream_added">"Üst sunucu eklendi"</string>
+    <string name="server_upstream_deleted">"Üst sunucu silindi"</string>
+    <string name="server_rule_added">"Kural eklendi"</string>
+    <string name="server_rule_deleted">"Kural silindi"</string>
+    <string name="wb_room_stop_failed">"Sunucudaki WB Stream odası durdurulamadı. Profil korundu; yeniden silmeyi deneyin."</string>
+    <string name="wb_room_still_present">"WB Stream odası hâlâ sunucuda mevcut"</string>
+    <string name="rule_label_domain">"Alan adı"</string>
+    <string name="rule_label_cidr">"IP aralığı (CIDR)"</string>
+    <string name="rule_label_geosite">"Site grubu (geosite)"</string>
+    <string name="rule_label_geoip">"IP grubu (geoip)"</string>
+    <string name="rule_label_direct">"Doğrudan bağlantı"</string>
+    <string name="rule_label_block">"Engelle"</string>
+    <string name="rule_label_via">"Üst sunucu üzerinden"</string>
+    <string name="rule_no_upstreams">"Üst sunucu eklenmedi"</string>
+</resources>

@@ -12,6 +12,27 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 class AdaptiveSiteProxyTest {
+    @Test fun selectedAppOverridesDirectCacheWithoutChangingOtherApps() {
+        val directCount = AtomicInteger(); val vpnCount = AtomicInteger(); val normalCount = AtomicInteger()
+        Listener { s -> directCount.incrementAndGet(); readHeaders(s); s.getOutputStream().write("direct".toByteArray()) }.use { direct ->
+            Listener { s -> socks(s); normalCount.incrementAndGet(); s.getOutputStream().write(SocksWire.reply()); readHeaders(s); s.getOutputStream().write("normal".toByteArray()) }.use { normal ->
+                Listener { s -> socks(s); vpnCount.incrementAndGet(); s.getOutputStream().write(SocksWire.reply()); readHeaders(s); s.getOutputStream().write("vpn".toByteArray()) }.use { vpn ->
+                    val policy = SiteRoutingPolicy("apps")
+                    policy.record(SiteOrigin("same.test",direct.port,false),"127.0.0.1",SiteMeasurement(2,10),SiteMeasurement(2,1000))
+                    val apps = AppRoutePolicy(setOf(10001),true) { if(it.local.port==40001)10001 else 10002 }
+                    AdaptiveSiteProxy(SiteRouteTransport(LocalSocks(normal.port,"",""),LocalSocks(vpn.port,"",""),{true},publicAddress={true}),
+                        {"apps"}, loadCache={policy.export()}, forceVpn=apps::forceVpn, routeAllowed={_,_->true}).use { proxy ->
+                        fun app(port:Int)=proxy.endpoint.copy(user=proxy.endpoint.user+"|6|10.10.10.1|$port|127.0.0.1|${direct.port}")
+                        val bytes="GET / HTTP/1.1\r\nHost: same.test\r\n\r\n".toByteArray()
+                        assertEquals("vpn",String(request(app(40001),direct.port,bytes)))
+                        assertEquals(0,directCount.get())
+                        assertEquals("direct",String(request(app(40002),direct.port,bytes)))
+                        assertEquals(1,directCount.get());assertEquals(1,vpnCount.get());assertEquals(0,normalCount.get())
+                    }
+                }
+            }
+        }
+    }
     private class Listener(private val handle: (Socket) -> Unit) : AutoCloseable {
         private val listener = ServerSocket(0, 32, InetAddress.getByName("127.0.0.1"))
         val port get() = listener.localPort
@@ -66,7 +87,7 @@ class AdaptiveSiteProxyTest {
         client.socket().getInputStream().readBytes()
     }
 
-    @Test fun slowHeadChecksAndSaturatedProbeWorkersNeverHoldFirstRequests() {
+    @Test fun slowDiagnosticGetsAndSaturatedProbeWorkersNeverHoldFirstRequests() {
         val gate = CountDownLatch(1)
         val checksStarted = CountDownLatch(1)
         val actualRequests = AtomicInteger()
@@ -74,7 +95,7 @@ class AdaptiveSiteProxyTest {
             Listener { s ->
                 socks(s); s.getOutputStream().write(SocksWire.reply())
                 val header = readHeaders(s)
-                if (header.startsWith("HEAD / ")) { checksStarted.countDown(); gate.await(10, TimeUnit.SECONDS) }
+                if (header.contains("User-Agent: NetGuard-Route")) { checksStarted.countDown(); gate.await(10, TimeUnit.SECONDS) }
                 else {
                     actualRequests.incrementAndGet()
                     s.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfirst".toByteArray())
@@ -85,7 +106,7 @@ class AdaptiveSiteProxyTest {
                     AdaptiveSiteProxy(SiteRouteTransport(ep, ep, { true }, publicAddress = { true }),
                         { "network" }, routeAllowed = { _, _ -> true }).use { proxy ->
                         // More origins than both foreground/probe worker counts.
-                        // HEADs remain blocked for the entire assertion. Real
+                        // Diagnostic GETs stay blocked for the entire assertion. Real
                         // requests must arrive independently and succeed once.
                         repeat(24) { i ->
                             val requestBytes = "GET / HTTP/1.1\r\nHost: first$i.test\r\n\r\n".toByteArray()
@@ -100,7 +121,7 @@ class AdaptiveSiteProxyTest {
         }
     }
 
-    @Test fun comparesOnFirstOpenCachesForWeekAndNeverReplaysPostOrBreaksHalfClose() {
+    @Test fun comparesOnFirstOpenRechecksExpiredCacheAndNeverReplaysPostOrBreaksHalfClose() {
         val directHeads = AtomicInteger()
         val vpnHeads = AtomicInteger()
         val posts = ConcurrentLinkedQueue<ByteArray>()
@@ -110,7 +131,7 @@ class AdaptiveSiteProxyTest {
         val body = ByteArray(300_000) { (it % 251).toByte() }
         Listener { s ->
             val header = readHeaders(s)
-            if (header.startsWith("HEAD / ")) directHeads.incrementAndGet()
+            if (header.contains("User-Agent: NetGuard-Route")) directHeads.incrementAndGet()
             s.getOutputStream().write("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n".toByteArray())
         }.use { direct ->
             Listener { s ->
@@ -118,7 +139,7 @@ class AdaptiveSiteProxyTest {
                 check(cmd == 1 && destination.port == direct.port)
                 s.getOutputStream().write(SocksWire.reply())
                 val header = readHeaders(s)
-                if (header.startsWith("HEAD / ")) {
+                if (header.contains("User-Agent: NetGuard-Route")) {
                     vpnHeads.incrementAndGet()
                     s.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".toByteArray())
                 } else {
@@ -161,16 +182,18 @@ class AdaptiveSiteProxyTest {
         val broken = AtomicBoolean(false)
         val vpnRequests = AtomicInteger()
         val directRequests = AtomicInteger()
+        val directProbes = AtomicInteger()
+        val vpnProbes = AtomicInteger()
         val cache = AtomicReference<String>()
         Listener { s ->
-            val head = readHeaders(s).startsWith("HEAD / ")
-            if (!head) directRequests.incrementAndGet()
+            val head = readHeaders(s).contains("User-Agent: NetGuard-Route")
+            if (!head) directRequests.incrementAndGet() else directProbes.incrementAndGet()
             s.getOutputStream().write((if (broken.get()) "HTTP/1.1 200 OK\r\n\r\ndirect" else "HTTP/1.1 403 Forbidden\r\n\r\n").toByteArray())
         }.use { direct ->
             Listener { s ->
                 socks(s); s.getOutputStream().write(SocksWire.reply())
-                val head = readHeaders(s).startsWith("HEAD / ")
-                if (!head) vpnRequests.incrementAndGet()
+                val head = readHeaders(s).contains("User-Agent: NetGuard-Route")
+                if (!head) vpnRequests.incrementAndGet() else vpnProbes.incrementAndGet()
                 if (head || !broken.get()) s.getOutputStream().write(
                     (if (broken.get()) "HTTP/1.1 403 Forbidden\r\n\r\n" else "HTTP/1.1 200 OK\r\n\r\nvpn").toByteArray())
                 // Simulate SOCKS accepting CONNECT, then the remote dial failing.
@@ -181,12 +204,16 @@ class AdaptiveSiteProxyTest {
                     val get = "GET / HTTP/1.1\r\nHost: site.test\r\n\r\n".toByteArray()
                     assertTrue(String(request(proxy.endpoint, direct.port, get)).endsWith("vpn"))
                     awaitCondition { cache.get()?.contains("\"path\":\"VPN\"") == true }
+                    val priorDirectProbes = directProbes.get()
+                    val priorVpnProbes = vpnProbes.get()
                     broken.set(true)
                     assertEquals(0, request(proxy.endpoint, direct.port, get).size)
                     assertEquals(2, vpnRequests.get()); assertEquals(0, directRequests.get())
-                    awaitCondition { cache.get()?.contains("\"path\":\"DIRECT\"") == true }
-                    assertTrue(String(request(proxy.endpoint, direct.port, get)).endsWith("direct"))
-                    assertEquals(2, vpnRequests.get()); assertEquals(1, directRequests.get())
+                    awaitCondition { directProbes.get() > priorDirectProbes && vpnProbes.get() > priorVpnProbes }
+                    // A short plaintext success cannot certify a safe direct route.
+                    assertFalse(cache.get()?.contains("\"path\":\"DIRECT\"") == true)
+                    assertEquals(0, request(proxy.endpoint, direct.port, get).size)
+                    assertEquals(3, vpnRequests.get()); assertEquals(0, directRequests.get())
                 }
             }
         }
@@ -199,7 +226,7 @@ class AdaptiveSiteProxyTest {
         val protected = AtomicInteger()
         Listener { s ->
             val h = readHeaders(s)
-            if (!h.startsWith("HEAD / ")) directRequests.incrementAndGet()
+            if (!h.contains("User-Agent: NetGuard-Route")) directRequests.incrementAndGet()
             s.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\ndirect".toByteArray())
         }.use { direct ->
             Listener { s -> socks(s); s.getOutputStream().write(SocksWire.reply()); normalRequests.incrementAndGet()

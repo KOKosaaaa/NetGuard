@@ -7,6 +7,16 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.launch
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
+import android.view.View
+import com.smarttools.netguard.widget.LiquidBackdrop
+import com.smarttools.netguard.widget.LiquidGlass
+import com.smarttools.netguard.model.ConnectionState
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -29,6 +39,11 @@ class MainActivity : AppCompatActivity() {
      * swaps in autoSelectAndConnect so the same launcher serves both flows.
      */
     private var pendingVpnAction: () -> Unit = { mainViewModel.connect() }
+    private lateinit var glassBackdrop: LiquidBackdrop
+    private var glassConnected = false
+    fun decorateGlass(view: View) {
+        if (::glassBackdrop.isInitialized) LiquidGlass.decorate(view,glassBackdrop,glassConnected)
+    }
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -54,8 +69,17 @@ class MainActivity : AppCompatActivity() {
         val prefs = app.getPreferences()
         val onboardingDone = prefs.getBoolean(OnboardingActivity.PREF_ONBOARDING_DONE, false)
         if (!onboardingDone) {
-            val hasPriorInstall = prefs.all.keys.any {
-                it != OnboardingActivity.PREF_ONBOARDING_DONE
+            // App's default migrations run before this Activity, even on a
+            // clean install. Their four default values are not user settings.
+            val bootstrapDefaults = mapOf<String, Any>(
+                "striping_migration_v2" to true,
+                "telemost_striping" to false,
+                "adaptive_routing_default_v1" to true,
+                "routing_mode" to com.smarttools.netguard.model.RoutingMode.AUTO.name
+            )
+            val hasPriorInstall = prefs.all.any { (key, value) ->
+                key != OnboardingActivity.PREF_ONBOARDING_DONE &&
+                    !(bootstrapDefaults.containsKey(key) && bootstrapDefaults[key] == value)
             }
             if (hasPriorInstall) {
                 prefs.edit()
@@ -83,9 +107,48 @@ class MainActivity : AppCompatActivity() {
             DynamicColors.applyToActivityIfAvailable(this)
         }
         super.onCreate(savedInstanceState)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
         setContentView(R.layout.activity_main)
+        // Refresh channel wording after an app-language change without resetting user channel preferences.
+        com.smarttools.netguard.service.NotificationHelper.createChannel(this)
+        com.smarttools.netguard.service.WifiAutoConnectManager.refreshChannel(this)
+        com.smarttools.netguard.service.TriggerWatcherService.refreshChannel(this)
+        // Dynamic palettes can be light even when the previous theme was dark.
+        // Match system icons to the resolved backgrounds after the overlay is applied.
+        val bars = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+        val background = android.util.TypedValue().also {
+            this.theme.resolveAttribute(android.R.attr.colorBackground, it, true)
+        }.data
+        val surface = com.google.android.material.color.MaterialColors.getColor(
+            this, com.google.android.material.R.attr.colorSurface, "MainActivity")
+        bars.isAppearanceLightStatusBars = androidx.core.graphics.ColorUtils.calculateLuminance(background) > 0.5
+        bars.isAppearanceLightNavigationBars = androidx.core.graphics.ColorUtils.calculateLuminance(surface) > 0.5
 
         mainViewModel = ViewModelProvider(this)[MainViewModel::class.java]
+        glassBackdrop=findViewById(R.id.liquid_backdrop)
+        applyGlassInsets()
+        supportFragmentManager.registerFragmentLifecycleCallbacks(object:FragmentManager.FragmentLifecycleCallbacks() {
+            override fun onFragmentViewCreated(fm:FragmentManager,f:Fragment,v:View,state:Bundle?) {
+                decorateGlass(v)
+                v.post { if(f.view===v)decorateGlass(v) }
+            }
+        },true)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainViewModel.connectionState.collect { state ->
+                    glassConnected=state is ConnectionState.Connected
+                    glassBackdrop.setConnected(glassConnected)
+                    // Palette must use the final state immediately, even while the light fades.
+                    glassBackdrop.postDelayed({decorateGlass(findViewById(R.id.nav_host_fragment));decorateGlass(findViewById(R.id.bottom_nav))},470)
+                }
+            }
+        }
 
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
@@ -103,14 +166,13 @@ class MainActivity : AppCompatActivity() {
         // fsociety boot-sequence: only on cold start (no savedInstanceState) so
         // it doesn't replay on every rotation / process restore. Lines type in
         // one by one for ~1.8s, then fade out.
-        if (theme == ThemeMode.FSOCIETY && savedInstanceState == null) {
-            playFsocietyBootSequence()
-        }
+        decorateGlass(bottomNav)
         // Custom click handler: when a tab is tapped, pop everything off the
         // backstack until we're at the root of THAT tab. Default behavior
         // can leave sub-screens (like nav_trigger under nav_settings) on the
         // backstack so the user comes back to the wrong fragment.
         bottomNav.setOnItemSelectedListener { item ->
+            if (navController.currentDestination?.id == item.itemId) return@setOnItemSelectedListener true
             // Always go back to the ROOT fragment of the tab — clear any
             // sub-screen the user opened earlier (e.g. Settings → Trigger).
             // saveState/restoreState are intentionally false so each tab
@@ -129,6 +191,12 @@ class MainActivity : AppCompatActivity() {
                 true
             } catch (_: IllegalArgumentException) {
                 false
+            }
+        }
+        // Reselecting an open root keeps its view and scroll offset.
+        bottomNav.setOnItemReselectedListener { item ->
+            if (navController.currentDestination?.id != item.itemId) {
+                if (!navController.popBackStack(item.itemId, false)) navController.navigate(item.itemId)
             }
         }
         // Keep highlight in sync — if user navigates by code (e.g. into
@@ -157,6 +225,33 @@ class MainActivity : AppCompatActivity() {
             // the trigger settings screen out of nowhere.
             intent?.removeExtra(OnboardingActivity.EXTRA_OPEN_TRIGGER)
         }
+    }
+
+    private fun applyGlassInsets() {
+        val shell = findViewById<View>(R.id.main_shell)
+        val host = findViewById<View>(R.id.nav_host_fragment)
+        val nav = findViewById<View>(R.id.bottom_nav)
+        val density = resources.displayMetrics.density
+        // Material's default listener would add the navigation inset a second time.
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(nav) { _, insets -> insets }
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(shell) { _, insets ->
+            val safe = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+            val keyboard = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
+            fun margins(view: View, left: Int, top: Int, right: Int, bottom: Int) {
+                val params = view.layoutParams as android.view.ViewGroup.MarginLayoutParams
+                if (params.leftMargin != left || params.topMargin != top || params.rightMargin != right || params.bottomMargin != bottom) {
+                    params.setMargins(left, top, right, bottom)
+                    view.layoutParams = params
+                }
+            }
+            // Keep the optical background full-window; inset only interactive content.
+            margins(host, safe.left, safe.top, safe.right, 0)
+            margins(nav, safe.left + (16 * density).toInt(), 0,
+                safe.right + (16 * density).toInt(), maxOf(safe.bottom, keyboard) + (12 * density).toInt())
+            insets
+        }
+        androidx.core.view.ViewCompat.requestApplyInsets(shell)
     }
 
     /**
@@ -213,7 +308,7 @@ class MainActivity : AppCompatActivity() {
         val input = intent?.data?.toString() ?: return
         val uri = runCatching { com.smarttools.netguard.core.SubscriptionLink.unwrap(input) }.getOrNull() ?: return
         if (uri.length > 8192) {
-            Toast.makeText(this, "URI too long", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(com.smarttools.netguard.R.string.import_uri_too_long), Toast.LENGTH_SHORT).show()
             return
         }
         if (uri.startsWith("https://", true) && (input.startsWith("happ://", true) || input.startsWith("v2rayng://", true))) {
@@ -226,30 +321,30 @@ class MainActivity : AppCompatActivity() {
                 }.setNegativeButton(android.R.string.cancel, null).show()
             return
         }
-        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://")
-        if (!schemes.any { uri.startsWith(it) }) return
+        val schemes = listOf("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://", "telemost://", "wbstream://")
+        if (!schemes.any { uri.startsWith(it) } && !com.smarttools.netguard.model.WbStreamLink.looksLike(uri)) return
 
         val profile = try {
             ProfileParser.parseSingleUri(uri)
         } catch (e: Exception) {
             android.util.Log.w("MainActivity", "Invalid deep link URI: ${e.message}")
-            Toast.makeText(this, "Invalid profile URI", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(com.smarttools.netguard.R.string.import_invalid_uri), Toast.LENGTH_SHORT).show()
             return
         }
 
         if (profile == null) {
-            Toast.makeText(this, "Unsupported protocol", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(com.smarttools.netguard.R.string.import_protocol_unsupported), Toast.LENGTH_SHORT).show()
             return
         }
 
-        val serverInfo = "${profile.protocol.value}://${profile.address}:${profile.port}"
+        val serverInfo = if (profile.protocol.usesRelay) profile.displayProtocol else "${profile.protocol.value}://${profile.address}:${profile.port}"
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.import_profile_question)
             .setMessage(getString(R.string.import_profile_confirm, serverInfo))
             .setPositiveButton(R.string.import_btn) { _, _ ->
                 val profileVm = ViewModelProvider(this)[ProfileListViewModel::class.java]
                 profileVm.importFromText(uri)
-                Toast.makeText(this, "Profile imported", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(com.smarttools.netguard.R.string.import_profile_done), Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

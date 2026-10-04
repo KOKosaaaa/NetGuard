@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"JSON 설정 붙여넣기"</string>
+    <string name="subscription_tls_date_error">"TLS 오류: 기기의 날짜와 시간을 확인하세요. %1$s"</string>
+    <string name="subscription_tls_pin_error">"고정된 TLS 인증서와 일치하지 않습니다. 이 앱이 출시된 후 인증서가 변경되었을 수 있습니다. %1$s"</string>
+    <string name="subscription_tls_chain_error">"서버 TLS 인증서 체인이 불완전합니다. 서버 설정 문제입니다. %1$s"</string>
+    <string name="subscription_fetch_failed">"구독을 불러오지 못했습니다"</string>
+    <string name="trigger_apps_removed_from_bypass">"VPN 우회 목록에서 제거된 앱: %1$d개. 해당 앱들은 자동 연결을 우회했을 것입니다."</string>
+    <string name="server_installing_xray">"서버에 xray 설치 중…"</string>
+    <string name="server_upstream_added">"업스트림이 추가되었습니다"</string>
+    <string name="server_upstream_deleted">"업스트림이 삭제되었습니다"</string>
+    <string name="server_rule_added">"규칙이 추가되었습니다"</string>
+    <string name="server_rule_deleted">"규칙이 삭제되었습니다"</string>
+    <string name="wb_room_stop_failed">"서버의 WB Stream 방을 중지하지 못했습니다. 프로필이 유지되었습니다. 삭제를 다시 시도하세요."</string>
+    <string name="wb_room_still_present">"서버에 WB Stream 방이 아직 존재합니다"</string>
+    <string name="rule_label_domain">"도메인"</string>
+    <string name="rule_label_cidr">"IP 범위 (CIDR)"</string>
+    <string name="rule_label_geosite">"사이트 그룹 (geosite)"</string>
+    <string name="rule_label_geoip">"IP 그룹 (geoip)"</string>
+    <string name="rule_label_direct">"직접 연결"</string>
+    <string name="rule_label_block">"차단"</string>
+    <string name="rule_label_via">"업스트림 경유"</string>
+    <string name="rule_no_upstreams">"추가된 업스트림이 없습니다"</string>
+</resources>

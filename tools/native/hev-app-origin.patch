@@ -1,0 +1,132 @@
+diff --git a/src/hev-socks5-session-tcp.c b/src/hev-socks5-session-tcp.c
+index a0475ab..cd6ab8a 100644
+--- a/src/hev-socks5-session-tcp.c
++++ b/src/hev-socks5-session-tcp.c
+@@ -286,6 +286,8 @@ hev_socks5_session_tcp_construct (HevSocks5SessionTCP *self,
+     self->pcb = pcb;
+     self->mutex = mutex;
+     self->data.self = self;
++    hev_socks5_session_set_origin (&self->data, 6, &pcb->remote_ip, pcb->remote_port,
++                                  &pcb->local_ip, pcb->local_port);
+ 
+     return 0;
+ }
+diff --git a/src/hev-socks5-session-udp.c b/src/hev-socks5-session-udp.c
+index 9a283f2..8868dcb 100644
+--- a/src/hev-socks5-session-udp.c
++++ b/src/hev-socks5-session-udp.c
+@@ -349,6 +349,8 @@ hev_socks5_session_udp_construct (HevSocks5SessionUDP *self,
+     self->pcb = pcb;
+     self->mutex = mutex;
+     self->data.self = self;
++    hev_socks5_session_set_origin (&self->data, 17, &pcb->remote_ip, pcb->remote_port,
++                                  &pcb->local_ip, pcb->local_port);
+ 
+     return 0;
+ }
+diff --git a/src/hev-socks5-session.c b/src/hev-socks5-session.c
+index e946fa6..8bce2de 100644
+--- a/src/hev-socks5-session.c
++++ b/src/hev-socks5-session.c
+@@ -8,20 +8,37 @@
+  */
+ 
+ #include <string.h>
++#include <stdio.h>
+ 
+ #include "hev-utils.h"
++#include "hev-compiler.h"
+ #include "hev-logger.h"
+ #include "hev-config.h"
+ #include "hev-socks5-client.h"
+ 
+ #include "hev-socks5-session.h"
+ 
++/* Authenticated loopback-only metadata for Android connection-owner lookup.
++ * LWIP's remote endpoint is the original application's local socket. */
++void
++hev_socks5_session_set_origin (HevSocks5SessionData *data, int protocol,
++    const ip_addr_t *source, unsigned int source_port,
++    const ip_addr_t *destination, unsigned int destination_port)
++{
++    char src[48], dst[48];
++    ipaddr_ntoa_r (source, src, sizeof (src));
++    ipaddr_ntoa_r (destination, dst, sizeof (dst));
++    snprintf (data->origin, sizeof (data->origin), "|%d|%s|%u|%s|%u",
++              protocol, src, source_port, dst, destination_port);
++}
++
+ void
+ hev_socks5_session_run (HevSocks5Session *self)
+ {
+     HevSocks5SessionIface *iface;
+     HevConfigServer *srv;
+     int res;
++    char origin_user[256];
+ 
+     LOG_D ("%p socks5 session run", self);
+ 
+@@ -35,9 +52,15 @@ hev_socks5_session_run (HevSocks5Session *self)
+     }
+ 
+     if (srv->user && srv->pass) {
+-        hev_socks5_client_set_auth (HEV_SOCKS5_CLIENT (self), srv->user,
+-                                    srv->pass);
+-        LOG_D ("%p socks5 client auth %s:%s", self, srv->user, srv->pass);
++        const char *user = srv->user;
++        if (strncmp (user, "ngsrc-", 6) == 0) {
++            HevListNode *node = hev_socks5_session_get_node (self);
++            HevSocks5SessionData *data = container_of (node, HevSocks5SessionData, node);
++            if (snprintf (origin_user, sizeof (origin_user), "%s%s", user, data->origin) >= sizeof (origin_user))
++                return;
++            user = origin_user;
++        }
++        hev_socks5_client_set_auth (HEV_SOCKS5_CLIENT (self), user, srv->pass);
+     }
+ 
+     res = hev_socks5_client_handshake (HEV_SOCKS5_CLIENT (self), srv->pipeline);
+diff --git a/src/hev-socks5-session.h b/src/hev-socks5-session.h
+index 63cab6f..c41be3a 100644
+--- a/src/hev-socks5-session.h
++++ b/src/hev-socks5-session.h
+@@ -11,6 +11,7 @@
+ #define __HEV_SOCKS5_SESSION_H__
+ 
+ #include <hev-task.h>
++#include <lwip/ip_addr.h>
+ 
+ #include "hev-list.h"
+ 
+@@ -27,6 +28,7 @@ struct _HevSocks5SessionData
+     HevListNode node;
+     HevTask *task;
+     HevSocks5Session *self;
++    char origin[128];
+ };
+ 
+ struct _HevSocks5SessionIface
+@@ -38,6 +40,9 @@ struct _HevSocks5SessionIface
+ };
+ 
+ void *hev_socks5_session_iface (void);
++void hev_socks5_session_set_origin (HevSocks5SessionData *data, int protocol,
++    const ip_addr_t *source, unsigned int source_port,
++    const ip_addr_t *destination, unsigned int destination_port);
+ 
+ void hev_socks5_session_run (HevSocks5Session *self);
+ void hev_socks5_session_terminate (HevSocks5Session *self);
+diff --git a/src/hev-socks5-tunnel.c b/src/hev-socks5-tunnel.c
+index 28bfe78..14fbe0f 100644
+--- a/src/hev-socks5-tunnel.c
++++ b/src/hev-socks5-tunnel.c
+@@ -264,6 +264,10 @@ udp_recv_handler (void *arg, struct udp_pcb *pcb, struct pbuf *p,
+         udp_remove (pcb);
+         return;
+     }
++    /* At accept time LWIP has not set pcb->local_ip/port yet. The callback
++     * carries the first datagram's actual destination. */
++    hev_socks5_session_set_origin (&udp->data, 17, &pcb->remote_ip, pcb->remote_port,
++                                  addr, port);
+ 
+     stack_size = hev_config_get_misc_task_stack_size ();
+     task = hev_task_new (stack_size);

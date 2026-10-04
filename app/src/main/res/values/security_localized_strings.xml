@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Own SOCKS5 auth</string>
+    <string name="security_name_2">Neighboring VPNs</string>
+    <string name="security_name_3">SOCKS5 Proxy</string>
+    <string name="security_name_4">HTTP Proxy</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">Port Scan</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">VPN Flag</string>
+    <string name="security_name_10">MTU Check</string>
+    <string name="security_name_11">Package Name</string>
+    <string name="security_detail_1">Tunnel not active, cannot test</string>
+    <string name="security_detail_2">Server closed connection on no-auth — good</string>
+    <string name="security_detail_3">Unexpected SOCKS version: %1$s</string>
+    <string name="security_detail_4">CRITICAL: own SOCKS5 accepts NO AUTH — auth chain is broken!</string>
+    <string name="security_detail_5">Own SOCKS5 correctly requires user/pass auth</string>
+    <string name="security_detail_6">Own SOCKS5 rejects no-auth (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">Own SOCKS5 returned unexpected method: 0x%1$s</string>
+    <string name="security_detail_8">Could not test own SOCKS: %1$s</string>
+    <string name="security_detail_9">No other known VPN clients installed</string>
+    <string name="security_detail_10">Other VPN clients installed (some may be affected by the April 2026 local-SOCKS leak): %1$s</string>
+    <string name="security_detail_11">No unauthenticated SOCKS5 found on standard ports</string>
+    <string name="security_detail_12">VULNERABLE: Open SOCKS5 without auth on ports: %1$s</string>
+    <string name="security_detail_13">No open HTTP CONNECT proxy found on standard ports</string>
+    <string name="security_detail_14">VULNERABLE: Open HTTP proxy on ports: %1$s</string>
+    <string name="security_detail_15">No Xray gRPC API ports detected</string>
+    <string name="security_detail_16">VULNERABLE: Xray API ports open: %1$s</string>
+    <string name="security_detail_17">No Clash REST API detected</string>
+    <string name="security_detail_18">VULNERABLE: Clash API open on ports: %1$s — /connections leaks all IPs</string>
+    <string name="security_detail_19">No known VPN ports open on localhost</string>
+    <string name="security_detail_20">Detectable ports open: %1$s</string>
+    <string name="security_detail_21">No known VPN ports found in /proc/net/tcp</string>
+    <string name="security_detail_22">Detectable in /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">Cannot read /proc/net/tcp (may be restricted)</string>
+    <string name="security_detail_24">TRANSPORT_VPN is visible (unavoidable on Android). Apps can detect VPN is active, but cannot see server IP.</string>
+    <string name="security_detail_25">No TRANSPORT_VPN flag detected (VPN not active or check ran before connection)</string>
+    <string name="security_detail_26">Cannot check NetworkCapabilities</string>
+    <string name="security_detail_27">No TUN interface detected</string>
+    <string name="security_detail_28">Informational only: %1$s. MTU alone is not a reliable VPN indicator.</string>
+    <string name="security_detail_29">Cannot check interface MTU</string>
+    <string name="security_detail_30">VULNERABLE: Package name \'%1$s\' contains VPN keywords</string>
+    <string name="security_detail_31">Package name \'%1$s\' is neutral</string>
+</resources>

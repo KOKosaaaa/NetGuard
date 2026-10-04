@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">本应用 SOCKS5 身份验证</string>
+    <string name="security_name_2">其他 VPN</string>
+    <string name="security_name_3">SOCKS5 代理</string>
+    <string name="security_name_4">HTTP 代理</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">端口扫描</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">VPN 标志</string>
+    <string name="security_name_10">MTU 检查</string>
+    <string name="security_name_11">包名</string>
+    <string name="security_detail_1">隧道未启用，无法测试</string>
+    <string name="security_detail_2">服务器关闭了无身份验证的连接——正常</string>
+    <string name="security_detail_3">意外的 SOCKS 版本：%1$s</string>
+    <string name="security_detail_4">严重：本应用 SOCKS5 接受无身份验证——身份验证链已失效！</string>
+    <string name="security_detail_5">本应用 SOCKS5 正确要求用户名和密码验证</string>
+    <string name="security_detail_6">本应用 SOCKS5 拒绝无身份验证（NO ACCEPTABLE METHODS）</string>
+    <string name="security_detail_7">本应用 SOCKS5 返回了意外的方法：0x%1$s</string>
+    <string name="security_detail_8">无法测试本应用 SOCKS：%1$s</string>
+    <string name="security_detail_9">未安装其他已知 VPN 客户端</string>
+    <string name="security_detail_10">已安装其他 VPN 客户端（部分可能受到 2026 年 4 月本地 SOCKS 泄漏问题影响）：%1$s</string>
+    <string name="security_detail_11">标准端口上未发现无身份验证的 SOCKS5</string>
+    <string name="security_detail_12">存在漏洞：以下端口开放了无身份验证的 SOCKS5：%1$s</string>
+    <string name="security_detail_13">标准端口上未发现开放的 HTTP CONNECT 代理</string>
+    <string name="security_detail_14">存在漏洞：以下端口开放了 HTTP 代理：%1$s</string>
+    <string name="security_detail_15">未检测到 Xray gRPC API 端口</string>
+    <string name="security_detail_16">存在漏洞：Xray API 端口已开放：%1$s</string>
+    <string name="security_detail_17">未检测到 Clash REST API</string>
+    <string name="security_detail_18">存在漏洞：以下端口开放了 Clash API：%1$s——/connections 会泄漏所有 IP</string>
+    <string name="security_detail_19">localhost 上未开放已知 VPN 端口</string>
+    <string name="security_detail_20">已开放可检测的端口：%1$s</string>
+    <string name="security_detail_21">/proc/net/tcp 中未发现已知 VPN 端口</string>
+    <string name="security_detail_22">可在 /proc/net/tcp 中检测到：%1$s</string>
+    <string name="security_detail_23">无法读取 /proc/net/tcp（可能受到限制）</string>
+    <string name="security_detail_24">TRANSPORT_VPN 可见（在 Android 上无法避免）。应用可以检测到 VPN 已启用，但无法看到服务器 IP。</string>
+    <string name="security_detail_25">未检测到 TRANSPORT_VPN 标志（VPN 未启用，或检查在连接前运行）</string>
+    <string name="security_detail_26">无法检查 NetworkCapabilities</string>
+    <string name="security_detail_27">未检测到 TUN 接口</string>
+    <string name="security_detail_28">仅供参考：%1$s。仅凭 MTU 不能可靠判断是否使用 VPN。</string>
+    <string name="security_detail_29">无法检查接口 MTU</string>
+    <string name="security_detail_30">存在漏洞：包名 \'%1$s\' 包含 VPN 关键词</string>
+    <string name="security_detail_31">包名 \'%1$s\' 不含敏感标识</string>
+</resources>

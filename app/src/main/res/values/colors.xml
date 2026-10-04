@@ -32,7 +32,7 @@
     <color name="btn_connecting">#FF9800</color>
     <color name="btn_disconnected">#616161</color>
 
-    <color name="ic_launcher_background">#0D1B2A</color>
+    <color name="ic_launcher_background">#171421</color>
 
     <!-- fsociety theme: phosphor terminal green + alert red on pure black -->
     <color name="fsoc_bg">#000000</color>

@@ -151,13 +151,14 @@ class SubscriptionRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            val localized = com.smarttools.netguard.util.LocalizedResources.context(context)
             val message = when (e) {
-                is SocketTimeoutException -> context.getString(R.string.subscription_timeout_error)
-                is SubscriptionFormatException -> context.getString(R.string.subscription_format_error)
-                is SubscriptionSizeException -> context.getString(R.string.subscription_size_error)
+                is SocketTimeoutException -> localized.getString(R.string.subscription_timeout_error)
+                is SubscriptionFormatException -> localized.getString(R.string.subscription_format_error)
+                is SubscriptionSizeException -> localized.getString(R.string.subscription_size_error)
                 is SubscriptionHttpException -> "HTTP ${e.status}"
-                is IOException -> context.getString(R.string.subscription_network_error)
-                else -> e.message ?: context.getString(R.string.subscription_network_error)
+                is IOException -> localized.getString(R.string.subscription_network_error)
+                else -> e.message ?: localized.getString(R.string.subscription_network_error)
             }
             Result.failure(IOException(message, e))
         }

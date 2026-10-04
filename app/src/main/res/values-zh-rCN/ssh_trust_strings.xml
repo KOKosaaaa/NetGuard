@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">验证 SSH 服务器</string>
+    <string name="ssh_trust_message">继续前，请与服务器控制台中的指纹核对。尚未发送 SSH 密码。\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">信任此密钥</string>
+    <string name="ssh_trust_changed">SSH 主机密钥已更改。连接已阻止，请验证服务器身份。</string>
+    <string name="ssh_trust_rejected">未批准 SSH 主机密钥。未发送 SSH 密码。</string>
+</resources>

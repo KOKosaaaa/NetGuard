@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Некорректная ссылка подписки"</string>
+    <string name="subscription_url_required">"Введи ссылку"</string>
+    <string name="subscription_room_invalid">"Некорректная ссылка комнаты или профиля"</string>
+    <string name="subscription_profile_unsupported">"Ссылка профиля не поддерживается"</string>
+    <string name="profile_default_name">"Профиль"</string>
+    <string name="subscription_default_name">"Подписка"</string>
+    <string name="subscription_profile_invalid_details">"Некорректная ссылка профиля: %1$s"</string>
+    <string name="subscription_profile_added">"Профиль добавлен: %1$s"</string>
+    <string name="subscription_url_invalid_details">"Некорректная ссылка: %1$s"</string>
+    <string name="subscription_deleted_name">"Удалено: %1$s"</string>
+    <string name="subscription_update_with_errors">"Обновлено профилей: %1$d. Ошибок: %2$d"</string>
+    <string name="profile_room_invalid">"Некорректная ссылка комнаты"</string>
+    <string name="profile_address_invalid">"Некорректный адрес"</string>
+    <string name="profile_test_connect_first">"Сначала подключи VPN, чтобы не раскрыть свой IP-адрес"</string>
+    <string name="profile_test_proxy_unready">"Параметры VPN ещё не готовы"</string>
+    <string name="profile_testing">"Проверяю…"</string>
+    <string name="profile_test_failed">"Проверка не пройдена"</string>
+    <string name="backup_empty_json">"Файл настроек пуст"</string>
+    <string name="import_profiles_with_errors">"Импортировано профилей: %1$d. Ошибок: %2$d"</string>
+    <string name="connection_room_not_ready">"Сервер в комнате не подтвердил соединение"</string>
+    <string name="connection_whitelist_help">"Возможно, сервер блокируется по списку разрешённых IP. Попробуй WB Stream или Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">Обновлён %1$d профиль</item>
+        <item quantity="few">Обновлено %1$d профиля</item>
+        <item quantity="many">Обновлено %1$d профилей</item>
+        <item quantity="other">Обновлено %1$d профиля</item>
+    </plurals>
+</resources>

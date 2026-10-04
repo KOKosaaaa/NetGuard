@@ -78,7 +78,13 @@ data class ServerProfile(
     val isSelected: Boolean = false,
     val isFavorite: Boolean = false
 ) {
+    val isWbStream: Boolean get() = protocol == Protocol.WBSTREAM ||
+        (protocol == Protocol.TELEMOST && WbStreamLink.looksLike(address))
+    val displayProtocol: String get() = if (isWbStream) "WB Stream" else protocol.value.uppercase()
+    val relayHost: String get() = if (isWbStream) "stream.wb.ru" else "telemost.yandex.ru"
+
     fun toUri(): String {
+        if (isWbStream) return WbStreamLink.encode(address, name)
         return when (protocol) {
             Protocol.VLESS -> buildVlessUri()
             Protocol.VMESS -> buildVmessUri()
@@ -86,6 +92,7 @@ data class ServerProfile(
             Protocol.SHADOWSOCKS -> buildShadowsocksUri()
             Protocol.HYSTERIA2 -> buildHysteria2Uri()
             Protocol.TELEMOST -> buildTelemostUri()
+            Protocol.WBSTREAM -> WbStreamLink.encode(address, name)
         }
     }
 
@@ -189,7 +196,10 @@ enum class Protocol(val value: String) {
     TROJAN("trojan"),
     SHADOWSOCKS("shadowsocks"),
     HYSTERIA2("hysteria2"),
-    TELEMOST("telemost");
+    TELEMOST("telemost"),
+    WBSTREAM("wbstream");
+
+    val usesRelay: Boolean get() = this == TELEMOST || this == WBSTREAM
 
     companion object {
         fun fromString(s: String): Protocol = entries.firstOrNull {

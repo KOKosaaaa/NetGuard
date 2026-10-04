@@ -6,14 +6,15 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 /** Periodic service checks run even when the user is idle. */
-class ThrottleDetector(
+internal class ThrottleDetector(
     private val scope: CoroutineScope,
     private val probe: SocksServiceProbe,
     private val settings: () -> AppSettings,
     private val network: () -> String?,
     private val receivedBytes: () -> Long,
     private val onHealthy: () -> Unit,
-    private val onThrottle: (Set<HealthTarget>) -> Unit
+    private val onThrottle: (Set<HealthTarget>) -> Unit,
+    private val onObservation: (String, AppSettings, ServerQuality) -> Unit = { _, _, _ -> }
 ) {
     private var job: Job? = null
     fun arm() {
@@ -31,11 +32,16 @@ class ThrottleDetector(
                 if (!prefs.autoSwitchOnThrottle || currentNetwork == null) { policy.reset(); delay(10_000); continue }
                 val selected = HealthTarget.entries.filter { it.name in prefs.healthCheckServices }
                 if (selected.isEmpty()) { policy.reset(); delay(10_000); continue }
-                val results = coroutineScope {
-                    selected.map { target -> async(Dispatchers.IO) { parallel.withPermit { target to probe.check(target) } } }.awaitAll().toMap()
+                val answers = coroutineScope {
+                    selected.map { target -> async(Dispatchers.IO) { parallel.withPermit {
+                        val start = System.nanoTime()
+                        target to ServiceAnswer(probe.check(target), ((System.nanoTime() - start) / 1_000_000).toInt())
+                    } } }.awaitAll().toMap()
                 }
                 ensureActive()
                 if (network() != currentNetwork) { policy.reset(); continue }
+                if (settings() == prefs) onObservation(currentNetwork, prefs, ServerQuality(answers))
+                val results = answers.mapValues { it.value.state }
                 val rx = receivedBytes()
                 val receivingTraffic = rx - previousRx >= 1024
                 previousRx = rx

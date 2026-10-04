@@ -4,7 +4,12 @@
 
 Android VPN client built for privacy, security, and stealth. Powered by xray-core.
 
-## Version 2.0.0
+## Releases
+
+The current release is [3.0.0](docs/releases/3.0.0.md), with WB Stream,
+adaptive routing, a refreshed glass interface and sixteen languages.
+Download the signed ARM64 APK from [GitHub Releases](https://github.com/KOKosaaaa/NetGuard/releases/tag/v3.0.0).
+The application reports 3.0.0 (versionCode 114); the bundled server agent is 0.5.13.
 
 See the [2.0.0 release notes](docs/releases/2.0.0.md) for automatic per-site routing,
 Happ subscription compatibility, conservative service failover and active-server
@@ -17,11 +22,17 @@ Licensed under the **Apache License, Version 2.0** - see [`LICENSE`](LICENSE). Y
 
 ## What makes NetGuard different
 
-Most VPN clients (v2rayNG, Hiddify, v2rayTUN) are great tools, but they share common weaknesses: credentials sitting on disk, open local SOCKS ports, IP leaks during network switches, and package names that scream "VPN" to any DPI system. NetGuard was designed to fix all of that.
+NetGuard combines an authenticated local proxy, encrypted profile storage,
+per-site routing and conference transports. These protections describe this
+codebase; they are not a security assessment of other VPN clients.
 
 ### Zero-leak network switching
 
-When you switch between WiFi and mobile data, typical clients tear down the entire VPN tunnel and reconnect from scratch. During that window your real IP leaks. NetGuard keeps the TUN interface alive and only restarts the internal xray + tun2socks processes. Packets are black-holed until the tunnel is back up - zero leak window.
+During a managed Wi-Fi/mobile reconnect, NetGuard keeps the TUN interface alive
+while restarting its internal transport. Packets wait or are dropped until the
+transport is available. Protection after the app is stopped depends on Android's
+Always-on VPN and Block connections without VPN settings. AUTO/direct routing and
+explicit app exclusions intentionally permit direct traffic.
 
 ### Ephemeral authenticated SOCKS5
 
@@ -32,6 +43,9 @@ Every connection generates a fresh random port, a UUID username, and a 32-charac
 Xray receives its JSON configuration in memory through the libXray JNI API in a
 dedicated Android service process. The configuration is not passed through a
 native child process's command line or a persistent JSON configuration file.
+The hev JNI bridge reads a private, app-internal YAML file asynchronously. That
+file contains the temporary bridge credentials while the tunnel runs and is
+removed when the bridge stops; it is not copied to external storage.
 
 ### Built-in security self-test
 
@@ -46,7 +60,7 @@ native child process's command line or a persistent JSON configuration file.
 - VPN transport flag detection
 - MTU informational report (non-decisive - see self-test details)
 - Package name stealth analysis
-- Neighboring VPN clients (informational; flags installed apps that may be vulnerable to the April 2026 local-SOCKS leak)
+- Neighboring VPN clients (informational inventory, not proof of a vulnerability)
 
 ### Evil Twin WiFi protection
 
@@ -58,11 +72,15 @@ Test which services actually work through each server - YouTube, Telegram, Insta
 
 ### Stealth branding
 
-Package name `com.smarttools.netguard`, notification says "Connection active / Network service is running" - no mention of VPN or proxy anywhere visible to system-level inspection.
+Package name `com.smarttools.netguard`. Notification wording is localized and
+deliberately compact. Android still identifies this app as a VPN and can display
+its VPN indicator; branding does not hide the VPN from the operating system.
 
 ## Features
 
-**Protocols:** VLESS (+ REALITY), VMess, Trojan, Shadowsocks, Hysteria2, Telemost (loopback SOCKS5 LB over multi-channel relay)
+**Protocols:** VLESS (+ REALITY), VMess, Trojan, Shadowsocks, Telemost and WB Stream.
+Imported profiles require a protocol/transport supported by the bundled core;
+successful import alone does not establish that a server works.
 
 **Transports:** TCP, WebSocket, gRPC, HTTP/2, HTTP Upgrade, SplitHTTP, KCP, QUIC
 
@@ -73,13 +91,13 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 | WiFi Auto-Connect | Auto-enable VPN on untrusted WiFi + Evil Twin detection |
 | Material You | Dynamic color theme on Android 12+ |
 | Per-app routing | Whitelist / Blacklist / Disabled |
-| Auto-select best server | TCP ping all servers, connect to fastest |
+| Auto-select best server | Compare service responses and latency; bounded selection with cancellation |
 | Subscription management | Auto-update via WorkManager (6/12/24/48h) |
 | QR code | Scan (ML Kit + CameraX) and generate (ZXing) |
 | Deep link import | `vless://`, `vmess://`, `trojan://`, `ss://`, `hy2://` |
 | Traffic stats | Real-time speed, session/daily/weekly/total counters |
 | Home screen widget | One-tap connect/disconnect |
-| Quick Settings tile | Android 7.0+ notification panel toggle |
+| Quick Settings tile | Notification panel connect/disconnect toggle |
 | Boot auto-connect | Reconnect to last server on device restart |
 | DNS | Custom primary/secondary, optional DoH through proxy |
 | Routing modes | AUTO (per-site comparison, weekly cache) / Global proxy / Rule-based (RU direct) / Direct |
@@ -94,7 +112,7 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Security hardening
 
-- **Not vulnerable to the April 2026 VLESS local-SOCKS leak** affecting Happ, v2rayTUN, Hiddify, v2rayNG, NekoBox and others. No unauthenticated local SOCKS5 inbound is ever exposed - both internal bridges (SOCKS5 for tun2socks, HTTP for internal speed/service tests) require the ephemeral 32-char password. See *Ephemeral authenticated SOCKS5* above.
+- Local SOCKS5 and the HTTP bridge for internal tests require session credentials. Regression tests check rejection of unauthenticated SOCKS5 clients.
 - The TUN-to-SOCKS bridge runs through hev JNI in the app process; its credentials are no longer passed to a native child process through command-line arguments.
 - SQLCipher encrypts the Room database, with migration from the existing plaintext database. EncryptedSharedPreferences holds key material and small secrets, including the site-route cache.
 - Log redaction - UUIDs, passwords, Bearer tokens masked automatically
@@ -111,8 +129,9 @@ Package name `com.smarttools.netguard`, notification says "Connection active / N
 
 ## Known limitations
 
-- AUTO uses independent HEAD probes to compare reachability and response latency, not full download speed or every authenticated page. HTTP/3 and ECH-hidden names use the core route without per-site comparison. A direct route exposes the connection's normal public IP to the destination.
-- **`androidx.security:security-crypto` was deprecated by Google in 2024.** The 1.1.0-alpha06 release still works on current Android, but Android 15/16 may change backing-store behaviour without backward-compatibility guarantees. Migration path: move to `java.security.KeyStore.getInstance("AndroidKeyStore")` directly, generate the AES-256 key via `KeyGenerator`, and store ciphertext in plain `SharedPreferences`. Tracked, not urgent.
+- AUTO uses independent, bounded probes to compare reachability and response latency, not full download speed or every authenticated page. Probe results and actual forwarded traffic are recorded separately. HTTP/3 and ECH-hidden names use the core route without per-site comparison. A direct route exposes the connection's normal public IP to the destination.
+- WB Stream and Telemost depend on third-party signaling and media relays. Their bandwidth, room lifetime and availability vary; parallel channels do not guarantee a particular speed.
+- Local fixtures and emulator tests do not establish performance on a particular carrier or long-running stability on a physical phone.
 - Real network or server failures can still interrupt established connections. On-device migration and long-running Remote sessions need device validation.
 
 ## Acknowledgements
@@ -587,7 +606,8 @@ Sprint-1 + Sprint-2 of the post-v1.1.8 code-review fix list. Closes 6 P0 (critic
 - Speed-test URLs switched to HTTPS where the endpoint supports it; cleartext exception narrowed to `speedtest.tele2.net` only (was three domains).
 - Removed unused `ConfigBuilder.kt` wrapper, cleaned out imaginary `com.github.nicknob.*` entries from `KNOWN_VPN_PACKAGES`, removed the dead `SQLCipher` dependency (was declared but never wired into Room).
 - First unit tests: `AddressValidatorTest` covers the SSRF-critical logic (16 cases, including CGNAT, hex/octal IPv4, IPv4-mapped IPv6).
-- CI: GitHub Actions workflow runs `./gradlew testDebugUnitTest` on push / PR.
+- Run `./gradlew testDebugUnitTest lintRelease` locally with the native inputs
+  described in `app/libs/README.md`; those inputs are not downloaded by CI.
 - `SECURITY.md` with responsible-disclosure policy.
 - `User-Agent` now reads from `BuildConfig.VERSION_NAME` instead of the hard-coded `"NetGuard/1.0"`.
 

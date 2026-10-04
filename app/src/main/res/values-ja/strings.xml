@@ -172,7 +172,7 @@
     <string name="speed_test_desc">ホーム画面に速度テストボタン</string>
     <string name="speed_test">速度テスト</string>
     <string name="auto_connect_wifi">WiFi自動接続</string>
-    <string name="auto_connect_wifi_desc">不明なWiFiでVPN接続 + Evil Twin保護</string>
+    <string name="auto_connect_wifi_desc">信頼されていないWi-FiでVPNに接続します。Androidがネットワーク情報を隠す場合も信頼されていないと見なします。事前にVPNの許可が必要です。</string>
     <string name="trusted_wifi">信頼済みWiFiネットワーク</string>
     <string name="add_current_wifi">現在のWiFiを追加</string>
     <string name="location_needed_for_wifi">WiFi名の読み取りに位置情報の許可が必要です</string>
@@ -388,9 +388,9 @@
     <string name="srv_profiles_empty_how_title">仕組み</string>
     <string name="srv_profiles_empty_title">ここに VPN プロファイルが表示されます</string>
     <string name="srv_proto_telemost_badge">YA</string>
-    <string name="srv_proto_telemost_desc">＋ 通常の VPN がブロックされる「БС モード」でも動作します。\n－ VLESS より遅く、サーバーと端末への負荷がかなり大きくなります。\n本物の Telemost 会議の中にトラフィックを隠します。NetGuard 専用。</string>
+    <string name="srv_proto_telemost_desc">＋ 通常の VPN がブロックされる「許可リスト方式」でも動作します。\n－ VLESS より遅く、サーバーと端末への負荷がかなり大きくなります。\n本物の Telemost 会議の中にトラフィックを隠します。NetGuard 専用。</string>
     <string name="srv_proto_telemost_title">ビデオ会議（Telemost）</string>
-    <string name="srv_proto_vless_desc">＋ 高速で、サーバーと端末への負荷がほとんどありません。大手サイトに偽装します。\n－ 事業者が IP アドレスで遮断する「БС モード」では動作しません。\nNetGuard, Hiddify, v2rayNG, Streisand に適しています。</string>
+    <string name="srv_proto_vless_desc">＋ 高速で、サーバーと端末への負荷がほとんどありません。大手サイトに偽装します。\n－ 事業者が IP アドレスで遮断する「許可リスト方式」では動作しません。\nNetGuard, Hiddify, v2rayNG, Streisand に適しています。</string>
     <string name="srv_proto_vless_title">VLESS + REALITY · 推奨</string>
     <string name="srv_protocol">プロトコル</string>
     <string name="srv_purge_confirm">これはアプリがこのサーバーに設定したすべてを消去します: エージェント、xray、sing-box、Telemost と、それらの設定および wlb ユーザー。サーバーはクリーンな状態になり、アプリから削除されます。これは元に戻せません。</string>

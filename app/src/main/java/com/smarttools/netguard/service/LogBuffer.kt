@@ -130,6 +130,9 @@ object LogBuffer {
         updateChannel.trySend(Unit)
     }
 
+    /** Fresh export snapshot, including entries awaiting the UI debounce. */
+    fun snapshot(): List<LogEntry> = synchronized(entries) { entries.toList() }
+
     fun clear() {
         synchronized(entries) { entries.clear() }
         _flow.value = emptyList()

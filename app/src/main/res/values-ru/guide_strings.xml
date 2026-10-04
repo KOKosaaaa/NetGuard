@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="launcher_icon_title" tools:ignore="MissingTranslation">Иконка приложения</string>
+    <string name="launcher_icon_follow" tools:ignore="MissingTranslation">По теме приложения</string>
+    <string name="guide_about" tools:ignore="MissingTranslation">О приложении</string>
+    <string name="guide_skip" tools:ignore="MissingTranslation">Пропустить</string>
+    <string name="guide_start" tools:ignore="MissingTranslation">Начать</string>
+    <string name="guide_close" tools:ignore="MissingTranslation">Закрыть</string>
+    <string name="guide_page" tools:ignore="MissingTranslation">%1$d из %2$d</string>
+    <string name="guide_version" tools:ignore="MissingTranslation">NetGuard · %1$s</string>
+    <string name="guide_app_title" tools:ignore="MissingTranslation">Что такое NetGuard</string>
+    <string name="guide_app_body" tools:ignore="MissingTranslation">NetGuard помогает открывать сайты и приложения через VPN и выбирать подходящий способ подключения.\n\nПоддерживает подписки, отдельные серверы и подключения через видеоконференции. Основные настройки можно менять в любой момент.</string>
+    <string name="guide_auto_title" tools:ignore="MissingTranslation">Как работает автоматический режим</string>
+    <string name="guide_auto_body" tools:ignore="MissingTranslation">Приложение сравнивает доступность сайта напрямую и через VPN. Когда проверка даёт достаточно данных, оно запоминает подходящий маршрут и периодически проверяет его снова.\n\nПервое открытие может пройти через VPN, пока идёт проверка. Для выбранных приложений можно включить «Всегда через VPN».</string>
+    <string name="guide_wb_title" tools:ignore="MissingTranslation">Что такое WB Stream</string>
+    <string name="guide_wb_body" tools:ignore="MissingTranslation">WB Stream передаёт интернет-трафик внутри видеопотока конференции. Это дополнительный способ подключения, когда обычный VPN недоступен, но WB Stream продолжает работать.\n\nДля подключения нужен настроенный сервер и комната WB Stream. Автовосстановление помогает поддерживать соединение, но скорость и стабильность зависят от сети и сервиса. Для больших загрузок обычный VPN может быть быстрее.</string>
+    <string name="guide_help_title" tools:ignore="MissingTranslation">Если что-то не работает</string>
+    <string name="guide_help_body" tools:ignore="MissingTranslation">Текущий сервер виден на главном экране, а результаты проверок и фактически использованные маршруты — в диагностике.\n\nЕсли соединение зависает или скорость падает, сохраните лог сразу после проблемы — он поможет понять причину. Успешная проверка отдельного сайта ещё не гарантирует работу всех функций приложения.</string>
+</resources>

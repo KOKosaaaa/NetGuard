@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">अपने SOCKS5 का प्रमाणीकरण</string>
+    <string name="security_name_2">अन्य VPN</string>
+    <string name="security_name_3">SOCKS5 प्रॉक्सी</string>
+    <string name="security_name_4">HTTP प्रॉक्सी</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">पोर्ट स्कैन</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">VPN फ़्लैग</string>
+    <string name="security_name_10">MTU की जाँच</string>
+    <string name="security_name_11">पैकेज का नाम</string>
+    <string name="security_detail_1">टनल सक्रिय नहीं है, टेस्ट नहीं हो सकता</string>
+    <string name="security_detail_2">बिना प्रमाणीकरण पर सर्वर ने कनेक्शन बंद किया — सही</string>
+    <string name="security_detail_3">अप्रत्याशित SOCKS संस्करण: %1$s</string>
+    <string name="security_detail_4">गंभीर: अपना SOCKS5 बिना प्रमाणीकरण स्वीकार करता है — प्रमाणीकरण श्रृंखला टूट गई है!</string>
+    <string name="security_detail_5">अपना SOCKS5 सही तरीके से उपयोगकर्ता/पासवर्ड प्रमाणीकरण माँगता है</string>
+    <string name="security_detail_6">अपना SOCKS5 बिना प्रमाणीकरण अस्वीकार करता है (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">अपने SOCKS5 ने अप्रत्याशित विधि लौटाई: 0x%1$s</string>
+    <string name="security_detail_8">अपने SOCKS का टेस्ट नहीं हो सका: %1$s</string>
+    <string name="security_detail_9">अन्य ज्ञात VPN क्लाइंट इंस्टॉल नहीं हैं</string>
+    <string name="security_detail_10">अन्य VPN क्लाइंट इंस्टॉल हैं (कुछ अप्रैल 2026 के स्थानीय SOCKS लीक से प्रभावित हो सकते हैं): %1$s</string>
+    <string name="security_detail_11">मानक पोर्ट पर बिना प्रमाणीकरण वाला SOCKS5 नहीं मिला</string>
+    <string name="security_detail_12">असुरक्षित: इन पोर्ट पर बिना प्रमाणीकरण SOCKS5 खुला है: %1$s</string>
+    <string name="security_detail_13">मानक पोर्ट पर खुली HTTP CONNECT प्रॉक्सी नहीं मिली</string>
+    <string name="security_detail_14">असुरक्षित: इन पोर्ट पर HTTP प्रॉक्सी खुली है: %1$s</string>
+    <string name="security_detail_15">Xray gRPC API पोर्ट नहीं मिले</string>
+    <string name="security_detail_16">असुरक्षित: Xray API पोर्ट खुले हैं: %1$s</string>
+    <string name="security_detail_17">Clash REST API नहीं मिला</string>
+    <string name="security_detail_18">असुरक्षित: इन पोर्ट पर Clash API खुला है: %1$s — /connections सभी IP लीक करता है</string>
+    <string name="security_detail_19">localhost पर ज्ञात VPN पोर्ट खुले नहीं हैं</string>
+    <string name="security_detail_20">पहचाने जा सकने वाले पोर्ट खुले हैं: %1$s</string>
+    <string name="security_detail_21">/proc/net/tcp में ज्ञात VPN पोर्ट नहीं मिले</string>
+    <string name="security_detail_22">/proc/net/tcp में पहचाना जा सकता है: %1$s</string>
+    <string name="security_detail_23">/proc/net/tcp पढ़ा नहीं जा सकता (पाबंदी हो सकती है)</string>
+    <string name="security_detail_24">TRANSPORT_VPN दिखाई देता है (Android पर इसे छिपाना संभव नहीं)। ऐप VPN सक्रिय होने का पता लगा सकते हैं, लेकिन सर्वर का IP नहीं देख सकते।</string>
+    <string name="security_detail_25">TRANSPORT_VPN फ़्लैग नहीं मिला (VPN सक्रिय नहीं है या जाँच कनेक्शन से पहले हुई)</string>
+    <string name="security_detail_26">NetworkCapabilities जाँचा नहीं जा सकता</string>
+    <string name="security_detail_27">TUN इंटरफ़ेस नहीं मिला</string>
+    <string name="security_detail_28">केवल जानकारी: %1$s। अकेला MTU, VPN का विश्वसनीय संकेत नहीं है।</string>
+    <string name="security_detail_29">इंटरफ़ेस MTU जाँचा नहीं जा सकता</string>
+    <string name="security_detail_30">असुरक्षित: पैकेज नाम \'%1$s\' में VPN कीवर्ड हैं</string>
+    <string name="security_detail_31">पैकेज नाम \'%1$s\' तटस्थ है</string>
+</resources>

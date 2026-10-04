@@ -172,7 +172,7 @@
     <string name="speed_test_desc">Pulsante test velocità nella schermata principale</string>
     <string name="speed_test">Test di velocità</string>
     <string name="auto_connect_wifi">Connessione automatica WiFi</string>
-    <string name="auto_connect_wifi_desc">VPN su WiFi sconosciuto + protezione Evil Twin</string>
+    <string name="auto_connect_wifi_desc">VPN su reti Wi-Fi non attendibili, anche quando Android nasconde i dati della rete. È necessaria una precedente autorizzazione VPN.</string>
     <string name="trusted_wifi">Reti WiFi affidabili</string>
     <string name="add_current_wifi">Aggiungi WiFi attuale</string>
     <string name="location_needed_for_wifi">Permesso posizione necessario per il nome WiFi</string>

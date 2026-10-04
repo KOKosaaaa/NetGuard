@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Autenticación SOCKS5 propia</string>
+    <string name="security_name_2">Otras VPN</string>
+    <string name="security_name_3">Proxy SOCKS5</string>
+    <string name="security_name_4">Proxy HTTP</string>
+    <string name="security_name_5">API de Xray</string>
+    <string name="security_name_6">API de Clash</string>
+    <string name="security_name_7">Escaneo de puertos</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">Indicador VPN</string>
+    <string name="security_name_10">Comprobación de MTU</string>
+    <string name="security_name_11">Nombre del paquete</string>
+    <string name="security_detail_1">El túnel no está activo; no se puede probar</string>
+    <string name="security_detail_2">El servidor cerró la conexión sin autenticación: correcto</string>
+    <string name="security_detail_3">Versión SOCKS inesperada: %1$s</string>
+    <string name="security_detail_4">CRÍTICO: el SOCKS5 propio acepta NO AUTH; ¡la cadena de autenticación está rota!</string>
+    <string name="security_detail_5">El SOCKS5 propio exige correctamente usuario y contraseña</string>
+    <string name="security_detail_6">El SOCKS5 propio rechaza conexiones sin autenticación (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">El SOCKS5 propio devolvió un método inesperado: 0x%1$s</string>
+    <string name="security_detail_8">No se pudo probar el SOCKS propio: %1$s</string>
+    <string name="security_detail_9">No hay otros clientes VPN conocidos instalados</string>
+    <string name="security_detail_10">Hay otros clientes VPN instalados (algunos pueden estar afectados por la filtración SOCKS local de abril de 2026): %1$s</string>
+    <string name="security_detail_11">No se encontró SOCKS5 sin autenticación en los puertos habituales</string>
+    <string name="security_detail_12">VULNERABLE: SOCKS5 abierto sin autenticación en los puertos: %1$s</string>
+    <string name="security_detail_13">No se encontró un proxy HTTP CONNECT abierto en los puertos habituales</string>
+    <string name="security_detail_14">VULNERABLE: proxy HTTP abierto en los puertos: %1$s</string>
+    <string name="security_detail_15">No se detectaron puertos de la API gRPC de Xray</string>
+    <string name="security_detail_16">VULNERABLE: puertos de la API de Xray abiertos: %1$s</string>
+    <string name="security_detail_17">No se detectó la API REST de Clash</string>
+    <string name="security_detail_18">VULNERABLE: API de Clash abierta en los puertos: %1$s; /connections revela todas las IP</string>
+    <string name="security_detail_19">No hay puertos VPN conocidos abiertos en localhost</string>
+    <string name="security_detail_20">Puertos detectables abiertos: %1$s</string>
+    <string name="security_detail_21">No se encontraron puertos VPN conocidos en /proc/net/tcp</string>
+    <string name="security_detail_22">Detectable en /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">No se puede leer /proc/net/tcp (puede estar restringido)</string>
+    <string name="security_detail_24">TRANSPORT_VPN es visible (inevitable en Android). Las apps pueden detectar que la VPN está activa, pero no pueden ver la IP del servidor.</string>
+    <string name="security_detail_25">No se detectó el indicador TRANSPORT_VPN (VPN inactiva o comprobación anterior a la conexión)</string>
+    <string name="security_detail_26">No se puede comprobar NetworkCapabilities</string>
+    <string name="security_detail_27">No se detectó ninguna interfaz TUN</string>
+    <string name="security_detail_28">Solo informativo: %1$s. La MTU por sí sola no es un indicador fiable de VPN.</string>
+    <string name="security_detail_29">No se puede comprobar la MTU de la interfaz</string>
+    <string name="security_detail_30">VULNERABLE: el nombre del paquete «%1$s» contiene palabras clave de VPN</string>
+    <string name="security_detail_31">El nombre del paquete «%1$s» es neutro</string>
+</resources>

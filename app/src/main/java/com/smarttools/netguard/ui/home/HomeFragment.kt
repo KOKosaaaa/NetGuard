@@ -22,6 +22,7 @@ import com.smarttools.netguard.model.ConnectionState
 import com.smarttools.netguard.model.TrafficStatsMode
 import com.smarttools.netguard.util.GeoLookup
 import com.smarttools.netguard.util.TrafficFormatter
+import com.smarttools.netguard.util.SpeedTester
 import com.smarttools.netguard.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -473,8 +474,16 @@ class HomeFragment : Fragment() {
     // terminal-style header/prompt. Default false so every other theme is
     // visually unchanged.
     private var fsocietyMode = false
+    private var speedSheet: com.google.android.material.bottomsheet.BottomSheetDialog? = null
+    private var detailsSheet: com.google.android.material.bottomsheet.BottomSheetDialog? = null
+    private var twoColumns=false
+    private var fittedViewport=""
+    private var portraitLayout = emptyList<Pair<View, android.widget.LinearLayout.LayoutParams>>()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        twoColumns=false
+        fittedViewport=""
+        portraitLayout = emptyList()
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -489,14 +498,42 @@ class HomeFragment : Fragment() {
         // fsociety theme is active so other themes stay clean. The visibility
         // toggle here keeps the layout flow identical for every other theme.
         fsocietyMode = settings.themeMode == com.smarttools.netguard.model.ThemeMode.FSOCIETY
+        binding.homeMap.setTerminalTypography(fsocietyMode)
         val maskVis = if (fsocietyMode) View.VISIBLE else View.GONE
-        binding.tvFsocHeader.visibility = maskVis
+        binding.tvFsocHeader.visibility = View.GONE
         binding.tvFsocPrompt.visibility = maskVis
 
         if (fsocietyMode) {
-            startCursorBlink()
-            installProfileNameEasterEgg()
+            binding.tvFsocPrompt.text = "root@fsociety:~$ [ OFF ]"
         }
+
+        binding.serverCard.setOnClickListener {
+            androidx.navigation.fragment.NavHostFragment.findNavController(this).navigate(R.id.nav_profiles)
+        }
+        binding.serverCard.setOnLongClickListener {
+            val p=viewModel.connectionProfile.value.second
+            if(p!=null)com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(p.name).setMessage(p.displayProtocol).setPositiveButton(android.R.string.ok,null).show()
+            true
+        }
+        val speedContent=binding.speedCard
+        (speedContent.parent as ViewGroup).removeView(speedContent)
+        speedContent.setContentPadding(dp(22),dp(24),dp(22),dp(24))
+        speedContent.setCardBackgroundColor(themeColor(com.google.android.material.R.attr.colorSurface))
+        for(tv in listOf(binding.tvSpeedStage,binding.tvSpeedResult,binding.tvSpeedError)) {
+            tv.textSize=16f; tv.setPadding(0,dp(10),0,dp(10))
+        }
+        speedSheet=com.google.android.material.bottomsheet.BottomSheetDialog(requireContext()).apply {
+            setContentView(androidx.core.widget.NestedScrollView(requireContext()).apply { addView(speedContent) })
+            setOnShowListener { behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED }
+            setOnDismissListener { viewModel.cancelSpeedTest() }
+        }
+        binding.homeMap.overview=true
+        binding.homeMap.setVectorMap(R.drawable.world_map_clean)
+        binding.homeMap.setLocations(GeoLookup.getUserLocation(),null)
+        binding.btnDetails.setOnClickListener { showTrafficDetails() }
+        binding.layoutStats.setOnClickListener { showTrafficDetails() }
+        binding.root.addOnLayoutChangeListener { _,_,_,_,_,_,_,_,_ -> fitHome() }
 
         binding.btnConnect.setOnClickListener {
             val state = viewModel.connectionState.value
@@ -519,19 +556,15 @@ class HomeFragment : Fragment() {
             viewModel.autoSelectAndConnect()
         }
 
-        // Connection map setup
-        if (settings.showConnectionMap) {
-            binding.connectionMap.visibility = View.VISIBLE
-            binding.connectionMap.setMapImage(R.drawable.world_map)
-            binding.connectionMap.setLocations(GeoLookup.getUserLocation(), null)
-        }
-
         // Speed test setup
         if (settings.showSpeedTest) {
             binding.btnSpeedTest.setOnClickListener {
+                binding.speedCard.visibility=View.VISIBLE
+                speedSheet?.show()
                 viewModel.runSpeedTest()
             }
         }
+        binding.btnCancelSpeed.setOnClickListener { viewModel.cancelSpeedTest() }
 
         updateSessionStats()
 
@@ -561,8 +594,7 @@ class HomeFragment : Fragment() {
                 }
                 launch {
                     viewModel.trafficStats.collect { stats ->
-                        binding.tvDownSpeed.text = TrafficFormatter.formatSpeed(stats.rxSpeed)
-                        binding.tvUpSpeed.text = TrafficFormatter.formatSpeed(stats.txSpeed)
+                        renderTraffic(stats)
                         binding.tvDownTotal.text = TrafficFormatter.formatBytes(stats.rxBytes)
                         binding.tvUpTotal.text = TrafficFormatter.formatBytes(stats.txBytes)
                     }
@@ -576,29 +608,32 @@ class HomeFragment : Fragment() {
                         // the map after a switch or after this view stops.
                         mapLookup?.cancel()
                         binding.tvProfileName.text = profile?.name ?: getString(R.string.no_profile_selected)
+                        binding.tvProfileProtocol.text=profile?.displayProtocol ?: ""
+                        binding.serverCard.contentDescription=listOfNotNull(profile?.name,profile?.displayProtocol,getString(R.string.home_choose_server)).joinToString(" · ")
                         if (!settings.showConnectionMap) return@collect
 
                         val connected = state is ConnectionState.Connected && profile != null
                         val namedLocation = if (connected) profile?.let { GeoLookup.fromProfileName(it.name) } else null
-                        binding.connectionMap.setServerLabel(if (connected) profile?.name else null)
-                        binding.connectionMap.setLocations(GeoLookup.getUserLocation(), namedLocation)
-                        binding.connectionMap.setConnected(connected && namedLocation != null)
+                        binding.homeMap.setServerLabel(if(connected)profile?.name else null)
+                        binding.homeMap.setLocations(GeoLookup.getUserLocation(),namedLocation)
+                        binding.homeMap.setConnected(connected)
                         if (!connected || profile == null) return@collect
 
                         mapLookup = launch {
-                            val serverLocation = namedLocation ?: withContext(Dispatchers.IO) {
-                                // Telemost addresses contain a meeting URL, not a host.
-                                if (profile.protocol == com.smarttools.netguard.model.Protocol.TELEMOST) null
-                                else GeoLookup.fromIp(profile.address)
+                            val proxy = com.smarttools.netguard.core.CredentialManager.speedProxy(profile.protocol.usesRelay)
+                            val serverLocation = withContext(Dispatchers.IO) {
+                                val exit = proxy?.let { GeoLookup.fromTunnel(it) }
+                                exit ?: namedLocation ?: if (profile.protocol.usesRelay) null else GeoLookup.fromIp(profile.address)
                             }
-                            binding.connectionMap.setLocations(GeoLookup.getUserLocation(), serverLocation)
-                            binding.connectionMap.setConnected(serverLocation != null)
+                            if (proxy != null && !com.smarttools.netguard.core.CredentialManager.isCurrent(proxy)) return@launch
+                            binding.homeMap.setLocations(GeoLookup.getUserLocation(),serverLocation)
+                            binding.homeMap.setConnected(true)
                             // Refresh only during an active connection. This job
                             // owns both locations; no independent callback can
                             // replace the active server with the saved selection.
                             val userLocation = withContext(Dispatchers.IO) { GeoLookup.fetchUserLocation() }
                             if (userLocation != null) {
-                                binding.connectionMap.setLocations(userLocation, serverLocation)
+                                binding.homeMap.setLocations(userLocation,serverLocation)
                             }
                         }
                     }
@@ -606,6 +641,9 @@ class HomeFragment : Fragment() {
                 launch {
                     viewModel.autoSelecting.collect { selecting ->
                         binding.btnAutoSelect.isEnabled = !selecting
+                        // Theme changes reapply text colors. Alpha preserves the
+                        // busy state through Connected and avoids text/spinner overlap.
+                        binding.btnAutoSelect.alpha = if (selecting) 0f else 1f
                         binding.progressAutoSelect.visibility = if (selecting) View.VISIBLE else View.GONE
                     }
                 }
@@ -622,22 +660,56 @@ class HomeFragment : Fragment() {
                     launch {
                         viewModel.speedTesting.collect { testing ->
                             binding.btnSpeedTest.isEnabled = !testing
+                            binding.btnSpeedTest.alpha = if (testing) 0f else 1f
                             binding.progressSpeedTest.visibility = if (testing) View.VISIBLE else View.GONE
+                            binding.btnCancelSpeed.visibility = if (testing) View.VISIBLE else View.GONE
+                            updateSpeedCard()
+                        }
+                    }
+                    launch {
+                        viewModel.speedStage.collect { stage ->
+                            binding.tvSpeedStage.visibility = if (stage == null) View.GONE else View.VISIBLE
+                            binding.tvSpeedStage.text = stage?.let { getString(when (it) {
+                                SpeedTester.Stage.LATENCY -> R.string.speed_latency_stage
+                                SpeedTester.Stage.DOWNLOAD -> R.string.speed_download_stage
+                                SpeedTester.Stage.UPLOAD -> R.string.speed_upload_stage
+                            }) }
+                            updateSpeedCard()
+                        }
+                    }
+                    launch {
+                        viewModel.speedError.collect { error ->
+                            binding.tvSpeedError.visibility = if (error == null) View.GONE else View.VISIBLE
+                            binding.tvSpeedError.text = error?.let { getString(when (it) {
+                                MainViewModel.SpeedError.NOT_READY -> R.string.speed_not_ready
+                                MainViewModel.SpeedError.FAILED -> R.string.speed_failed
+                                MainViewModel.SpeedError.TIMEOUT -> R.string.speed_timeout
+                            }) }
+                            updateSpeedCard()
                         }
                     }
                     launch {
                         viewModel.speedResult.collect { result ->
+                            binding.tvSpeedResult.visibility = if (result == null) View.GONE else View.VISIBLE
                             if (result != null) {
-                                binding.tvSpeedResult.visibility = View.VISIBLE
-                                val dlText = if (result.downloadMbps < 0) "—" else String.format("%.1f", result.downloadMbps)
-                                val ulText = if (result.uploadMbps < 0) "—" else String.format("%.1f", result.uploadMbps)
-                                binding.tvSpeedResult.text = "\u2193 $dlText Mbps  \u2191 $ulText Mbps  Ping ${result.pingMs}ms"
+                                fun rate(value: Double) = if (value < 0) getString(R.string.speed_unmeasured)
+                                    else getString(R.string.speed_value, String.format("%.1f", value))
+                                val latency = if (result.pingMs < 0) getString(R.string.speed_unmeasured)
+                                    else getString(R.string.speed_latency_value, result.pingMs)
+                                binding.tvSpeedResult.text = getString(R.string.speed_results,
+                                    rate(result.downloadMbps), rate(result.uploadMbps), latency)
                             }
+                            updateSpeedCard()
                         }
                     }
                 }
             }
         }
+    }
+
+    private fun updateSpeedCard() {
+        // This content lives in the result sheet, never in the fixed Home viewport.
+        binding.speedCard.visibility=View.VISIBLE
     }
 
     override fun onResume() {
@@ -651,10 +723,11 @@ class HomeFragment : Fragment() {
         val app = requireActivity().application as App
         val statsRepo = app.statsRepository
         val mode = app.loadSettings().trafficStatsMode
+        binding.historyCard.visibility = if (mode == TrafficStatsMode.HIDDEN) View.GONE else View.VISIBLE
 
         when (mode) {
             TrafficStatsMode.CHART -> {
-                binding.trafficChart.visibility = View.VISIBLE
+                binding.trafficChart.visibility = if(isCompact())View.GONE else View.VISIBLE
                 binding.layoutSessionStats.visibility = View.VISIBLE
                 binding.trafficChart.setData(statsRepo.getDailyHistory(7))
             }
@@ -677,36 +750,228 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateUI(state: ConnectionState) {
+        binding.tvStatus.setOnClickListener(null)
+        binding.btnConnect.text=getString(if(state.isActive)R.string.disconnect else R.string.connect)
+        val backdrop=requireActivity().findViewById<com.smarttools.netguard.widget.LiquidBackdrop>(R.id.liquid_backdrop)
+        val shellState=when(state){is ConnectionState.Connected -> "ON";is ConnectionState.Connecting -> "WAIT";else -> "OFF"}
+        binding.tvFsocPrompt.text=if(fsocietyMode) "root@fsociety:~$ [ $shellState ]" else "[ VPN / $shellState ]"
         when (state) {
             is ConnectionState.Disconnected -> {
-                binding.btnConnect.setBackgroundResource(R.drawable.bg_button_disconnected)
-                binding.tvStatus.text = if (fsocietyMode) "[ OFFLINE ]" else getString(R.string.status_disconnected)
-                binding.tvStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_disconnected))
-                if (fsocietyMode) setFsocPrompt("root@fsociety:~$ awaiting target")
+                binding.tvStatus.text = getString(R.string.status_disconnected)
+                binding.tvStatus.setTextColor(backdrop.foreground)
+                binding.btnConnect.contentDescription = getString(R.string.connect)
                 stopPulse()
             }
             is ConnectionState.Connecting -> {
-                binding.btnConnect.setBackgroundResource(R.drawable.bg_button_connecting)
-                binding.tvStatus.text = if (fsocietyMode) "[ DECRYPTING TUNNEL... ]" else getString(R.string.status_connecting)
-                binding.tvStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_connecting))
-                if (fsocietyMode) setFsocPrompt("root@fsociety:~$ ./hack-the-planet.sh")
+                binding.tvStatus.text = getString(R.string.status_connecting)
+                binding.tvStatus.setTextColor(backdrop.foreground)
+                binding.btnConnect.contentDescription = getString(R.string.disconnect)
                 stopPulse()
             }
             is ConnectionState.Connected -> {
-                binding.btnConnect.setBackgroundResource(R.drawable.bg_button_connected)
-                binding.tvStatus.text = if (fsocietyMode) "[ ROOT // ALIVE ]" else getString(R.string.status_connected)
-                binding.tvStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_connected))
-                if (fsocietyMode) setFsocPrompt("root@fsociety:~$ control is an illusion")
-                startPulse()
+                binding.tvStatus.text = getString(R.string.status_connected)
+                binding.tvStatus.setTextColor(backdrop.foreground)
+                binding.btnConnect.contentDescription = getString(R.string.disconnect)
+                stopPulse()
             }
             is ConnectionState.Error -> {
-                binding.btnConnect.setBackgroundResource(R.drawable.bg_button_disconnected)
-                binding.tvStatus.text = if (fsocietyMode) "[ SEGFAULT ]" else humanizeConnError(state.message)
+                binding.tvStatus.text = getString(R.string.status_disconnected)
+                binding.tvStatus.setOnClickListener { com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                    .setMessage(humanizeConnError(state.message)).setPositiveButton(android.R.string.ok,null).show() }
                 binding.tvStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_error))
-                if (fsocietyMode) setFsocPrompt("root@fsociety:~$ ${state.message.take(40)}")
+                binding.btnConnect.contentDescription = getString(R.string.connect)
                 stopPulse()
             }
         }
+        renderTraffic()
+    }
+
+    private fun renderTraffic(stats: com.smarttools.netguard.service.TunnelVpnService.TrafficSnapshot = viewModel.trafficStats.value) {
+        val connected = viewModel.connectionState.value is ConnectionState.Connected
+        val captionsHidden = (binding.layoutStats.getChildAt(0) as ViewGroup).getChildAt(0).visibility == View.GONE
+        binding.tvDownSpeed.text = (if (captionsHidden) "↓" else "") + TrafficFormatter.formatSpeed(if (connected) stats.rxSpeed else 0)
+        binding.tvUpSpeed.text = (if (captionsHidden) "↑" else "") + TrafficFormatter.formatSpeed(if (connected) stats.txSpeed else 0)
+        binding.tvDownSpeed.contentDescription = getString(R.string.home_download) + " " + binding.tvDownSpeed.text
+        binding.tvUpSpeed.contentDescription = getString(R.string.home_upload) + " " + binding.tvUpSpeed.text
+    }
+
+    private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
+    private fun isCompact()=binding.root.height>0 && binding.root.height/resources.displayMetrics.density<540 || resources.configuration.fontScale>1.25f
+    private fun setStatusSize(minSp: Int, maxSp: Int) {
+        // Reset wrap-content's measured font before changing the autosize range.
+        // Otherwise expanding from the compact viewport keeps the small font.
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(binding.tvStatus, android.widget.TextView.AUTO_SIZE_TEXT_TYPE_NONE)
+        binding.tvStatus.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, maxSp.toFloat())
+        // Measure the actual TextView: fallback fonts and locale-specific minimum
+        // line metrics can be taller than Paint/StaticLayout's default metrics.
+        binding.tvStatus.minimumHeight = 0
+        binding.tvStatus.measure(
+            View.MeasureSpec.makeMeasureSpec(binding.tvStatus.width.coerceAtLeast(1), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        binding.tvStatus.minimumHeight = binding.tvStatus.measuredHeight
+        androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(binding.tvStatus,minSp,maxSp,1,android.util.TypedValue.COMPLEX_UNIT_SP)
+    }
+    private fun fitHome() {
+        if(_binding==null)return
+        val root=binding.root
+        val d=resources.displayMetrics.density
+        val height=root.height/d
+        if(height<=0)return
+        val viewport="${root.width}:${root.height}:${resources.configuration.fontScale}"
+        if(viewport==fittedViewport)return
+        fittedViewport=viewport
+        val compact=isCompact()
+        binding.tvFsocHeader.visibility=if(fsocietyMode && !compact && height>=580)View.VISIBLE else View.GONE
+        binding.btnAutoSelect.setText(if(compact)R.string.home_auto_select_short else R.string.auto_select)
+        binding.btnSpeedTest.setText(if(compact)R.string.home_speed_test_short else R.string.speed_test)
+        binding.btnAutoSelect.contentDescription=getString(R.string.auto_select)
+        binding.btnSpeedTest.contentDescription=getString(R.string.speed_test)
+        val showOverview = !compact && height>=580 && (requireActivity().application as App).loadSettings().showConnectionMap
+        binding.homeMap.visibility=if(showOverview)View.VISIBLE else View.GONE
+        val horizontal=if(compact)16 else 24
+        val sidePadding = dp(horizontal)
+        val topPadding = dp(if(compact)8 else 20)
+        val bottomPadding = dp(8)
+        if(root.paddingLeft!=sidePadding || root.paddingRight!=sidePadding || root.paddingTop!=topPadding || root.paddingBottom!=bottomPadding) {
+            root.setPadding(sidePadding,topPadding,sidePadding,bottomPadding)
+        }
+        val chart=if((requireActivity().application as App).loadSettings().trafficStatsMode==TrafficStatsMode.CHART&&!compact)View.VISIBLE else View.GONE
+        if(binding.trafficChart.visibility!=chart)binding.trafficChart.visibility=chart
+        if (portraitLayout.isEmpty()) {
+            portraitLayout = (0 until root.childCount).map { index ->
+                val child = root.getChildAt(index)
+                child to android.widget.LinearLayout.LayoutParams(child.layoutParams as android.widget.LinearLayout.LayoutParams)
+            }
+        }
+        val landscapeColumns = root.width/d>500 && height<400
+        if (twoColumns && !landscapeColumns) {
+            portraitLayout.forEach { (child, _) -> (child.parent as? ViewGroup)?.removeView(child) }
+            root.removeAllViews()
+            root.orientation = android.widget.LinearLayout.VERTICAL
+            portraitLayout.forEach { (child, params) -> root.addView(child, android.widget.LinearLayout.LayoutParams(params)) }
+            twoColumns = false
+        }
+        // A short landscape window uses two columns rather than scrolling or shrinking the whole UI.
+        if(!twoColumns && landscapeColumns) {
+            val items=listOf(binding.connectionCard,binding.serverCard,binding.btnConnect,binding.layoutActionRow,binding.layoutStats,binding.historyCard)
+            items.forEach { (it.parent as ViewGroup).removeView(it) }
+            root.removeAllViews();root.orientation=android.widget.LinearLayout.HORIZONTAL
+            val left=android.widget.LinearLayout(requireContext()).apply {orientation=android.widget.LinearLayout.VERTICAL}
+            val right=android.widget.LinearLayout(requireContext()).apply {orientation=android.widget.LinearLayout.VERTICAL;setPadding(dp(16),0,0,0)}
+            root.addView(left,android.widget.LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1f))
+            root.addView(right,android.widget.LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1f))
+            for(v in items) {
+                val parent=if(v===binding.layoutActionRow || v===binding.layoutStats || v===binding.historyCard)right else left
+                parent.addView(v,android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            twoColumns=true
+        }
+        // Without a map, the status becomes a spacious hero instead of collapsing
+        // all controls into a stack at the top. Compact/two-column layouts stay fixed.
+        val hero = !showOverview && !compact && !twoColumns
+        (binding.connectionCard.layoutParams as android.widget.LinearLayout.LayoutParams).let { p ->
+            val targetHeight = if(hero)0 else ViewGroup.LayoutParams.WRAP_CONTENT
+            val targetWeight = if(hero)1f else 0f
+            if(p.height!=targetHeight || p.weight!=targetWeight) {
+                p.height=targetHeight;p.weight=targetWeight;binding.connectionCard.layoutParams=p
+            }
+        }
+        val statusContent=binding.connectionCard.getChildAt(0) as android.widget.LinearLayout
+        statusContent.gravity=if(hero)android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.TOP
+        statusContent.layoutParams.let {p ->
+            val target=if(hero)ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
+            if(p.height!=target){p.height=target;statusContent.layoutParams=p}
+        }
+        (binding.layoutStats.layoutParams as android.widget.LinearLayout.LayoutParams).let {p ->
+            val margin=dp(if(hero)20 else 0)
+            if(p.topMargin!=margin){p.topMargin=margin;binding.layoutStats.layoutParams=p}
+        }
+        val tight=height<410 || resources.configuration.fontScale>1.6f
+        if(tight) {
+            // Retain distinct Connected/Connecting/Error state even in the shortest viewport.
+            binding.connectionCard.visibility=View.VISIBLE
+            setStatusSize(12,18)
+            binding.tvTimer.visibility=View.GONE
+            binding.tvFsocPrompt.visibility=View.GONE
+            (binding.tvTimer.parent as View).visibility=View.GONE
+            binding.tvProfileProtocol.visibility=View.GONE
+            (binding.serverCard.getChildAt(0) as View).setPadding(dp(10),dp(6),dp(10),dp(6))
+            binding.btnConnect.minHeight=dp(48)
+            (binding.btnConnect.layoutParams as android.widget.LinearLayout.LayoutParams).let { p ->
+                if(p.topMargin!=dp(6)){p.topMargin=dp(6);binding.btnConnect.layoutParams=p}
+            }
+            binding.layoutStats.setPadding(dp(10),0,dp(10),0)
+            binding.btnAutoSelect.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,11f)
+            binding.btnSpeedTest.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,11f)
+            binding.btnDetails.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,11f)
+            // At extreme font sizes, the two live rates are a single-line readout.
+            for(i in 0 until binding.layoutStats.childCount) {
+                val column=binding.layoutStats.getChildAt(i) as ViewGroup
+                column.getChildAt(0).visibility=View.GONE
+                val speed=column.getChildAt(1)
+                (speed.layoutParams as android.widget.LinearLayout.LayoutParams).let {p ->
+                    if(p.topMargin!=0){p.topMargin=0;speed.layoutParams=p}
+                }
+            }
+        } else {
+            binding.connectionCard.visibility=View.VISIBLE
+            setStatusSize(20,34)
+            (binding.serverCard.getChildAt(0) as View).setPadding(dp(14),dp(14),dp(14),dp(14))
+            binding.btnConnect.minHeight=dp(56)
+            (binding.btnConnect.layoutParams as android.widget.LinearLayout.LayoutParams).let { p ->
+                if(p.topMargin!=dp(12)){p.topMargin=dp(12);binding.btnConnect.layoutParams=p}
+            }
+            binding.layoutStats.setPadding(dp(16),dp(14),dp(16),dp(14))
+            binding.btnAutoSelect.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,12f)
+            binding.btnSpeedTest.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,12f)
+            binding.btnDetails.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP,14f)
+            for(i in 0 until binding.layoutStats.childCount) {
+                val column=binding.layoutStats.getChildAt(i) as ViewGroup
+                column.getChildAt(0).visibility=View.VISIBLE
+                val speed=column.getChildAt(1)
+                (speed.layoutParams as android.widget.LinearLayout.LayoutParams).let { p ->
+                    if(p.topMargin!=dp(6)){p.topMargin=dp(6);speed.layoutParams=p}
+                }
+            }
+            binding.tvProfileProtocol.visibility=View.VISIBLE
+            binding.tvTimer.visibility=View.VISIBLE
+            (binding.tvTimer.parent as View).visibility=View.VISIBLE
+            binding.tvFsocPrompt.visibility=if(fsocietyMode)View.VISIBLE else View.GONE
+        }
+        renderTraffic()
+    }
+    private fun showTrafficDetails() {
+        val repo=(requireActivity().application as App).statsRepository
+        val stats=repo.getStats()
+        val column=android.widget.LinearLayout(requireContext()).apply {
+            orientation=android.widget.LinearLayout.VERTICAL;setPadding(dp(24),dp(24),dp(24),dp(28))
+        }
+        fun line(text:String,size:Float=16f) { column.addView(android.widget.TextView(requireContext()).apply {
+            this.text=text;textSize=size;setPadding(0,dp(8),0,dp(8))
+            typeface=if(size>20)com.smarttools.netguard.widget.AppTypography.heading(context) else com.smarttools.netguard.widget.AppTypography.body(context)
+        }) }
+        line(getString(R.string.home_details),24f)
+        line(getString(R.string.stats_today)+": "+TrafficFormatter.formatBytes(stats.todayRx+stats.todayTx))
+        line(getString(R.string.stats_week)+": "+TrafficFormatter.formatBytes(stats.weekRx+stats.weekTx))
+        line(getString(R.string.stats_total)+": "+TrafficFormatter.formatBytes(stats.totalRx+stats.totalTx))
+        val traffic=viewModel.trafficStats.value
+        line(getString(R.string.home_download)+": "+TrafficFormatter.formatBytes(traffic.rxBytes))
+        line(getString(R.string.home_upload)+": "+TrafficFormatter.formatBytes(traffic.txBytes))
+        column.addView(com.smarttools.netguard.widget.TrafficChartView(requireContext()).apply {
+            layoutParams=android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(100));setData(repo.getDailyHistory(7))
+        })
+        detailsSheet?.dismiss()
+        detailsSheet=com.google.android.material.bottomsheet.BottomSheetDialog(requireContext()).apply {
+            setOnShowListener { behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED }
+            setContentView(android.widget.ScrollView(requireContext()).apply {addView(column)});show()
+        }
+    }
+
+    private fun themeColor(attr: Int): Int {
+        val value = android.util.TypedValue()
+        requireContext().theme.resolveAttribute(attr, value, true)
+        return if (value.resourceId != 0) ContextCompat.getColor(requireContext(), value.resourceId) else value.data
     }
 
     /**
@@ -717,27 +982,30 @@ class HomeFragment : Fragment() {
      * map to a short friendly line.
      */
     private fun humanizeConnError(msg: String): String {
-        if (msg.any { it in 'Ѐ'..'ӿ' }) return msg // already Russian
         val m = msg.lowercase()
         return when {
-            m.contains("permission") -> "Нет разрешения на VPN. Разреши подключение и попробуй снова."
+            m.contains("нет сети") -> getString(com.smarttools.netguard.R.string.connection_no_network)
+            m.contains("whitelist") || m.contains("белый список") || m.contains("белых спис") ->
+                getString(com.smarttools.netguard.R.string.connection_whitelist_help)
+            m.contains("сервер в комнате") -> getString(com.smarttools.netguard.R.string.connection_room_not_ready)
+            m.contains("permission") -> getString(com.smarttools.netguard.R.string.connection_permission_help)
             m.contains("profile not found") || m.contains("no selected") ->
-                "Сервер не выбран. Выбери сервер и подключись."
+                getString(com.smarttools.netguard.R.string.connection_select_help)
             m.contains("timed out") || m.contains("timeout") ->
-                "Сервер не отвечает. Попробуй другой сервер."
+                getString(com.smarttools.netguard.R.string.connection_timeout_help)
             m.contains("refused") || m.contains("reset") || m.contains("unreachable") ||
                 m.contains("no route") || m.contains("connect") ->
-                "Не удалось подключиться к серверу. Попробуй другой или проверь интернет."
+                getString(com.smarttools.netguard.R.string.connection_network_help)
             m.contains("tun2socks") || m.contains("xray") ->
-                "Подключение прервалось. Попробуй ещё раз."
-            else -> "Не удалось подключиться. Попробуй ещё раз или выбери другой сервер."
+                getString(com.smarttools.netguard.R.string.connection_interrupted_help)
+            else -> getString(com.smarttools.netguard.R.string.connection_generic_help)
         }
     }
 
     private fun startPulse() {
         if (pulseAnimator == null) {
-            pulseAnimator = ObjectAnimator.ofFloat(binding.btnConnect, "alpha", 1f, 0.7f).apply {
-                duration = 1200
+            pulseAnimator = ObjectAnimator.ofFloat(binding.btnConnect, "alpha", 1f, 0.94f).apply {
+                duration = 2000
                 repeatMode = ValueAnimator.REVERSE
                 repeatCount = ValueAnimator.INFINITE
                 interpolator = AccelerateDecelerateInterpolator()
@@ -862,7 +1130,8 @@ class HomeFragment : Fragment() {
         // small target. Setting clickable+a generous padding extends the
         // hit zone without disturbing the visual layout.
         binding.tvProfileName.isClickable = true
-        binding.tvProfileName.setPadding(48, 16, 48, 16)
+        val density = resources.displayMetrics.density
+        binding.tvProfileName.setPadding((8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt(), (8 * density).toInt())
         binding.tvProfileName.setOnClickListener {
             android.util.Log.d("fsoc-egg", "tap ${profileTapCount + 1}/5")
             // Cancel any pending reset; restart the window from now.
@@ -883,11 +1152,15 @@ class HomeFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        viewModel.cancelSpeedTest()
+        speedSheet?.setOnDismissListener(null);speedSheet?.dismiss();speedSheet=null
+        detailsSheet?.dismiss();detailsSheet=null
         cancelTimer()
         stopPulse()
         stopCursorBlink()
         profileTapResetRunnable?.let { cursorHandler.removeCallbacks(it) }
         quoteHideRunnable?.let { cursorHandler.removeCallbacks(it) }
+        portraitLayout = emptyList()
         _binding = null
         super.onDestroyView()
     }

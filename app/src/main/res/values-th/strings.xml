@@ -172,7 +172,7 @@
     <string name="speed_test_desc">ปุ่มทดสอบความเร็วบนหน้าจอหลัก</string>
     <string name="speed_test">ทดสอบความเร็ว</string>
     <string name="auto_connect_wifi">เชื่อมต่ออัตโนมัติเมื่อใช้ WiFi</string>
-    <string name="auto_connect_wifi_desc">VPN บน WiFi ที่ไม่รู้จัก + ป้องกัน Evil Twin</string>
+    <string name="auto_connect_wifi_desc">เชื่อมต่อ VPN บน Wi-Fi ที่ไม่น่าเชื่อถือ รวมถึงเมื่อ Android ซ่อนข้อมูลเครือข่าย ต้องอนุญาต VPN ไว้ก่อน</string>
     <string name="trusted_wifi">เครือข่าย WiFi ที่เชื่อถือได้</string>
     <string name="add_current_wifi">เพิ่ม WiFi ปัจจุบัน</string>
     <string name="location_needed_for_wifi">ต้องการสิทธิ์ตำแหน่งเพื่ออ่านชื่อ WiFi</string>

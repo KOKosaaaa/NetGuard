@@ -46,6 +46,8 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
         /** Per-subscription accent color, chosen by the current theme's
          *  surface luminance so it stays readable on light AND dark themes. */
         fun colorFor(context: android.content.Context, subId: Long): Int {
+            if ((context.applicationContext as com.smarttools.netguard.App).loadSettings().themeMode ==
+                com.smarttools.netguard.model.ThemeMode.FSOCIETY) return 0xFF46FF80.toInt()
             val palette = if (isLightSurface(context)) GROUP_COLORS_LIGHT else GROUP_COLORS
             return palette[(subId % palette.size).toInt()]
         }
@@ -61,9 +63,6 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
             return lum > 150
         }
 
-        private const val FRAME_CORNER_RADIUS = 20f
-        private const val FRAME_STROKE_WIDTH = 4f
-        private const val FRAME_PADDING = 12f
         // How far past the viewport to draw a frame edge when the group
         // continues offscreen — large enough that no rounded corner is
         // ever visible on the wrong side.
@@ -72,11 +71,6 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
 
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = FRAME_STROKE_WIDTH
-    }
-
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
     }
 
     override fun getItemOffsets(
@@ -93,13 +87,17 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
         val groupSubId: Long = subIdOf(item) ?: return
         if (groupSubId <= 0) return
 
-        outRect.left = FRAME_PADDING.toInt()
-        outRect.right = FRAME_PADDING.toInt()
+        val density = parent.resources.displayMetrics.density
+        outRect.left = (4 * density).toInt()
+        outRect.right = (4 * density).toInt()
+        if (adapter.itemAt(position - 1)?.let { subIdOf(it) } != groupSubId) {
+            outRect.top = (2 * density).toInt()
+        }
 
         val nextItem = adapter.itemAt(position + 1)
         val nextSubId = nextItem?.let { subIdOf(it) }
         if (nextSubId != groupSubId) {
-            outRect.bottom = FRAME_PADDING.toInt()
+            outRect.bottom = (6 * density).toInt()
         }
     }
 
@@ -107,6 +105,9 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
         val adapter = parent.adapter as? ProfileAdapter ?: return
         val itemCount = adapter.itemCount
         if (itemCount == 0) return
+        val saved = c.save()
+        c.clipRect(parent.paddingLeft, parent.paddingTop,
+            parent.width - parent.paddingRight, parent.height - parent.paddingBottom)
 
         // Walk the full adapter list (not just onscreen children) and build
         // group bounds (firstPos..lastPos) by subscriptionId.
@@ -151,26 +152,26 @@ class SubscriptionGroupDecoration : RecyclerView.ItemDecoration() {
 
             drawFrame(c, parent, top, bottom, subId)
         }
+        c.restoreToCount(saved)
     }
 
     private fun drawFrame(c: Canvas, parent: RecyclerView,
                           rawTop: Float, rawBottom: Float, subId: Long) {
         val color = colorFor(parent.context, subId)
 
-        val left = parent.paddingLeft + FRAME_PADDING / 2
-        val right = parent.width - parent.paddingRight - FRAME_PADDING / 2
-        val top = rawTop - FRAME_PADDING / 2
-        val bottom = rawBottom + FRAME_PADDING / 2
+        val density = parent.resources.displayMetrics.density
+        val left = parent.paddingLeft + 2 * density
+        val right = parent.width - parent.paddingRight - 2 * density
+        val top = rawTop - 2 * density
+        val bottom = rawBottom + 2 * density
 
         val rect = RectF(left, top, right, bottom)
 
-        fillPaint.color = color
-        fillPaint.alpha = 20
-        c.drawRoundRect(rect, FRAME_CORNER_RADIUS, FRAME_CORNER_RADIUS, fillPaint)
-
         strokePaint.color = color
-        strokePaint.alpha = 180
-        c.drawRoundRect(rect, FRAME_CORNER_RADIUS, FRAME_CORNER_RADIUS, strokePaint)
+        strokePaint.alpha = 70
+        strokePaint.strokeWidth = density
+        // No separate flat group fill: the full-window backdrop remains continuous.
+        c.drawRoundRect(rect, 28 * density, 28 * density, strokePaint)
     }
 
     private fun subIdOf(item: ProfileAdapter.Item): Long? = when (item) {

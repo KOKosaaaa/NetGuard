@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Verify SSH server</string>
+    <string name="ssh_trust_message">Compare this fingerprint with the server console before continuing. No SSH password has been sent.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Trust this key</string>
+    <string name="ssh_trust_changed">The SSH host key has changed. Connection blocked; verify the server identity.</string>
+    <string name="ssh_trust_rejected">SSH host key was not approved. No SSH password was sent.</string>
+</resources>

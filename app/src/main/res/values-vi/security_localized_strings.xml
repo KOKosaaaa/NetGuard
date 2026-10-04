@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Xác thực SOCKS5 của ứng dụng</string>
+    <string name="security_name_2">VPN khác</string>
+    <string name="security_name_3">Proxy SOCKS5</string>
+    <string name="security_name_4">Proxy HTTP</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">Quét cổng</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">Cờ VPN</string>
+    <string name="security_name_10">Kiểm tra MTU</string>
+    <string name="security_name_11">Tên gói</string>
+    <string name="security_detail_1">Đường hầm chưa hoạt động, không thể kiểm tra</string>
+    <string name="security_detail_2">Máy chủ đóng kết nối không xác thực — tốt</string>
+    <string name="security_detail_3">Phiên bản SOCKS ngoài dự kiến: %1$s</string>
+    <string name="security_detail_4">NGHIÊM TRỌNG: SOCKS5 của ứng dụng chấp nhận KHÔNG XÁC THỰC — chuỗi xác thực bị hỏng!</string>
+    <string name="security_detail_5">SOCKS5 của ứng dụng yêu cầu đúng xác thực tên người dùng/mật khẩu</string>
+    <string name="security_detail_6">SOCKS5 của ứng dụng từ chối không xác thực (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">SOCKS5 của ứng dụng trả về phương thức ngoài dự kiến: 0x%1$s</string>
+    <string name="security_detail_8">Không thể kiểm tra SOCKS của ứng dụng: %1$s</string>
+    <string name="security_detail_9">Không cài đặt ứng dụng VPN khác đã biết</string>
+    <string name="security_detail_10">Đã cài đặt ứng dụng VPN khác (một số có thể bị ảnh hưởng bởi rò rỉ SOCKS cục bộ tháng 4 năm 2026): %1$s</string>
+    <string name="security_detail_11">Không tìm thấy SOCKS5 không xác thực trên các cổng tiêu chuẩn</string>
+    <string name="security_detail_12">CÓ LỖ HỔNG: SOCKS5 mở không xác thực trên các cổng: %1$s</string>
+    <string name="security_detail_13">Không tìm thấy proxy HTTP CONNECT mở trên các cổng tiêu chuẩn</string>
+    <string name="security_detail_14">CÓ LỖ HỔNG: Proxy HTTP mở trên các cổng: %1$s</string>
+    <string name="security_detail_15">Không phát hiện cổng Xray gRPC API</string>
+    <string name="security_detail_16">CÓ LỖ HỔNG: Các cổng Xray API đang mở: %1$s</string>
+    <string name="security_detail_17">Không phát hiện Clash REST API</string>
+    <string name="security_detail_18">CÓ LỖ HỔNG: Clash API mở trên các cổng: %1$s — /connections làm rò rỉ mọi IP</string>
+    <string name="security_detail_19">Không có cổng VPN đã biết mở trên localhost</string>
+    <string name="security_detail_20">Các cổng có thể phát hiện đang mở: %1$s</string>
+    <string name="security_detail_21">Không tìm thấy cổng VPN đã biết trong /proc/net/tcp</string>
+    <string name="security_detail_22">Có thể phát hiện trong /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">Không thể đọc /proc/net/tcp (có thể bị hạn chế)</string>
+    <string name="security_detail_24">TRANSPORT_VPN hiển thị (không thể tránh trên Android). Ứng dụng có thể phát hiện VPN đang hoạt động, nhưng không thể thấy IP máy chủ.</string>
+    <string name="security_detail_25">Không phát hiện cờ TRANSPORT_VPN (VPN chưa hoạt động hoặc kiểm tra chạy trước khi kết nối)</string>
+    <string name="security_detail_26">Không thể kiểm tra NetworkCapabilities</string>
+    <string name="security_detail_27">Không phát hiện giao diện TUN</string>
+    <string name="security_detail_28">Chỉ mang tính thông tin: %1$s. Chỉ riêng MTU không phải chỉ báo VPN đáng tin cậy.</string>
+    <string name="security_detail_29">Không thể kiểm tra MTU giao diện</string>
+    <string name="security_detail_30">CÓ LỖ HỔNG: Tên gói \'%1$s\' chứa từ khóa VPN</string>
+    <string name="security_detail_31">Tên gói \'%1$s\' trung tính</string>
+</resources>

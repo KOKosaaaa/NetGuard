@@ -17,8 +17,8 @@ internal class NioSiteRelay : AutoCloseable {
     private val thread = Thread(::loop, "site-relay").apply { isDaemon = true; start() }
 
     private class Stream(val client: SocketChannel, val server: SocketChannel, initial: ByteArray,
-                         val control: Boolean, val closed: (Boolean) -> Unit) {
-        val up = ByteBuffer.allocate(32768).apply { put(initial) }
+                         val control: Boolean, val progress: ((Long, Long) -> Unit)?, val closed: (Boolean) -> Unit) {
+        val up = ByteBuffer.allocate(maxOf(32768, initial.size)).apply { put(initial) }
         val down = ByteBuffer.allocate(32768)
         var clientEof = false
         var serverEof = false
@@ -33,12 +33,12 @@ internal class NioSiteRelay : AutoCloseable {
 
     /** Takes ownership even when admission fails. Callback runs exactly once. */
     @Synchronized fun attach(client: SocketChannel, server: SocketChannel, initial: ByteArray = byteArrayOf(),
-                            control: Boolean = false, closed: (Boolean) -> Unit = {}) {
-        if (!running.get() || count.get() >= 256 || initial.size > 32768) {
+                            control: Boolean = false, progress: ((Long, Long) -> Unit)? = null, closed: (Boolean) -> Unit = {}) {
+        if (!running.get() || count.get() >= 256 || initial.size > 32773) {
             runCatching { client.close() }; runCatching { server.close() }; closed(false); return
         }
         count.incrementAndGet()
-        pending.add(Stream(client, server, initial, control, closed))
+        pending.add(Stream(client, server, initial, control, progress, closed))
         selector.wakeup()
     }
 
@@ -73,9 +73,10 @@ internal class NioSiteRelay : AutoCloseable {
                         if (key.isValid && key.isWritable) {
                             val buffer = if (client) c.down else c.up
                             buffer.flip()
-                            try { if (channel.write(buffer) > 0) {
+                            try { val written = channel.write(buffer); if (written > 0) {
                                 c.lastProgress = System.nanoTime()
                                 if (!client) c.sent = true
+                                runCatching { c.progress?.invoke(if (client) 0 else written.toLong(), if (client) written.toLong() else 0) }
                             } }
                             finally { buffer.compact() }
                         }
@@ -115,7 +116,9 @@ internal class NioSiteRelay : AutoCloseable {
         if (!streams.remove(c)) return
         runCatching { c.client.close() }; runCatching { c.server.close() }
         count.decrementAndGet()
-        runCatching { c.closed(c.sent && !c.received && (c.serverEof || c.serverError)) }
+        // A remote reset after some bytes still merits a fresh independent probe.
+        // Clean EOF/idle alone cannot prove truncation of an encrypted user stream.
+        runCatching { c.closed(c.sent && (c.serverError || (!c.received && c.serverEof))) }
     }
 
     override fun close() {

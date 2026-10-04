@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"ลิงก์การสมัครรับข้อมูลไม่ถูกต้อง"</string>
+    <string name="subscription_url_required">"URL ว่างเปล่า"</string>
+    <string name="subscription_room_invalid">"ลิงก์ห้องหรือโปรไฟล์ไม่ถูกต้อง"</string>
+    <string name="subscription_profile_unsupported">"ไม่รองรับ URI โปรไฟล์"</string>
+    <string name="profile_default_name">"โปรไฟล์"</string>
+    <string name="subscription_default_name">"การสมัครรับข้อมูล"</string>
+    <string name="subscription_profile_invalid_details">"ลิงก์โปรไฟล์ไม่ถูกต้อง: %1$s"</string>
+    <string name="subscription_profile_added">"เพิ่มโปรไฟล์แล้ว: %1$s"</string>
+    <string name="subscription_url_invalid_details">"URL ไม่ถูกต้อง: %1$s"</string>
+    <string name="subscription_deleted_name">"ลบแล้ว: %1$s"</string>
+    <string name="subscription_update_with_errors">"โปรไฟล์ที่อัปเดต: %1$d ข้อผิดพลาด: %2$d"</string>
+    <string name="profile_room_invalid">"ลิงก์ห้องไม่ถูกต้อง"</string>
+    <string name="profile_address_invalid">"ที่อยู่ไม่ถูกต้อง"</string>
+    <string name="profile_test_connect_first">"เชื่อมต่อ VPN ก่อนเพื่อป้องกัน IP จริงรั่วไหล"</string>
+    <string name="profile_test_proxy_unready">"ข้อมูลรับรอง VPN ยังไม่พร้อม"</string>
+    <string name="profile_testing">"กำลังทดสอบ…"</string>
+    <string name="profile_test_failed">"ล้มเหลว"</string>
+    <string name="backup_empty_json">"ไฟล์การกำหนดค่าว่างเปล่า"</string>
+    <string name="import_profiles_with_errors">"โปรไฟล์ที่นำเข้า: %1$d ข้อผิดพลาด: %2$d"</string>
+    <string name="connection_room_not_ready">"เซิร์ฟเวอร์ในห้องยังไม่ยืนยันการเชื่อมต่อ"</string>
+    <string name="connection_whitelist_help">"เซิร์ฟเวอร์อาจถูกบล็อกจากรายการ IP ที่อนุญาต ลองใช้ WB Stream หรือ Telemost"</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="other">อัปเดต %1$d โปรไฟล์แล้ว</item>
+    </plurals>
+</resources>

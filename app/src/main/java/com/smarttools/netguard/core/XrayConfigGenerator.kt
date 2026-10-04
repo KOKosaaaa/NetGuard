@@ -288,7 +288,7 @@ object XrayConfigGenerator {
             Protocol.TROJAN -> buildTrojanOutbound(profile, fingerprint)
             Protocol.SHADOWSOCKS -> buildShadowsocksOutbound(profile, fingerprint)
             Protocol.HYSTERIA2 -> buildHysteria2Outbound(profile, fingerprint)
-            Protocol.TELEMOST -> throw IllegalStateException("Telemost profile must not reach XrayConfigGenerator; use TelemostRelayManager")
+            Protocol.TELEMOST, Protocol.WBSTREAM -> throw IllegalStateException("Telemost profile must not reach XrayConfigGenerator; use TelemostRelayManager")
         }
         val streamSettings = outbound.getAsJsonObject("streamSettings")
         val socketOptions = streamSettings?.getAsJsonObject("sockopt") ?: JsonObject()

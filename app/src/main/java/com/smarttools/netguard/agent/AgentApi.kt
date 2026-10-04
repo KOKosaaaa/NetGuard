@@ -228,6 +228,7 @@ data class TelemostRoomInstance(
     val index: Int,
     val room: String,
     val active: Boolean,
+    val ownerState: String = "",
 )
 
 data class TelemostRooms(
@@ -245,6 +246,7 @@ data class TelemostRooms(
                     index = o.optInt("index"),
                     room = o.optString("room"),
                     active = o.optBoolean("active"),
+                    ownerState = o.optString("owner_state"),
                 )
             }
             return TelemostRooms(

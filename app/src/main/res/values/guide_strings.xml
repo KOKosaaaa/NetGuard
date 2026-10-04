@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="launcher_icon_title" tools:ignore="MissingTranslation">App icon</string>
+    <string name="launcher_icon_follow" tools:ignore="MissingTranslation">Follow app theme</string>
+    <string name="guide_about" tools:ignore="MissingTranslation">About the app</string>
+    <string name="guide_skip" tools:ignore="MissingTranslation">Skip</string>
+    <string name="guide_start" tools:ignore="MissingTranslation">Start</string>
+    <string name="guide_close" tools:ignore="MissingTranslation">Close</string>
+    <string name="guide_page" tools:ignore="MissingTranslation">%1$d of %2$d</string>
+    <string name="guide_version" tools:ignore="MissingTranslation">NetGuard · %1$s</string>
+    <string name="guide_app_title" tools:ignore="MissingTranslation">What is NetGuard?</string>
+    <string name="guide_app_body" tools:ignore="MissingTranslation">NetGuard helps you access websites and apps through a VPN and choose a suitable connection method.\n\nIt supports subscriptions, individual servers and connections through video meetings. You can change the main settings at any time.</string>
+    <string name="guide_auto_title" tools:ignore="MissingTranslation">How automatic routing works</string>
+    <string name="guide_auto_body" tools:ignore="MissingTranslation">The app compares access to a website directly and through the VPN. Once a check provides enough evidence, it remembers a suitable route and checks it again periodically.\n\nThe first visit may use the VPN while checks run. You can select apps that must always use the VPN.</string>
+    <string name="guide_wb_title" tools:ignore="MissingTranslation">What is WB Stream?</string>
+    <string name="guide_wb_body" tools:ignore="MissingTranslation">WB Stream carries Internet traffic inside a video meeting stream. It provides another connection method when an ordinary VPN is unavailable but WB Stream still works.\n\nYou need a configured server and a WB Stream room. Automatic recovery helps maintain the connection, but speed and reliability depend on the network and the service. An ordinary VPN may be faster for large downloads.</string>
+    <string name="guide_help_title" tools:ignore="MissingTranslation">If something does not work</string>
+    <string name="guide_help_body" tools:ignore="MissingTranslation">The current server appears on Home. Diagnostics show check results and the routes actually used.\n\nIf a connection stalls or slows down, save a log immediately after the problem to help identify the cause. A successful check of one website does not guarantee that every app feature works.</string>
+</resources>

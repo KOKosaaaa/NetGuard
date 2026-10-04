@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Dán cấu hình JSON"</string>
+    <string name="subscription_tls_date_error">"Lỗi TLS: kiểm tra ngày giờ trên thiết bị. %1$s"</string>
+    <string name="subscription_tls_pin_error">"Chứng chỉ TLS không khớp với chứng chỉ đã ghim. Chứng chỉ có thể đã thay đổi sau khi phiên bản ứng dụng này phát hành. %1$s"</string>
+    <string name="subscription_tls_chain_error">"Chuỗi chứng chỉ TLS của máy chủ không đầy đủ. Đây là vấn đề cấu hình máy chủ. %1$s"</string>
+    <string name="subscription_fetch_failed">"Không thể tải gói đăng ký"</string>
+    <string name="trigger_apps_removed_from_bypass">"Ứng dụng đã xóa khỏi danh sách bỏ qua VPN: %1$d. Chúng sẽ bỏ qua kết nối tự động nếu vẫn ở trong danh sách."</string>
+    <string name="server_installing_xray">"Đang cài đặt xray trên máy chủ…"</string>
+    <string name="server_upstream_added">"Đã thêm upstream"</string>
+    <string name="server_upstream_deleted">"Đã xóa upstream"</string>
+    <string name="server_rule_added">"Đã thêm quy tắc"</string>
+    <string name="server_rule_deleted">"Đã xóa quy tắc"</string>
+    <string name="wb_room_stop_failed">"Không thể dừng phòng WB Stream trên máy chủ. Hồ sơ đã được giữ lại; hãy thử xóa lần nữa."</string>
+    <string name="wb_room_still_present">"Phòng WB Stream vẫn còn trên máy chủ"</string>
+    <string name="rule_label_domain">"Tên miền"</string>
+    <string name="rule_label_cidr">"Dải IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Nhóm trang web (geosite)"</string>
+    <string name="rule_label_geoip">"Nhóm IP (geoip)"</string>
+    <string name="rule_label_direct">"Kết nối trực tiếp"</string>
+    <string name="rule_label_block">"Chặn"</string>
+    <string name="rule_label_via">"Qua upstream"</string>
+    <string name="rule_no_upstreams">"Chưa thêm upstream nào"</string>
+</resources>

@@ -11,34 +11,58 @@ import androidx.core.app.NotificationCompat
 import com.smarttools.netguard.MainActivity
 import com.smarttools.netguard.R
 import com.smarttools.netguard.util.TrafficFormatter
+import com.smarttools.netguard.util.LocalizedResources
 
 object NotificationHelper {
 
     const val NOTIFICATION_ID = 1
     private const val CHANNEL_ID = "net_service"
-    private const val CHANNEL_NAME = "Network Service"
-
-    private var channelCreated = false
+    private var channelTextKey: String? = null
     private var cachedContentIntent: PendingIntent? = null
     private var cachedStopIntent: PendingIntent? = null
-    private var cachedTitle: String? = null
-    private var cachedStopLabel: String? = null
     private var lastSpeedText: String? = null
 
-    fun createChannel(context: Context) {
-        if (channelCreated) return
-        // minSdk 26 (O): notification channels always exist.
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            CHANNEL_NAME,
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Background service status"
-            setShowBadge(false)
-        }
+    /** Permission, app-wide switch and the actual service channel must all allow posting. */
+    fun canPost(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return false
         val nm = context.getSystemService(NotificationManager::class.java)
+        return nm.areNotificationsEnabled() &&
+            nm.getNotificationChannel(CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    fun settingsIntent(context: Context): Intent {
+        createChannel(context)
+        val nm = context.getSystemService(NotificationManager::class.java)
+        val channelBlocked = nm.areNotificationsEnabled() &&
+            nm.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE
+        return Intent(if (channelBlocked) android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS
+            else android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+            if (channelBlocked) putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
+        }
+    }
+
+    @Synchronized fun createChannel(context: Context) {
+        val localized = LocalizedResources.context(context)
+        val name = localized.getString(R.string.notification_channel_name)
+        val descriptionText = localized.getString(R.string.notification_channel_description)
+        val key = "${localized.resources.configuration.locales.toLanguageTags()}|$name|$descriptionText"
+        if (channelTextKey == key) return
+        // minSdk 26 (O): notification channels always exist.
+        val nm = context.getSystemService(NotificationManager::class.java)
+        // Reuse the channel: preserve its user-selected importance, sound and badge.
+        val channel = nm.getNotificationChannel(CHANNEL_ID) ?: NotificationChannel(
+            CHANNEL_ID,
+            name,
+            NotificationManager.IMPORTANCE_LOW
+        ).apply { setShowBadge(false) }
+        channel.name = name
+        channel.description = descriptionText
         nm.createNotificationChannel(channel)
-        channelCreated = true
+        channelTextKey = key
+        lastSpeedText = null // Same rates must still refresh localized title/action.
     }
 
     private fun getContentIntent(context: Context): PendingIntent {
@@ -64,20 +88,18 @@ object NotificationHelper {
     }
 
     private fun getTitle(context: Context): String {
-        cachedTitle?.let { return it }
-        return context.getString(R.string.notif_title).also { cachedTitle = it }
+        return LocalizedResources.context(context).getString(R.string.notif_title)
     }
 
     private fun getStopLabel(context: Context): String {
-        cachedStopLabel?.let { return it }
-        return context.getString(R.string.notif_stop).also { cachedStopLabel = it }
+        return LocalizedResources.context(context).getString(R.string.notif_stop)
     }
 
     fun createConnectingNotification(context: Context): Notification {
         createChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(context.getString(R.string.notif_title_connecting))
-            .setContentText(context.getString(R.string.notif_text_connecting))
+            .setContentTitle(LocalizedResources.context(context).getString(R.string.notif_title_connecting))
+            .setContentText(LocalizedResources.context(context).getString(R.string.notif_text_connecting))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(getContentIntent(context))
             .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
@@ -91,7 +113,7 @@ object NotificationHelper {
         createChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(getTitle(context))
-            .setContentText(context.getString(R.string.notif_text))
+            .setContentText(LocalizedResources.context(context).getString(R.string.notif_text))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(getContentIntent(context))
             .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
@@ -102,6 +124,9 @@ object NotificationHelper {
     }
 
     fun showConnectedNotification(context: Context) {
+        if (!canPost(context)) return
+        // Re-enabling speed with the same idle rates must replace this plain text.
+        lastSpeedText = null
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, createConnectedNotification(context))
     }
@@ -109,8 +134,8 @@ object NotificationHelper {
     fun createQuarantineNotification(context: Context): Notification {
         createChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(context.getString(R.string.notif_title_quarantine))
-            .setContentText(context.getString(R.string.notif_text_quarantine))
+            .setContentTitle(LocalizedResources.context(context).getString(R.string.notif_title_quarantine))
+            .setContentText(LocalizedResources.context(context).getString(R.string.notif_text_quarantine))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(getContentIntent(context))
             .addAction(R.drawable.ic_stop, getStopLabel(context), getStopIntent(context))
@@ -121,11 +146,15 @@ object NotificationHelper {
     }
 
     fun showQuarantineNotification(context: Context) {
+        if (!canPost(context)) return
+        lastSpeedText = null
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, createQuarantineNotification(context))
     }
 
     fun updateSpeedNotification(context: Context, rxSpeed: Long, txSpeed: Long) {
+        if (!canPost(context)) return
+        createChannel(context)
         val speedText = "\u2193 ${TrafficFormatter.formatSpeed(rxSpeed)}  \u2191 ${TrafficFormatter.formatSpeed(txSpeed)}"
         // Skip if text hasn't changed
         if (speedText == lastSpeedText) return
@@ -151,9 +180,7 @@ object NotificationHelper {
     fun invalidateCache() {
         cachedContentIntent = null
         cachedStopIntent = null
-        cachedTitle = null
-        cachedStopLabel = null
         lastSpeedText = null
-        channelCreated = false
+        channelTextKey = null
     }
 }

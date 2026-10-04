@@ -4,6 +4,7 @@ import com.smarttools.netguard.util.RandomPort
 import java.security.SecureRandom
 import java.util.Arrays
 import java.util.UUID
+import com.smarttools.netguard.service.LocalSocks
 
 object CredentialManager {
 
@@ -20,13 +21,26 @@ object CredentialManager {
         val pass: CharArray,
         val port: Int,
         val httpPort: Int,
-        val healthPort: Int
+        val healthPort: Int,
+        val generation: Long
     )
 
     @Volatile
     private var current: Credentials? = null
+    private var generation = 0L
 
-    fun generate(): Triple<String, String, Int> {
+    internal class SpeedProxy(val endpoint: LocalSocks, val generation: Long)
+
+    /** One atomic session snapshot. Relay SOCKS has no auth; health-in forces Xray VPN. */
+    @Synchronized internal fun speedProxy(relay: Boolean): SpeedProxy? {
+        val creds = current ?: return null
+        return SpeedProxy(LocalSocks(if (relay) creds.port else creds.healthPort,
+            if (relay) "" else String(creds.user), if (relay) "" else String(creds.pass)), creds.generation)
+    }
+
+    internal fun isCurrent(proxy: SpeedProxy): Boolean = current?.generation == proxy.generation
+
+    @Synchronized fun generate(): Triple<String, String, Int> {
         val sr = SecureRandom()
         val userStr = UUID.randomUUID().toString()
         val passChars = CharArray(PASS_LENGTH)
@@ -51,7 +65,7 @@ object CredentialManager {
 
         // Clear any previous credentials before overwriting.
         clear()
-        current = Credentials(userStr.toCharArray(), passChars, port, httpPort, healthPort)
+        current = Credentials(userStr.toCharArray(), passChars, port, httpPort, healthPort, generation)
 
         return Triple(userStr, String(passChars), port)
     }
@@ -62,7 +76,8 @@ object CredentialManager {
     fun getHttpPort(): Int? = current?.httpPort
     fun getHealthPort(): Int? = current?.healthPort
 
-    fun clear() {
+    @Synchronized fun clear() {
+        generation++
         current?.let { creds ->
             Arrays.fill(creds.user, '\u0000')
             Arrays.fill(creds.pass, '\u0000')

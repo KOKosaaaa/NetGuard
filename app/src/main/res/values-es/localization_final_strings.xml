@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subscription_invalid_link">"Enlace de suscripción no válido"</string>
+    <string name="subscription_url_required">"La URL está vacía"</string>
+    <string name="subscription_room_invalid">"Enlace de sala o perfil no válido"</string>
+    <string name="subscription_profile_unsupported">"URI de perfil no compatible"</string>
+    <string name="profile_default_name">"Perfil"</string>
+    <string name="subscription_default_name">"Suscripción"</string>
+    <string name="subscription_profile_invalid_details">"Enlace de perfil no válido: %1$s"</string>
+    <string name="subscription_profile_added">"Perfil añadido: %1$s"</string>
+    <string name="subscription_url_invalid_details">"URL no válida: %1$s"</string>
+    <string name="subscription_deleted_name">"Eliminado: %1$s"</string>
+    <string name="subscription_update_with_errors">"Perfiles actualizados: %1$d. Errores: %2$d"</string>
+    <string name="profile_room_invalid">"Enlace de sala no válido"</string>
+    <string name="profile_address_invalid">"Dirección no válida"</string>
+    <string name="profile_test_connect_first">"Conecta primero la VPN para evitar revelar tu IP real"</string>
+    <string name="profile_test_proxy_unready">"Las credenciales de la VPN aún no están listas"</string>
+    <string name="profile_testing">"Probando…"</string>
+    <string name="profile_test_failed">"Falló"</string>
+    <string name="backup_empty_json">"El archivo de configuración está vacío"</string>
+    <string name="import_profiles_with_errors">"Perfiles importados: %1$d. Errores: %2$d"</string>
+    <string name="connection_room_not_ready">"El servidor de la sala no ha confirmado la conexión"</string>
+    <string name="connection_whitelist_help">"Puede que una lista de IP permitidas bloquee el servidor. Prueba WB Stream o Telemost."</string>
+    <plurals name="subscription_updated_count">
+        <item quantity="one">%1$d perfil actualizado</item>
+        <item quantity="other">%1$d perfiles actualizados</item>
+    </plurals>
+</resources>

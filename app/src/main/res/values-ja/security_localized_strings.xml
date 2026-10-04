@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">本アプリの SOCKS5 認証</string>
+    <string name="security_name_2">他の VPN</string>
+    <string name="security_name_3">SOCKS5 プロキシ</string>
+    <string name="security_name_4">HTTP プロキシ</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">ポートスキャン</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">VPN フラグ</string>
+    <string name="security_name_10">MTU の確認</string>
+    <string name="security_name_11">パッケージ名</string>
+    <string name="security_detail_1">トンネルが有効でないためテストできません</string>
+    <string name="security_detail_2">サーバーが認証なしの接続を終了しました。正常です</string>
+    <string name="security_detail_3">想定外の SOCKS バージョン：%1$s</string>
+    <string name="security_detail_4">重大：本アプリの SOCKS5 が認証なしの接続を許可しています。認証チェーンが機能していません！</string>
+    <string name="security_detail_5">本アプリの SOCKS5 は正しくユーザー名とパスワード認証を要求しています</string>
+    <string name="security_detail_6">本アプリの SOCKS5 は認証なしの接続を拒否しています（NO ACCEPTABLE METHODS）</string>
+    <string name="security_detail_7">本アプリの SOCKS5 が想定外の方式を返しました：0x%1$s</string>
+    <string name="security_detail_8">本アプリの SOCKS をテストできませんでした：%1$s</string>
+    <string name="security_detail_9">他の既知の VPN クライアントはインストールされていません</string>
+    <string name="security_detail_10">他の VPN クライアントがインストールされています（一部は 2026 年 4 月のローカル SOCKS 漏えいの影響を受ける可能性があります）：%1$s</string>
+    <string name="security_detail_11">標準ポートに認証なしの SOCKS5 は見つかりませんでした</string>
+    <string name="security_detail_12">脆弱：認証なしの SOCKS5 が次のポートで開いています：%1$s</string>
+    <string name="security_detail_13">標準ポートに開放された HTTP CONNECT プロキシは見つかりませんでした</string>
+    <string name="security_detail_14">脆弱：HTTP プロキシが次のポートで開いています：%1$s</string>
+    <string name="security_detail_15">Xray gRPC API のポートは検出されませんでした</string>
+    <string name="security_detail_16">脆弱：Xray API のポートが開いています：%1$s</string>
+    <string name="security_detail_17">Clash REST API は検出されませんでした</string>
+    <string name="security_detail_18">脆弱：Clash API が次のポートで開いています：%1$s。/connections がすべての IP を漏えいします</string>
+    <string name="security_detail_19">localhost で既知の VPN ポートは開いていません</string>
+    <string name="security_detail_20">検出可能なポートが開いています：%1$s</string>
+    <string name="security_detail_21">/proc/net/tcp に既知の VPN ポートは見つかりませんでした</string>
+    <string name="security_detail_22">/proc/net/tcp で検出可能：%1$s</string>
+    <string name="security_detail_23">/proc/net/tcp を読み取れません（制限されている可能性があります）</string>
+    <string name="security_detail_24">TRANSPORT_VPN は表示されます（Android では回避できません）。アプリは VPN の使用を検出できますが、サーバーの IP は見えません。</string>
+    <string name="security_detail_25">TRANSPORT_VPN フラグは検出されませんでした（VPN が有効でないか、接続前に確認が実行されました）</string>
+    <string name="security_detail_26">NetworkCapabilities を確認できません</string>
+    <string name="security_detail_27">TUN インターフェースは検出されませんでした</string>
+    <string name="security_detail_28">参考情報のみ：%1$s。MTU だけでは VPN の使用を確実に判断できません。</string>
+    <string name="security_detail_29">インターフェースの MTU を確認できません</string>
+    <string name="security_detail_30">脆弱：パッケージ名 \'%1$s\' に VPN のキーワードが含まれています</string>
+    <string name="security_detail_31">パッケージ名 \'%1$s\' は中立的です</string>
+</resources>

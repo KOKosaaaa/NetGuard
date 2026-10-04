@@ -3,7 +3,6 @@ package deploy
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"testing"
 )
@@ -58,5 +57,4 @@ func TestResolveInboundPort(t *testing.T) {
 	if err != nil || got == 0 || portInUse(got) {
 		t.Errorf("auto port: got %d err %v (want non-zero free port)", got, err)
 	}
-	fmt.Sprintf("%d", got) // silence any unused in odd build tags
 }

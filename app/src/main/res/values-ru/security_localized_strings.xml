@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Авторизация собственного SOCKS5</string>
+    <string name="security_name_2">Другие VPN</string>
+    <string name="security_name_3">Прокси SOCKS5</string>
+    <string name="security_name_4">Прокси HTTP</string>
+    <string name="security_name_5">API Xray</string>
+    <string name="security_name_6">API Clash</string>
+    <string name="security_name_7">Проверка портов</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">Признак VPN</string>
+    <string name="security_name_10">Проверка MTU</string>
+    <string name="security_name_11">Имя пакета</string>
+    <string name="security_detail_1">Туннель не активен, проверка невозможна</string>
+    <string name="security_detail_2">Сервер закрыл соединение без авторизации — это правильно</string>
+    <string name="security_detail_3">Неожиданная версия SOCKS: %1$s</string>
+    <string name="security_detail_4">КРИТИЧНО: собственный SOCKS5 принимает соединения БЕЗ АВТОРИЗАЦИИ — защита нарушена!</string>
+    <string name="security_detail_5">Собственный SOCKS5 требует логин и пароль</string>
+    <string name="security_detail_6">Собственный SOCKS5 отклоняет соединение без авторизации (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">Собственный SOCKS5 вернул неожиданный метод: 0x%1$s</string>
+    <string name="security_detail_8">Не удалось проверить собственный SOCKS: %1$s</string>
+    <string name="security_detail_9">Других известных VPN-клиентов не установлено</string>
+    <string name="security_detail_10">Установлены другие VPN-клиенты (некоторые могут быть подвержены утечке через локальный SOCKS, обнаруженной в апреле 2026 года): %1$s</string>
+    <string name="security_detail_11">На стандартных портах не найден SOCKS5 без авторизации</string>
+    <string name="security_detail_12">УЯЗВИМОСТЬ: SOCKS5 без авторизации открыт на портах: %1$s</string>
+    <string name="security_detail_13">На стандартных портах не найден открытый прокси HTTP CONNECT</string>
+    <string name="security_detail_14">УЯЗВИМОСТЬ: HTTP-прокси открыт на портах: %1$s</string>
+    <string name="security_detail_15">Порты gRPC API Xray не обнаружены</string>
+    <string name="security_detail_16">УЯЗВИМОСТЬ: открыты порты API Xray: %1$s</string>
+    <string name="security_detail_17">REST API Clash не обнаружен</string>
+    <string name="security_detail_18">УЯЗВИМОСТЬ: API Clash открыт на портах: %1$s — /connections раскрывает все IP-адреса</string>
+    <string name="security_detail_19">На localhost нет открытых известных портов VPN</string>
+    <string name="security_detail_20">Обнаружены открытые порты: %1$s</string>
+    <string name="security_detail_21">В /proc/net/tcp не найдены известные порты VPN</string>
+    <string name="security_detail_22">Обнаружено в /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">Не удалось прочитать /proc/net/tcp (доступ может быть ограничен)</string>
+    <string name="security_detail_24">Признак TRANSPORT_VPN виден (на Android это неизбежно). Приложения могут обнаружить активный VPN, но не видят IP-адрес сервера.</string>
+    <string name="security_detail_25">Признак TRANSPORT_VPN не обнаружен (VPN не активен или проверка выполнена до подключения)</string>
+    <string name="security_detail_26">Не удалось проверить NetworkCapabilities</string>
+    <string name="security_detail_27">Интерфейс TUN не обнаружен</string>
+    <string name="security_detail_28">Для информации: %1$s. Сам по себе MTU не является надёжным признаком VPN.</string>
+    <string name="security_detail_29">Не удалось проверить MTU интерфейса</string>
+    <string name="security_detail_30">УЯЗВИМОСТЬ: имя пакета «%1$s» содержит ключевые слова VPN</string>
+    <string name="security_detail_31">Имя пакета «%1$s» нейтральное</string>
+</resources>

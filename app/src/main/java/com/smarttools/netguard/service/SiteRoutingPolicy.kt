@@ -6,17 +6,19 @@ import java.net.IDN
 import androidx.annotation.Keep
 
 @Keep
-enum class SitePath { VPN, DIRECT }
+enum class SitePath { VPN, DIRECT, TLS_RECORD_SNI, TLS_RECORD_HEADER }
 @Keep
 data class SiteOrigin(val host: String, val port: Int, val tls: Boolean) {
     val key: String get() = "$host|$port|$tls"
 }
 @Keep
-data class SiteMeasurement(val quality: Int = 0, val millis: Long = -1)
+data class SiteMeasurement(val quality: Int = 0, val millis: Long = -1,
+    val stage: String = "NOT_TESTED", val outcome: String = "UNKNOWN", val bytes: Int = 0, val status: Int = 0)
 @Keep
 data class SiteRouteRecord(
     val origin: SiteOrigin, val target: String, val path: SitePath,
-    val checkedAt: Long, val direct: SiteMeasurement, val vpn: SiteMeasurement
+    val checkedAt: Long, val direct: SiteMeasurement, val vpn: SiteMeasurement,
+    val dpiPath: SitePath? = null, val dpi: SiteMeasurement? = null
 )
 
 /** Only hostnames and route measurements are persisted, never URLs, headers or payloads. */
@@ -46,7 +48,11 @@ class SiteRoutingPolicy(
     private fun valid(record: SiteRouteRecord): Boolean {
         if (record.checkedAt <= 0) return false
         val age = now() - record.checkedAt
-        val ttl = if (record.direct.quality == 0 && record.vpn.quality == 0) 60_000L else WEEK_MS
+        val ttl = when {
+            record.direct.quality == 2 || record.vpn.quality == 2 || record.dpi?.quality == 2 -> WEEK_MS
+            record.direct.quality == 0 && record.vpn.quality == 0 -> 60_000L
+            else -> 600_000L
+        }
         return age >= 0 && age < ttl
     }
 
@@ -67,9 +73,13 @@ class SiteRoutingPolicy(
         return record.copy(path = heldPath(origin.key) ?: record.path)
     }
 
-    @Synchronized fun record(origin: SiteOrigin, target: String, direct: SiteMeasurement, vpn: SiteMeasurement): SiteRouteRecord {
+    @Synchronized fun record(origin: SiteOrigin, target: String, direct: SiteMeasurement, vpn: SiteMeasurement,
+        dpiPath: SitePath? = null, dpi: SiteMeasurement? = null): SiteRouteRecord {
         val old = records[origin.key]
         val path = when {
+            origin.tls && direct.quality < 2 && dpi?.quality == 2 && dpi.outcome == "VERIFIED_TWICE" &&
+                dpi.bytes >= HttpBodyProbe.MIN_VERIFIED && dpiPath in LocalDpi.paths -> dpiPath!!
+            direct.quality < 2 -> SitePath.VPN
             direct.quality > vpn.quality -> SitePath.DIRECT
             vpn.quality > direct.quality -> SitePath.VPN
             direct.quality == 0 -> SitePath.VPN
@@ -78,7 +88,7 @@ class SiteRoutingPolicy(
             direct.millis >= 0 && direct.millis + 100 < vpn.millis * 0.8 -> SitePath.DIRECT
             else -> SitePath.VPN
         }
-        val result = SiteRouteRecord(origin, target, path, now(), direct, vpn)
+        val result = SiteRouteRecord(origin, target, path, now(), direct, vpn, dpiPath, dpi)
         records[origin.key] = result
         trim()
         changed()
@@ -112,7 +122,8 @@ class SiteRoutingPolicy(
         // retain their lease and are never killed or replayed here.
         records[origin.key] = r.copy(checkedAt = 0,
             direct = if (path == SitePath.DIRECT) SiteMeasurement() else r.direct,
-            vpn = if (path == SitePath.VPN) SiteMeasurement() else r.vpn)
+            vpn = if (path == SitePath.VPN) SiteMeasurement() else r.vpn,
+            dpi = if (path in LocalDpi.paths) SiteMeasurement() else r.dpi)
         changed()
     }
 
@@ -128,13 +139,13 @@ class SiteRoutingPolicy(
         }
     }
 
-    @Synchronized fun export(): String = Gson().toJson(mapOf("version" to 1, "context" to contextKey, "sites" to records.values.toList()))
+    @Synchronized fun export(): String = Gson().toJson(mapOf("version" to 2, "context" to contextKey, "sites" to records.values.toList()))
 
     @Synchronized fun restore(json: String?) {
         if (json.isNullOrBlank() || json.length > 1024 * 1024) return
         runCatching {
             val root = JsonParser.parseString(json).asJsonObject
-            if (root["version"].asInt != 1 || root["context"].asString != contextKey) return
+            if (root["version"].asInt != 2 || root["context"].asString != contextKey) return
             val gson = Gson()
             root.getAsJsonArray("sites").toList().takeLast(MAX_SITES).forEach { item ->
                 runCatching item@{
@@ -143,6 +154,8 @@ class SiteRoutingPolicy(
                     if (host(r.origin.host) != r.origin.host || r.origin.port !in 1..65535 || r.checkedAt <= 0 ||
                         r.checkedAt > now() || r.target.isNullOrBlank() || r.target.length > 253 ||
                         r.direct.quality !in 0..2 || r.vpn.quality !in 0..2) return@item
+                    if (r.path in LocalDpi.paths && (r.dpiPath != r.path || r.dpi?.quality != 2 ||
+                        r.dpi.outcome != "VERIFIED_TWICE" || r.dpi.bytes < HttpBodyProbe.MIN_VERIFIED || !r.origin.tls)) return@item
                     records[r.origin.key] = r
                 }
             }

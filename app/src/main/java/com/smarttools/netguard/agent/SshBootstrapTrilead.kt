@@ -25,6 +25,7 @@ class SshBootstrapTrilead(
     private val agentListenAddr: String = ":9443",
     private val timeoutMs: Long = 90_000,
     private val onProgress: (SshBootstrap.Stage) -> Unit = {},
+    private val verifyHostKey: (ByteArray) -> Boolean,
 ) {
 
     fun run(): SshBootstrap.BootstrapResult {
@@ -96,7 +97,7 @@ class SshBootstrapTrilead(
         val conn = Connection(host, sshPort)
         try {
             // Trilead's connect() takes (verifier, kexTimeoutMs, connectTimeoutMs).
-            conn.connect(null, timeoutMs.toInt(), timeoutMs.toInt())
+            conn.connect({ _, _, _, key -> verifyHostKey(key) }, timeoutMs.toInt(), timeoutMs.toInt())
         } catch (e: SocketTimeoutException) {
             try { conn.close() } catch (_: Exception) {}
             throw SshBootstrap.Failure.BannerTimeout(
@@ -145,7 +146,7 @@ class SshBootstrapTrilead(
             sess.stderr.copyTo(errBuf)
             sess.waitForCondition(com.trilead.ssh2.ChannelCondition.EXIT_STATUS, timeoutMs)
             val exit = sess.exitStatus ?: -1
-            return CommandResult(exit, outBuf.toString(Charsets.UTF_8), errBuf.toString(Charsets.UTF_8))
+            return CommandResult(exit, outBuf.toString("UTF-8"), errBuf.toString("UTF-8"))
         } finally {
             try { sess.close() } catch (_: Exception) {}
         }
@@ -162,7 +163,7 @@ class SshBootstrapTrilead(
             sess.stderr.copyTo(errBuf)
             sess.waitForCondition(com.trilead.ssh2.ChannelCondition.EXIT_STATUS, timeoutMs)
             val exit = sess.exitStatus ?: -1
-            return CommandResult(exit, outBuf.toString(Charsets.UTF_8), errBuf.toString(Charsets.UTF_8))
+            return CommandResult(exit, outBuf.toString("UTF-8"), errBuf.toString("UTF-8"))
         } finally {
             try { sess.close() } catch (_: Exception) {}
         }

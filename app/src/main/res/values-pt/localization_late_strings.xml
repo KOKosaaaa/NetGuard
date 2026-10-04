@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Cole a configuração JSON"</string>
+    <string name="subscription_tls_date_error">"Erro TLS: verifique a data e a hora do dispositivo. %1$s"</string>
+    <string name="subscription_tls_pin_error">"O certificado TLS não corresponde ao certificado fixado. Ele pode ter mudado desde esta versão do app. %1$s"</string>
+    <string name="subscription_tls_chain_error">"A cadeia de certificados TLS do servidor está incompleta. É um problema de configuração do servidor. %1$s"</string>
+    <string name="subscription_fetch_failed">"Não foi possível carregar a assinatura"</string>
+    <string name="trigger_apps_removed_from_bypass">"Apps removidos da lista de exclusão da VPN: %1$d. Eles teriam evitado a conexão automática."</string>
+    <string name="server_installing_xray">"Instalando xray no servidor…"</string>
+    <string name="server_upstream_added">"Servidor upstream adicionado"</string>
+    <string name="server_upstream_deleted">"Servidor upstream excluído"</string>
+    <string name="server_rule_added">"Regra adicionada"</string>
+    <string name="server_rule_deleted">"Regra excluída"</string>
+    <string name="wb_room_stop_failed">"Não foi possível interromper a sala do WB Stream no servidor. O perfil foi mantido; tente excluir novamente."</string>
+    <string name="wb_room_still_present">"A sala do WB Stream ainda está no servidor"</string>
+    <string name="rule_label_domain">"Domínio"</string>
+    <string name="rule_label_cidr">"Faixa de IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Grupo de sites (geosite)"</string>
+    <string name="rule_label_geoip">"Grupo de IP (geoip)"</string>
+    <string name="rule_label_direct">"Conexão direta"</string>
+    <string name="rule_label_block">"Bloquear"</string>
+    <string name="rule_label_via">"Por um servidor upstream"</string>
+    <string name="rule_no_upstreams">"Nenhum servidor upstream adicionado"</string>
+</resources>

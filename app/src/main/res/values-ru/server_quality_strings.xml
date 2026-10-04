@@ -1,0 +1,3 @@
+<resources>
+    <string name="server_quality_failed">Не удалось проверить серверы. Проверь подключение и повтори попытку.</string>
+</resources>

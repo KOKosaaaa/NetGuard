@@ -132,7 +132,7 @@
     <string name="speed_test_desc">Geschwindigkeitstest-Taste auf dem Startbildschirm</string>
     <string name="speed_test">Geschwindigkeitstest</string>
     <string name="auto_connect_wifi">Auto-Verbindung bei WLAN</string>
-    <string name="auto_connect_wifi_desc">VPN bei unbekanntem WLAN + Evil-Twin-Schutz</string>
+    <string name="auto_connect_wifi_desc">VPN in nicht vertrauenswürdigen WLANs. Von Android verborgene Netzwerkdaten gelten ebenfalls als nicht vertrauenswürdig. VPN muss zuvor erlaubt sein.</string>
     <string name="trusted_wifi">Vertrauenswürdige WLANs</string>
     <string name="add_current_wifi">Aktuelles WLAN hinzufügen</string>
     <string name="location_needed_for_wifi">Standortberechtigung für WLAN-Namen erforderlich</string>

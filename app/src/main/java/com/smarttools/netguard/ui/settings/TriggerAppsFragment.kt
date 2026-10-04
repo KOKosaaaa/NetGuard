@@ -45,7 +45,7 @@ class TriggerAppsFragment : Fragment() {
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             applyAndExit(true)
         } else {
-            Toast.makeText(requireContext(), "VPN permission required", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.trigger_vpn_permission), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -110,7 +110,7 @@ class TriggerAppsFragment : Fragment() {
                 try {
                     startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
                 } catch (_: Exception) {
-                    Toast.makeText(requireContext(), "Open Settings → VPN → NetGuard manually", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), getString(com.smarttools.netguard.R.string.trigger_open_netguard_settings), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -231,7 +231,7 @@ class TriggerAppsFragment : Fragment() {
         if (overlap.isNotEmpty()) {
             Toast.makeText(
                 requireContext(),
-                "Removed ${overlap.size} app(s) from per-app blacklist (would bypass trigger)",
+                getString(com.smarttools.netguard.R.string.trigger_apps_removed_from_bypass, overlap.size),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -317,14 +317,11 @@ class TriggerAppsFragment : Fragment() {
         val pkg = requireContext().packageName
         if (pm.isIgnoringBatteryOptimizations(pkg)) { onDone(); return }
         com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Keep trigger running")
+            .setTitle(getString(com.smarttools.netguard.R.string.trigger_battery_title))
             .setMessage(
-                "For auto-VPN to work when you open an app, NetGuard's watcher " +
-                    "must keep running in the background. Some phones (Nothing, " +
-                    "Xiaomi, etc.) kill it to save battery.\n\n" +
-                    "Allow NetGuard to run without battery restrictions?"
+                getString(com.smarttools.netguard.R.string.trigger_battery_body)
             )
-            .setPositiveButton("Allow") { _, _ ->
+            .setPositiveButton(getString(com.smarttools.netguard.R.string.action_allow)) { _, _ ->
                 try {
                     @android.annotation.SuppressLint("BatteryLife")
                     val i = android.content.Intent(
@@ -339,7 +336,7 @@ class TriggerAppsFragment : Fragment() {
                 }
                 onDone()
             }
-            .setNegativeButton("Skip") { _, _ -> onDone() }
+            .setNegativeButton(getString(com.smarttools.netguard.R.string.action_skip)) { _, _ -> onDone() }
             .setOnCancelListener { onDone() }
             .show()
     }

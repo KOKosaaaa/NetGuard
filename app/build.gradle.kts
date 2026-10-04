@@ -10,7 +10,22 @@ import java.util.Properties
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
+}
+
+val validateReleaseSigningInputs = tasks.register("validateReleaseSigningInputs") {
+    group = "verification"
+    description = "Refuse a release build without the configured release signing key."
+    doLast {
+        check(keystorePropertiesFile.isFile) { "Release signing requires keystore.properties; debug-key fallback is forbidden." }
+        for (key in listOf("storeFile", "storePassword", "keyAlias", "keyPassword")) {
+            check(!keystoreProperties.getProperty(key).isNullOrBlank()) { "Release signing property is missing: $key" }
+        }
+        check(file(keystoreProperties.getProperty("storeFile")).isFile) { "Configured release keystore is missing." }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(validateReleaseSigningInputs)
 }
 
 android {
@@ -21,8 +36,9 @@ android {
         applicationId = "com.smarttools.netguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 79
-        versionName = "2.0.0"
+        versionCode = 114
+        versionName = "3.0.0"
+        testInstrumentationRunner = "com.smarttools.netguard.WbWizardInstrumentation"
 
         buildConfigField("String", "VERSION_NAME", "\"$versionName\"")
 
@@ -47,11 +63,7 @@ android {
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -59,6 +71,8 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            // Owned-emulator UI QA can upgrade the signed release without erasing its database.
+            if (keystorePropertiesFile.exists()) signingConfig = signingConfigs.getByName("release")
         }
     }
 

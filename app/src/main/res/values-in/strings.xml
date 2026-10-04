@@ -172,7 +172,7 @@
     <string name="speed_test_desc">Tombol tes kecepatan di layar utama</string>
     <string name="speed_test">Tes Kecepatan</string>
     <string name="auto_connect_wifi">Koneksi otomatis WiFi</string>
-    <string name="auto_connect_wifi_desc">VPN di WiFi tidak dikenal + perlindungan Evil Twin</string>
+    <string name="auto_connect_wifi_desc">Hubungkan VPN pada Wi-Fi tidak tepercaya, termasuk saat Android menyembunyikan informasi jaringan. Izin VPN harus diberikan terlebih dahulu.</string>
     <string name="trusted_wifi">Jaringan WiFi Terpercaya</string>
     <string name="add_current_wifi">Tambahkan WiFi saat ini</string>
     <string name="location_needed_for_wifi">Izin lokasi diperlukan untuk membaca nama WiFi</string>

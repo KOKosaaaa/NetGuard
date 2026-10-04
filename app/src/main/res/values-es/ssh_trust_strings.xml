@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">Verificar servidor SSH</string>
+    <string name="ssh_trust_message">Compare esta huella con la consola del servidor antes de continuar. La contraseña SSH aún no se ha enviado.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">Confiar en esta clave</string>
+    <string name="ssh_trust_changed">La clave del servidor SSH ha cambiado. Conexión bloqueada; verifique la identidad del servidor.</string>
+    <string name="ssh_trust_rejected">No se aprobó la clave del servidor SSH. No se envió la contraseña SSH.</string>
+</resources>

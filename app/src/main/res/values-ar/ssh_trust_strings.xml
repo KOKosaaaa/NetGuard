@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_trust_title">تحقق من خادم SSH</string>
+    <string name="ssh_trust_message">قارن هذه البصمة مع وحدة تحكم الخادم قبل المتابعة. لم تُرسل كلمة مرور SSH بعد.\n\n%1$s:%2$d\n%3$s</string>
+    <string name="ssh_trust_accept">الوثوق بهذا المفتاح</string>
+    <string name="ssh_trust_changed">تغيّر مفتاح مضيف SSH. تم حظر الاتصال؛ تحقق من هوية الخادم.</string>
+    <string name="ssh_trust_rejected">لم تتم الموافقة على مفتاح مضيف SSH. لم تُرسل كلمة مرور SSH.</string>
+</resources>

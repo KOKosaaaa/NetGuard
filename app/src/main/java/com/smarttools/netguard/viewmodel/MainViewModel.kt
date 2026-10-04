@@ -9,10 +9,18 @@ import com.smarttools.netguard.model.ConnectionState
 import com.smarttools.netguard.model.ServerProfile
 import com.smarttools.netguard.service.TunnelVpnService
 import com.smarttools.netguard.util.GeoLookup
-import com.smarttools.netguard.util.PingHelper
 import com.smarttools.netguard.util.SpeedTester
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import com.smarttools.netguard.core.CredentialManager
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -37,6 +45,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _autoSelecting = MutableStateFlow(false)
     val autoSelecting: StateFlow<Boolean> = _autoSelecting.asStateFlow()
+    private var autoSelectJob: Job? = null
+    private var autoSelectGeneration = 0L
+
+    private fun cancelAutoSelection() {
+        autoSelectGeneration++
+        autoSelectJob?.cancel()
+        autoSelectJob = null
+        _autoSelecting.value = false
+    }
 
     // replay=1 so the result shows on the Home tab even if the user
     // tapped Best Server and switched away before it finished. UI is
@@ -55,8 +72,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _speedResult = MutableStateFlow<SpeedTester.SpeedResult?>(null)
     val speedResult: StateFlow<SpeedTester.SpeedResult?> = _speedResult.asStateFlow()
+    enum class SpeedError { NOT_READY, FAILED, TIMEOUT }
+    private val _speedError = MutableStateFlow<SpeedError?>(null)
+    val speedError = _speedError.asStateFlow()
+    private val _speedStage = MutableStateFlow<SpeedTester.Stage?>(null)
+    val speedStage = _speedStage.asStateFlow()
+    private var speedJob: Job? = null
+    private var speedSession: ConnectionState.Connected? = null
+    private var speedProfileId = -1L
 
     init {
+        viewModelScope.launch {
+            combine(connectionState, TunnelVpnService.activeProfileIdFlow) { state, id -> state to id }
+                .collect { (state, id) ->
+                    if (_autoSelecting.value && (state !== autoSelectState || id != autoSelectProfileId))
+                        cancelAutoSelection()
+                }
+        }
+        viewModelScope.launch {
+            combine(connectionState, TunnelVpnService.activeProfileIdFlow) { state, id -> state to id }
+                .collect { (state, id) ->
+                    if (state !== speedSession || id != speedProfileId) {
+                        speedJob?.cancel()
+                        _speedResult.value = null
+                        _speedError.value = null
+                    }
+                }
+        }
         // Orphaned-tunnel guard: if the profile the tunnel is actually
         // connected to is deleted (server purged/removed, profile or route
         // deleted), the VPN would otherwise keep running as "connected, no
@@ -87,11 +129,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun connect() {
+        cancelAutoSelection()
         viewModelScope.launch {
             val profile = profileRepo.getSelected()
             if (profile == null) {
-                // No server picked yet → fall back to auto-select (best non-RU
-                // server by ping). It also kicks off the connection on success.
+                // No server picked yet → check service replies and latency.
                 autoSelectAndConnect()
                 return@launch
             }
@@ -100,10 +142,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun disconnect() {
+        cancelAutoSelection()
         TunnelVpnService.stop(getApplication())
     }
 
     fun selectProfile(id: Long) {
+        cancelAutoSelection()
         viewModelScope.launch {
             val wasConnected = connectionState.value is ConnectionState.Connected ||
                     connectionState.value is ConnectionState.Connecting
@@ -145,42 +189,91 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun runSpeedTest() {
         if (_speedTesting.value) return
-        if (connectionState.value !is ConnectionState.Connected) return
-        viewModelScope.launch {
-            _speedTesting.value = true
+        val session = connectionState.value as? ConnectionState.Connected ?: run {
             _speedResult.value = null
+            _speedError.value = SpeedError.NOT_READY
+            return
+        }
+        val profileId = TunnelVpnService.activeProfileId
+        speedSession = session
+        speedProfileId = profileId
+        _speedTesting.value = true
+        _speedResult.value = null
+        _speedError.value = null
+        speedJob = viewModelScope.launch {
+            var proxy: CredentialManager.SpeedProxy? = null
+            fun errorIfCurrent(error: SpeedError) {
+                if (connectionState.value === session && TunnelVpnService.activeProfileId == profileId &&
+                    (proxy == null || CredentialManager.isCurrent(proxy!!))) _speedError.value = error
+            }
             try {
-                val session = connectionState.value
-                if (session !is ConnectionState.Connected) return@launch
-                val profileId = TunnelVpnService.activeProfileId
-                val profile = profileRepo.getById(profileId) ?: return@launch
-                val result = SpeedTester.run(profile.address, profile.port)
-                // A result from the previous connection must not be attributed
-                // to a new server if failover happened during the test.
-                if (TunnelVpnService.activeProfileId == profileId && connectionState.value == session) {
-                    _speedResult.value = result
+                val profile = profileRepo.getById(profileId) ?: run {
+                    errorIfCurrent(SpeedError.NOT_READY); return@launch
                 }
+                if (connectionState.value !== session) return@launch
+                val snapshot = CredentialManager.speedProxy(profile.protocol.usesRelay)
+                proxy = snapshot
+                if (snapshot == null) { errorIfCurrent(SpeedError.NOT_READY); return@launch }
+                val owner = currentCoroutineContext()[Job]!!
+                val proxyWatcher = launch watcher@{
+                    while (isActive) {
+                        delay(100)
+                        if (!CredentialManager.isCurrent(snapshot)) { owner.cancel(); return@watcher }
+                    }
+                }
+                try {
+                    val result = SpeedTester.run(snapshot) { _speedStage.value = it }
+                    currentCoroutineContext().ensureActive()
+                    if (TunnelVpnService.activeProfileId == profileId && connectionState.value === session && CredentialManager.isCurrent(snapshot)) {
+                        _speedResult.value = result
+                        if (result.timedOut) _speedError.value = SpeedError.TIMEOUT
+                        else if (result.downloadMbps < 0 && result.uploadMbps < 0) _speedError.value = SpeedError.FAILED
+                    }
+                } finally {
+                    proxyWatcher.cancel()
+                }
+            } catch (_: TimeoutCancellationException) {
+                errorIfCurrent(SpeedError.TIMEOUT)
+            } catch (e: CancellationException) {
+                if (connectionState.value === session && TunnelVpnService.activeProfileId == profileId &&
+                    proxy?.let { !CredentialManager.isCurrent(it) } == true) {
+                    _speedError.value = SpeedError.NOT_READY
+                }
+                throw e
+            } catch (e: Exception) {
+                com.smarttools.netguard.service.LogBuffer.add(com.smarttools.netguard.service.LogBuffer.LogLevel.ERROR,
+                    "[speed-test] unexpected failure: ${e.javaClass.simpleName}")
+                errorIfCurrent(SpeedError.FAILED)
             } finally {
                 _speedTesting.value = false
+                _speedStage.value = null
+                speedJob = null
             }
         }
     }
 
+    fun cancelSpeedTest() { speedJob?.cancel() }
+
     companion object {
         /** Countries excluded from auto-select (user can still pick them manually) */
         private val EXCLUDED_COUNTRIES = setOf("RU")
-        private const val AUTO_SELECT_PROBE_LIMIT = 3
-        private const val AUTO_SELECT_GOOD_ENOUGH_MS = 200
     }
+
+    private var autoSelectState: ConnectionState? = null
+    private var autoSelectProfileId = -1L
 
     fun autoSelectAndConnect() {
         if (_autoSelecting.value) return
-        viewModelScope.launch {
-            _autoSelecting.value = true
+        autoSelectJob?.cancel()
+        val generation = ++autoSelectGeneration
+        autoSelectState = connectionState.value
+        autoSelectProfileId = TunnelVpnService.activeProfileId
+        _autoSelecting.value = true
+        autoSelectJob = viewModelScope.launch {
             try {
                 val allProfiles = profileRepo.getAll()
                 if (allProfiles.isEmpty()) {
-                    _autoSelectMessage.emit("No servers added")
+                    _autoSelectMessage.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.selection_no_servers))
                     return@launch
                 }
 
@@ -190,45 +283,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     country == null || country !in EXCLUDED_COUNTRIES
                 }
                 if (eligible.isEmpty()) {
-                    _autoSelectMessage.emit("No eligible servers (all in excluded regions)")
+                    _autoSelectMessage.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.selection_no_eligible))
                     return@launch
                 }
 
-                // Burst-SYN to N servers from the user's real IP is a uniquely
-                // identifying VPN-client fingerprint at the ISP / corp DPI
-                // layer. Prefer cached `lastPingMs` from the previous session
-                // (subscription update or last connect) and fall back to a
-                // sequential probe of only Top-3 random candidates with an
-                // early-stop on a "good enough" result (<200ms).
-                val cached = eligible.filter { it.lastPingMs in 1..1000 }
-                    .sortedBy { it.lastPingMs }
-                val best = if (cached.isNotEmpty()) {
-                    cached.first()
-                } else {
-                    val sample = eligible.shuffled().take(AUTO_SELECT_PROBE_LIMIT)
-                    var winner: ServerProfile? = null
-                    var winnerMs = Int.MAX_VALUE
-                    for (p in sample) {
-                        val ms = PingHelper.pingForProfile(p.address, p.port, p.protocol)
-                        if (ms >= 0) profileRepo.updatePing(p.id, ms)
-                        if (ms in 0..winnerMs) {
-                            winner = p.copy(lastPingMs = ms)
-                            winnerMs = ms
-                        }
-                        if (ms in 0..AUTO_SELECT_GOOD_ENOUGH_MS) break
-                    }
-                    winner
-                }
+                val enabledSubs = app.database.subscriptionDao().getAll().filter { it.enabled }.map { it.id }.toSet()
+                val best = com.smarttools.netguard.service.ServerQualitySelector.best(app,
+                    eligible.filter { it.subscriptionId == 0L || it.subscriptionId in enabledSubs }, app.loadSettings())
 
                 if (best == null) {
-                    _autoSelectMessage.emit("No servers reachable")
+                    _autoSelectMessage.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.server_quality_failed))
                     return@launch
                 }
+                currentCoroutineContext().ensureActive()
+                if (generation != autoSelectGeneration || connectionState.value !== autoSelectState ||
+                    TunnelVpnService.activeProfileId != autoSelectProfileId) return@launch
                 profileRepo.selectProfile(best.id)
-                _autoSelectMessage.emit("Best: ${best.name} (${best.lastPingMs}ms)")
-                TunnelVpnService.start(getApplication(), best.id)
-            } finally {
+                currentCoroutineContext().ensureActive()
+                if (generation != autoSelectGeneration || connectionState.value !== autoSelectState ||
+                    TunnelVpnService.activeProfileId != autoSelectProfileId) return@launch
+                // Choice is complete. The connection has its own status indicator;
+                // never leave this spinner running behind a chosen/connected server.
                 _autoSelecting.value = false
+                _autoSelectMessage.emit("${best.name}")
+                currentCoroutineContext().ensureActive()
+                if (generation != autoSelectGeneration || connectionState.value !== autoSelectState ||
+                    TunnelVpnService.activeProfileId != autoSelectProfileId) return@launch
+                if (TunnelVpnService.activeProfileId != best.id || connectionState.value !is ConnectionState.Connected)
+                    TunnelVpnService.start(getApplication(), best.id)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) {
+                _autoSelectMessage.emit(com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.server_quality_failed))
+            } finally {
+                if (generation == autoSelectGeneration) {
+                    _autoSelecting.value = false
+                    autoSelectJob = null
+                }
             }
         }
     }

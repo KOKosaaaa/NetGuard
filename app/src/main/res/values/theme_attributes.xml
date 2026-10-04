@@ -1,0 +1,9 @@
+<resources>
+    <declare-styleable name="ThemePalette">
+        <attr name="colorPrimary" />
+        <attr name="colorSurface" />
+        <attr name="colorSurfaceVariant" />
+        <attr name="colorOnSurface" />
+        <attr name="colorOnSurfaceVariant" />
+    </declare-styleable>
+</resources>

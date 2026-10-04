@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Autenticazione SOCKS5 interna</string>
+    <string name="security_name_2">Altre VPN</string>
+    <string name="security_name_3">Proxy SOCKS5</string>
+    <string name="security_name_4">Proxy HTTP</string>
+    <string name="security_name_5">API Xray</string>
+    <string name="security_name_6">API Clash</string>
+    <string name="security_name_7">Scansione delle porte</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">Indicatore VPN</string>
+    <string name="security_name_10">Verifica MTU</string>
+    <string name="security_name_11">Nome del pacchetto</string>
+    <string name="security_detail_1">Tunnel non attivo, impossibile eseguire il test</string>
+    <string name="security_detail_2">Il server ha chiuso la connessione senza autenticazione: corretto</string>
+    <string name="security_detail_3">Versione SOCKS inattesa: %1$s</string>
+    <string name="security_detail_4">CRITICO: il SOCKS5 interno accetta NO AUTH: la catena di autenticazione è compromessa!</string>
+    <string name="security_detail_5">Il SOCKS5 interno richiede correttamente utente e password</string>
+    <string name="security_detail_6">Il SOCKS5 interno rifiuta connessioni senza autenticazione (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">Il SOCKS5 interno ha restituito un metodo inatteso: 0x%1$s</string>
+    <string name="security_detail_8">Impossibile verificare il SOCKS interno: %1$s</string>
+    <string name="security_detail_9">Nessun altro client VPN noto installato</string>
+    <string name="security_detail_10">Altri client VPN installati (alcuni potrebbero essere interessati dalla fuga SOCKS locale di aprile 2026): %1$s</string>
+    <string name="security_detail_11">Nessun SOCKS5 senza autenticazione trovato sulle porte standard</string>
+    <string name="security_detail_12">VULNERABILE: SOCKS5 aperto senza autenticazione sulle porte: %1$s</string>
+    <string name="security_detail_13">Nessun proxy HTTP CONNECT aperto trovato sulle porte standard</string>
+    <string name="security_detail_14">VULNERABILE: proxy HTTP aperto sulle porte: %1$s</string>
+    <string name="security_detail_15">Nessuna porta API gRPC di Xray rilevata</string>
+    <string name="security_detail_16">VULNERABILE: porte API Xray aperte: %1$s</string>
+    <string name="security_detail_17">Nessuna API REST di Clash rilevata</string>
+    <string name="security_detail_18">VULNERABILE: API Clash aperta sulle porte: %1$s; /connections espone tutti gli IP</string>
+    <string name="security_detail_19">Nessuna porta VPN nota aperta su localhost</string>
+    <string name="security_detail_20">Porte rilevabili aperte: %1$s</string>
+    <string name="security_detail_21">Nessuna porta VPN nota trovata in /proc/net/tcp</string>
+    <string name="security_detail_22">Rilevabile in /proc/net/tcp: %1$s</string>
+    <string name="security_detail_23">Impossibile leggere /proc/net/tcp (potrebbe essere limitato)</string>
+    <string name="security_detail_24">TRANSPORT_VPN è visibile (inevitabile su Android). Le app possono rilevare che la VPN è attiva, ma non possono vedere l’IP del server.</string>
+    <string name="security_detail_25">Nessun indicatore TRANSPORT_VPN rilevato (VPN non attiva o verifica eseguita prima della connessione)</string>
+    <string name="security_detail_26">Impossibile verificare NetworkCapabilities</string>
+    <string name="security_detail_27">Nessuna interfaccia TUN rilevata</string>
+    <string name="security_detail_28">Solo a titolo informativo: %1$s. L’MTU da solo non è un indicatore affidabile di VPN.</string>
+    <string name="security_detail_29">Impossibile verificare l’MTU dell’interfaccia</string>
+    <string name="security_detail_30">VULNERABILE: il nome del pacchetto «%1$s» contiene parole chiave VPN</string>
+    <string name="security_detail_31">Il nome del pacchetto «%1$s» è neutro</string>
+</resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Pega la configuración JSON"</string>
+    <string name="subscription_tls_date_error">"Error TLS: comprueba la fecha y la hora del dispositivo. %1$s"</string>
+    <string name="subscription_tls_pin_error">"El certificado TLS no coincide con el certificado fijado. Puede haber cambiado desde esta versión de la app. %1$s"</string>
+    <string name="subscription_tls_chain_error">"La cadena de certificados TLS del servidor está incompleta. Es un problema de configuración del servidor. %1$s"</string>
+    <string name="subscription_fetch_failed">"No se pudo cargar la suscripción"</string>
+    <string name="trigger_apps_removed_from_bypass">"Apps eliminadas de la lista de exclusión de la VPN: %1$d. Habrían evitado la conexión automática."</string>
+    <string name="server_installing_xray">"Instalando xray en el servidor…"</string>
+    <string name="server_upstream_added">"Servidor ascendente añadido"</string>
+    <string name="server_upstream_deleted">"Servidor ascendente eliminado"</string>
+    <string name="server_rule_added">"Regla añadida"</string>
+    <string name="server_rule_deleted">"Regla eliminada"</string>
+    <string name="wb_room_stop_failed">"No se pudo detener la sala de WB Stream en el servidor. El perfil se ha conservado; vuelve a intentar eliminarlo."</string>
+    <string name="wb_room_still_present">"La sala de WB Stream sigue en el servidor"</string>
+    <string name="rule_label_domain">"Dominio"</string>
+    <string name="rule_label_cidr">"Rango de IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Grupo de sitios (geosite)"</string>
+    <string name="rule_label_geoip">"Grupo de IP (geoip)"</string>
+    <string name="rule_label_direct">"Conexión directa"</string>
+    <string name="rule_label_block">"Bloquear"</string>
+    <string name="rule_label_via">"A través de un servidor ascendente"</string>
+    <string name="rule_no_upstreams">"No se han añadido servidores ascendentes"</string>
+</resources>

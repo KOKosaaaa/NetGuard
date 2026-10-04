@@ -36,7 +36,7 @@ class ProfileEditViewModel(application: Application) : AndroidViewModel(applicat
         if (id <= 0) return
         viewModelScope.launch {
             profileRepo.getById(id)?.let {
-                _profile.value = it
+                _profile.value = if (it.isWbStream) it.copy(protocol = Protocol.WBSTREAM) else it
             }
         }
     }
@@ -70,8 +70,19 @@ class ProfileEditViewModel(application: Application) : AndroidViewModel(applicat
 
     fun save() {
         viewModelScope.launch {
-            val p = _profile.value
-            if (p.address.isBlank() || !isValidAddress(p.address)) return@launch
+            val original = _profile.value
+            val p = if (original.isWbStream) {
+                val rooms = runCatching { WbStreamLink.parse(original.address) }.getOrElse {
+                    _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.wb_stream_invalid_room)
+                    return@launch
+                }
+                original.copy(protocol = Protocol.WBSTREAM, address = rooms.links.joinToString("\n"), port = 443)
+            } else if (original.protocol == Protocol.TELEMOST) {
+                val validated = runCatching { com.smarttools.netguard.core.ProfileParser.parseSingleUri(original.toUri()) }.getOrNull()
+                if (validated == null) { _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_room_invalid); return@launch }
+                original.copy(address = validated.address, port = 443)
+            } else original
+            if (!p.protocol.usesRelay && (p.address.isBlank() || !isValidAddress(p.address))) return@launch
             if (p.port !in 1..65535) return@launch
 
             if (p.id == 0L) {
@@ -84,21 +95,36 @@ class ProfileEditViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private var deleting = false
     fun delete() {
+        if (deleting) return
         viewModelScope.launch {
-            val p = _profile.value
-            if (p.id > 0) {
-                profileRepo.delete(p)
-            }
-            _saved.value = true
+            deleting = true
+            try {
+                val p = _profile.value
+                if (p.id > 0) {
+                    val saved = profileRepo.getById(p.id) ?: p
+                    _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_deleting_rooms)
+                    com.smarttools.netguard.agent.WbProfileDeletion.delete(app, saved)
+                }
+                _saved.value = true
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_delete_unconfirmed)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_kept_details, (if (e is com.smarttools.netguard.agent.WbRoomDeletionException) com.smarttools.netguard.util.LocalizedResources.string(app, e.messageId) else e.message) ?: com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.room_delete_failed)) }
+            finally { deleting = false }
         }
     }
 
     fun testConnection() {
         viewModelScope.launch {
             val p = _profile.value
+            if (p.protocol.usesRelay) {
+                _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.relay_test_hint)
+                return@launch
+            }
             if (p.address.isBlank() || !isValidAddress(p.address)) {
-                _testResult.value = "Invalid address"
+                _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_address_invalid)
                 return@launch
             }
             // Direct TCP probe from the user's real IP to the VPN server is a
@@ -107,19 +133,19 @@ class ProfileEditViewModel(application: Application) : AndroidViewModel(applicat
             // tunnel is up so the SYN goes through xray.
             val state = TunnelVpnService.connectionState.value
             if (state !is ConnectionState.Connected) {
-                _testResult.value = "Connect VPN first to avoid leaking real IP"
+                _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_test_connect_first)
                 return@launch
             }
             val socksPort = CredentialManager.getPort()
             val user = CredentialManager.getUser()
             val pass = CredentialManager.getPass()
             if (socksPort == null || user == null || pass == null) {
-                _testResult.value = "VPN credentials not ready"
+                _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_test_proxy_unready)
                 return@launch
             }
-            _testResult.value = "Testing..."
+            _testResult.value = com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_testing)
             val ms = pingViaSocks(p.address, p.port, socksPort, user, pass)
-            _testResult.value = if (ms >= 0) "${ms}ms" else "Failed"
+            _testResult.value = if (ms >= 0) "${ms}ms" else com.smarttools.netguard.util.LocalizedResources.string(app, com.smarttools.netguard.R.string.profile_test_failed)
         }
     }
 

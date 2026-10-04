@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_import_json_hint">"Collez la configuration JSON"</string>
+    <string name="subscription_tls_date_error">"Erreur TLS : vérifiez la date et l’heure de votre appareil. %1$s"</string>
+    <string name="subscription_tls_pin_error">"Le certificat TLS ne correspond pas au certificat épinglé. Il a peut-être changé depuis cette version de l’application. %1$s"</string>
+    <string name="subscription_tls_chain_error">"La chaîne de certificats TLS du serveur est incomplète. Il s’agit d’un problème de configuration du serveur. %1$s"</string>
+    <string name="subscription_fetch_failed">"Impossible de charger l’abonnement"</string>
+    <string name="trigger_apps_removed_from_bypass">"Applications retirées de la liste d’exclusion du VPN : %1$d. Elles auraient contourné la connexion automatique."</string>
+    <string name="server_installing_xray">"Installation de xray sur le serveur…"</string>
+    <string name="server_upstream_added">"Serveur amont ajouté"</string>
+    <string name="server_upstream_deleted">"Serveur amont supprimé"</string>
+    <string name="server_rule_added">"Règle ajoutée"</string>
+    <string name="server_rule_deleted">"Règle supprimée"</string>
+    <string name="wb_room_stop_failed">"Impossible d’arrêter la salle WB Stream sur le serveur. Le profil a été conservé ; réessayez de le supprimer."</string>
+    <string name="wb_room_still_present">"La salle WB Stream est toujours présente sur le serveur"</string>
+    <string name="rule_label_domain">"Domaine"</string>
+    <string name="rule_label_cidr">"Plage d’IP (CIDR)"</string>
+    <string name="rule_label_geosite">"Groupe de sites (geosite)"</string>
+    <string name="rule_label_geoip">"Groupe d’IP (geoip)"</string>
+    <string name="rule_label_direct">"Connexion directe"</string>
+    <string name="rule_label_block">"Bloquer"</string>
+    <string name="rule_label_via">"Via un serveur amont"</string>
+    <string name="rule_no_upstreams">"Aucun serveur amont ajouté"</string>
+</resources>

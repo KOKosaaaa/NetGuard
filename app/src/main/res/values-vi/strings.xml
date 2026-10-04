@@ -172,7 +172,7 @@
     <string name="speed_test_desc">Nút kiểm tra tốc độ trên màn hình chính</string>
     <string name="speed_test">Kiểm tra tốc độ</string>
     <string name="auto_connect_wifi">Tự kết nối khi có WiFi</string>
-    <string name="auto_connect_wifi_desc">VPN trên WiFi lạ + bảo vệ Evil Twin</string>
+    <string name="auto_connect_wifi_desc">Kết nối VPN trên Wi-Fi không đáng tin cậy, kể cả khi Android ẩn thông tin mạng. Cần cấp quyền VPN trước.</string>
     <string name="trusted_wifi">Mạng WiFi tin cậy</string>
     <string name="add_current_wifi">Thêm WiFi hiện tại</string>
     <string name="location_needed_for_wifi">Cần quyền vị trí để đọc tên WiFi</string>

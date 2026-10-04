@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_name_1">Kendi SOCKS5 kimlik doğrulaması</string>
+    <string name="security_name_2">Diğer VPN’ler</string>
+    <string name="security_name_3">SOCKS5 vekili</string>
+    <string name="security_name_4">HTTP vekili</string>
+    <string name="security_name_5">Xray API</string>
+    <string name="security_name_6">Clash API</string>
+    <string name="security_name_7">Port taraması</string>
+    <string name="security_name_8">/proc/net/tcp</string>
+    <string name="security_name_9">VPN bayrağı</string>
+    <string name="security_name_10">MTU kontrolü</string>
+    <string name="security_name_11">Paket adı</string>
+    <string name="security_detail_1">Tünel etkin değil, test yapılamıyor</string>
+    <string name="security_detail_2">Sunucu kimlik doğrulamasız bağlantıyı kapattı — doğru</string>
+    <string name="security_detail_3">Beklenmeyen SOCKS sürümü: %1$s</string>
+    <string name="security_detail_4">KRİTİK: Kendi SOCKS5 sunucusu NO AUTH kabul ediyor — kimlik doğrulama zinciri bozuk!</string>
+    <string name="security_detail_5">Kendi SOCKS5 sunucusu doğru şekilde kullanıcı adı/parola istiyor</string>
+    <string name="security_detail_6">Kendi SOCKS5 sunucusu kimlik doğrulamasız bağlantıları reddediyor (NO ACCEPTABLE METHODS)</string>
+    <string name="security_detail_7">Kendi SOCKS5 sunucusu beklenmeyen bir yöntem döndürdü: 0x%1$s</string>
+    <string name="security_detail_8">Kendi SOCKS sunucusu test edilemedi: %1$s</string>
+    <string name="security_detail_9">Başka bilinen VPN istemcisi kurulu değil</string>
+    <string name="security_detail_10">Diğer VPN istemcileri kurulu (bazıları Nisan 2026’daki yerel SOCKS sızıntısından etkilenebilir): %1$s</string>
+    <string name="security_detail_11">Standart portlarda kimlik doğrulamasız SOCKS5 bulunamadı</string>
+    <string name="security_detail_12">SAVUNMASIZ: Şu portlarda kimlik doğrulamasız açık SOCKS5 var: %1$s</string>
+    <string name="security_detail_13">Standart portlarda açık HTTP CONNECT vekili bulunamadı</string>
+    <string name="security_detail_14">SAVUNMASIZ: Şu portlarda açık HTTP vekili var: %1$s</string>
+    <string name="security_detail_15">Xray gRPC API portu algılanmadı</string>
+    <string name="security_detail_16">SAVUNMASIZ: Açık Xray API portları: %1$s</string>
+    <string name="security_detail_17">Clash REST API algılanmadı</string>
+    <string name="security_detail_18">SAVUNMASIZ: Clash API şu portlarda açık: %1$s — /connections tüm IP adreslerini sızdırıyor</string>
+    <string name="security_detail_19">localhost üzerinde bilinen açık VPN portu yok</string>
+    <string name="security_detail_20">Algılanabilir açık portlar: %1$s</string>
+    <string name="security_detail_21">/proc/net/tcp içinde bilinen VPN portu bulunamadı</string>
+    <string name="security_detail_22">/proc/net/tcp içinde algılanabilir: %1$s</string>
+    <string name="security_detail_23">/proc/net/tcp okunamıyor (kısıtlanmış olabilir)</string>
+    <string name="security_detail_24">TRANSPORT_VPN görünür (Android’de kaçınılmazdır). Uygulamalar VPN’in etkin olduğunu algılayabilir, ancak sunucu IP adresini göremez.</string>
+    <string name="security_detail_25">TRANSPORT_VPN bayrağı algılanmadı (VPN etkin değil veya kontrol bağlantıdan önce yapıldı)</string>
+    <string name="security_detail_26">NetworkCapabilities kontrol edilemiyor</string>
+    <string name="security_detail_27">TUN arayüzü algılanmadı</string>
+    <string name="security_detail_28">Yalnızca bilgi amaçlı: %1$s. MTU tek başına güvenilir bir VPN göstergesi değildir.</string>
+    <string name="security_detail_29">Arayüz MTU değeri kontrol edilemiyor</string>
+    <string name="security_detail_30">SAVUNMASIZ: “%1$s” paket adı VPN anahtar kelimeleri içeriyor</string>
+    <string name="security_detail_31">“%1$s” paket adı tarafsız</string>
+</resources>

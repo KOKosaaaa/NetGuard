@@ -11,7 +11,10 @@
 
     <!-- Default Dark -->
     <style name="Theme.NetGuard" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
         <item name="colorPrimary">#7C4DFF</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorPrimaryContainer">#3700B3</item>
         <item name="colorSecondary">#BB86FC</item>
         <item name="colorSecondaryContainer">#4A148C</item>
@@ -30,6 +33,8 @@
 
     <!-- Light -->
     <style name="Theme.NetGuard.Light" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
         <item name="colorPrimary">#6200EE</item>
         <item name="colorPrimaryContainer">#E8DEF8</item>
         <item name="colorSecondary">#625B71</item>
@@ -57,6 +62,8 @@
 
     <!-- OLED Black - pure black for AMOLED displays -->
     <style name="Theme.NetGuard.OLED" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
         <item name="colorPrimary">#BB86FC</item>
         <item name="colorPrimaryContainer">#3700B3</item>
         <item name="colorSecondary">#03DAC6</item>
@@ -78,6 +85,8 @@
 
     <!-- Dynamic - Material You (Android 12+), DynamicColors overlays this -->
     <style name="Theme.NetGuard.Dynamic" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="cardNormalBackground">?attr/colorSurfaceVariant</item>
@@ -92,6 +101,8 @@
          layouts (default Material widgets are fine, only the typography
          feels off-tone). -->
     <style name="Theme.NetGuard.Fsociety" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
         <item name="colorPrimary">@color/fsoc_green</item>
         <item name="colorPrimaryContainer">@color/fsoc_green_dim</item>
         <item name="colorOnPrimary">@color/fsoc_bg</item>
@@ -113,8 +124,6 @@
         <item name="android:textColor">@color/fsoc_text</item>
         <item name="android:textColorPrimary">@color/fsoc_text</item>
         <item name="android:textColorSecondary">@color/fsoc_text_secondary</item>
-        <item name="android:typeface">monospace</item>
-        <item name="android:fontFamily">monospace</item>
         <item name="cardNormalBackground">@color/fsoc_surface</item>
         <item name="cardSelectedBackground">#FF112617</item>
         <item name="capsuleTrackColor">#33FFFFFF</item>
@@ -123,6 +132,8 @@
 
     <!-- Ocean - deep blue & cyan -->
     <style name="Theme.NetGuard.Ocean" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="fontFamily">@font/manrope</item>
         <item name="colorPrimary">#00BCD4</item>
         <item name="colorPrimaryContainer">#006874</item>
         <item name="colorSecondary">#4DD0E1</item>
@@ -143,3 +154,4 @@
     </style>
 
 </resources>
+
