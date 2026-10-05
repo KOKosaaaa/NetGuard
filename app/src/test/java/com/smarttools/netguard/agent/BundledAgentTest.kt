@@ -11,8 +11,8 @@ class BundledAgentTest {
 
     @Test fun bothOfflineInstallersRemainByteIdenticalAfterDecoding() {
         val expected = mapOf(
-            "amd64" to (26972320 to "9cc19250d58fcb13b555b7cc9d57b3d631e6bb659ab2450ffac43f7302bcd83b"),
-            "arm64" to (25165984 to "586be19e4d5b6c14ac144b868c3da777355af4c0c020e245512344df80235446")
+            "amd64" to (26972320 to "0dbb0c58d4c6ee04d30013ac566af8f8d950288259ff872abc514e25cddaaab0"),
+            "arm64" to (25165984 to "c830f594bea656598dd3fb062ad0779a8b8253ea6a653188d66dfc1c6a118b69")
         )
         for ((arch, fingerprint) in expected) {
             val decoded = asset(arch).inputStream().use { BundledAgent.decode(it) }

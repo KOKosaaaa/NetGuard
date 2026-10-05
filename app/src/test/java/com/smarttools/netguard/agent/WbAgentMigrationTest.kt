@@ -7,7 +7,7 @@ class WbAgentMigrationTest {
     @Test fun existingAgentsMustReceiveAuditedReleaseFixes() {
         assertTrue(WbStreamUpdater.needsUpdate(0))
         assertTrue(WbStreamUpdater.needsUpdate(13))
-        assertFalse(WbStreamUpdater.needsUpdate(14))
+        assertTrue(WbStreamUpdater.needsUpdate(14))
         assertFalse(WbStreamUpdater.needsUpdate(15))
     }
 }

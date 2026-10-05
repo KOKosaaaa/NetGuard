@@ -407,7 +407,7 @@ func Mount(d *Deps) http.Handler {
 	)))
 
 	mux.Handle("GET /v1/wbstream/health", authenticated(d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "transport_revision": 14})
+		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "transport_revision": 15})
 	})))
 	mux.Handle("GET /v1/wbstream/rooms", authenticated(d, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, deploy.WBStreamRooms(r.Context()))

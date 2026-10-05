@@ -26,7 +26,7 @@ import (
 	"github.com/KOKosaaaa/NetGuard/agent/internal/tlsutil"
 )
 
-const agentVersion = "0.5.13"
+const agentVersion = "0.5.14"
 
 func main() {
 	listen := flag.String("listen", ":9443", "address to serve HTTPS on")

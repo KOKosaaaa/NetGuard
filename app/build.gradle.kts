@@ -36,7 +36,7 @@ android {
         applicationId = "com.smarttools.netguard"
         minSdk = 26
         targetSdk = 34
-        versionCode = 116
+        versionCode = 117
         versionName = "3.0.0"
         testInstrumentationRunner = "com.smarttools.netguard.WbWizardInstrumentation"
 

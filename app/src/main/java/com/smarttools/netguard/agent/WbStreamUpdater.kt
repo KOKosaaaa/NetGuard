@@ -8,7 +8,7 @@ import java.security.MessageDigest
 /** Called on Dispatchers.IO. Check the actual capability after a self-update,
  * rather than accepting /health from the old agent while it is shutting down. */
 object WbStreamUpdater {
-    internal const val REQUIRED_REVISION = 14
+    internal const val REQUIRED_REVISION = 15
     internal fun needsUpdate(revision: Int) = revision < REQUIRED_REVISION
     suspend fun ensureTransport(client: AgentApiClient, assets: AssetManager, onUpdate: () -> Unit = {}) {
         val revision = try { client.wbStreamTransportRevision() } catch (e: AgentApiError) {

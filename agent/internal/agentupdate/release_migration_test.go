@@ -38,11 +38,11 @@ func TestReleaseELFUpgradeAndRollback(t *testing.T) {
 			t.Fatalf("version expected %s: %s %v", want, out, err)
 		}
 	}
-	version("0.5.12")
+	version("0.5.13")
 	if err := Install(context.Background(), target, bytes.NewReader(next), fmt.Sprintf("%x", sha256.Sum256(next))); err != nil {
 		t.Fatal(err)
 	}
-	version("0.5.13")
+	version("0.5.14")
 	backup, err := os.ReadFile(target + ".bak")
 	if err != nil || !bytes.Equal(old, backup) {
 		t.Fatal("old executable was not preserved exactly")
@@ -54,7 +54,7 @@ func TestReleaseELFUpgradeAndRollback(t *testing.T) {
 	if err := os.Rename(rollback, target); err != nil {
 		t.Fatal(err)
 	}
-	version("0.5.12")
+	version("0.5.13")
 	restored, _ := os.ReadFile(target)
 	if !bytes.Equal(old, restored) {
 		t.Fatal("rollback did not restore exact ELF")
